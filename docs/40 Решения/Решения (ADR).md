@@ -20,6 +20,8 @@ updated: 2026-10-08
 - [[ADR-010 Godot MCP]] — Для работы Claude Code с Godot-проектом — Coding-Solo/godot-mcp, ставится локально из клона с зафиксированным коммитом.
 - [[ADR-011 Документация в docs]] — Obsidian-волт живёт в `docs/` репозитория.
 - [[ADR-012 Лицензия MIT]] — Репозиторий под MIT.
+- [[ADR-013 Устройство бэкенда]] — асинхронный FastAPI, /healthz + /api/v1/version + /api/v1/health, CPU-работа вне event loop, образ в GHCR по тегам
+- [[ADR-014 MLflow для экспериментов]] — обоснование порогов и f0-движка экспериментами, Registry — stretch
 
 ## Связанные
 - [[Открытые решения]]

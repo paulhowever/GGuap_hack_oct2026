@@ -13,3 +13,7 @@ godot/.godot/
 godot/*.translation
 docs/.obsidian/workspace*
 docs/.obsidian/cache
+docs/.obsidian/plugins/*/data.json
+docs/.obsidian/graph.json
+docs/.obsidian/appearance.json
+docs/.obsidian/hotkeys.json
