@@ -17,7 +17,7 @@ updated: 2026-10-08
 - Если `outputLatency > 0.1`, выставляем `bt_suspect = true`, и Godot показывает «похоже на Bluetooth, нужен провод».
 
 **Питч.** pitchy (MIT, метод McLeod, чистый JS) прямо в AudioWorklet, без WASM и Worker.
-- `web/vendor/pitchy.bundle.js` собирается один раз: `npx esbuild node_modules/pitchy/dist/index.js --bundle --format=esm --outfile=web/vendor/pitchy.bundle.js` (pitchy тянет fft.js).
+- `web/vendor/pitchy.bundle.js` собирается один раз: `npx esbuild node_modules/pitchy/index.js --bundle --format=esm --outfile=web/vendor/pitchy.bundle.js` (в pitchy 4.1.0 нет `dist/`, точка входа — `index.js`; тянет fft.js).
 - Окно 2048, хоп 512 (≈10,7 мс при 48 кГц). Кольцевой буфер в worklet, `PitchDetector.forFloat32Array(2048)`, `findPitch(win, sampleRate) → [hz, clarity]`.
 - `conf = clarity`; кадр озвучен при `clarity ≥ 0,85` и `rms > gate`, `gate = max(0.01, 3·noise_floor)`. Hz вне [65, 1100] обнуляется.
 - Пачки кадров уходят в главный поток раз в ~30 мс; PCM-блоки для записи дубля идут тем же портом.
