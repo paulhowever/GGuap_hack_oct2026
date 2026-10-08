@@ -14,4 +14,4 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
-      - run: cd backend && uv sync && (uv run pytest -m "not gpu"; s=$?; [ $s -eq 0 ] || [ $s -eq 5 ])
+      - run: cd backend && uv sync --locked && uv run pytest -m "not gpu" || [ $? -eq 5 ]
