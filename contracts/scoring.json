@@ -1,0 +1,16 @@
+{
+  "version": "score-v1",
+  "tol_cents": {"easy": 200, "normal": 120, "hard": 60},
+  "conf_min": 0.5,
+  "rms_gate_db": -50,
+  "onset_ok_ms": 80,
+  "onset_zero_ms": 300,
+  "weights": {"pitch": 0.65, "rhythm": 0.25, "extras": 0.10},
+  "mult": {"normal": 1, "golden": 2, "rap": 0.25, "rap_golden": 0.5, "free": 0},
+  "lag_range_ms": [-100, 500],
+  "lag_clip_ms": 120,
+  "rho_min": 0.2,
+  "max": 10000,
+  "grades": {"S": 9000, "A": 7500, "B": 6000, "C": 4000},
+  "line_grades": {"Perfect": 90, "Great": 75, "Good": 55, "OK": 30}
+}

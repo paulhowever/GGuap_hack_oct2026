@@ -1,0 +1,15 @@
+{"schema":1,"id":"demo","title":"Демо-гамма","artist":"команда","language":"ru",
+ "audio":{"minus":"/media/demo/minus.mp3","guide":"/media/demo/guide.mp3","duration":12.0,"offset_ms":0},
+ "timing":{"bpm_txt":300.0,"gap_ms":2500,"beat_s":0.05},
+ "stats":{"notes":6,"lines":2,"range_midi":[60,67],"difficulty":1,"first_note":2.5,"last_end":8.9,"golden_share":0.17},
+ "lines":[
+  {"i":0,"t0":2.5,"t1":5.5,"text":"до ре ми","notes":[
+   {"i":0,"t":2.5,"d":0.8,"beat":0,"len":16,"midi":60,"pc":0,"type":"normal","syl":"до "},
+   {"i":1,"t":3.5,"d":0.8,"beat":20,"len":16,"midi":62,"pc":2,"type":"normal","syl":"ре "},
+   {"i":2,"t":4.5,"d":1.0,"beat":40,"len":20,"midi":64,"pc":4,"type":"golden","syl":"ми"}]},
+  {"i":1,"t0":6.0,"t1":8.9,"text":"фа соль ля","notes":[
+   {"i":3,"t":6.0,"d":0.8,"beat":70,"len":16,"midi":65,"pc":5,"type":"normal","syl":"фа "},
+   {"i":4,"t":7.0,"d":0.8,"beat":90,"len":16,"midi":67,"pc":7,"type":"normal","syl":"соль "},
+   {"i":5,"t":8.0,"d":0.9,"beat":110,"len":18,"midi":67,"pc":7,"type":"normal","syl":"ля"}]}],
+ "source":{"origin":"manual","generator":null,"t0_ms":0},
+ "license":{"music":"own","recording":"own","attribution":"huap team","url":null}}

@@ -1,0 +1,17 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: for f in $(find contracts songs -name '*.json'); do python3 -m json.tool "$f" > /dev/null || exit 1; done
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: cd backend && uv sync && (uv run pytest -m "not gpu"; s=$?; [ $s -eq 0 ] || [ $s -eq 5 ])

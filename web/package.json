@@ -1,0 +1,14 @@
+{
+  "name": "karaoke-voice",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "vendor": "esbuild node_modules/pitchy/dist/index.js --bundle --format=esm --outfile=vendor/pitchy.bundle.js"
+  },
+  "dependencies": {
+    "pitchy": "^4.1.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  }
+}
