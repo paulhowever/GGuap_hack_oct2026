@@ -9,7 +9,7 @@ from typing import Annotated, Any, Literal
 import numpy as np
 import soundfile as sf
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from app.api.players import CLIENT_ID
 from app.core.logging import log_event
@@ -23,6 +23,8 @@ log = logging.getLogger("karaoke.takes")
 
 
 class Frame(BaseModel):
+    model_config = ConfigDict(allow_inf_nan=False)
+
     t: float
     hz: float
     conf: float
@@ -30,6 +32,8 @@ class Frame(BaseModel):
 
 
 class TakeMeta(BaseModel):
+    model_config = ConfigDict(allow_inf_nan=False)
+
     song_id: str = Field(pattern=r"^[a-z0-9_-]{1,64}$")
     client_id: str | None = Field(default=None, pattern=CLIENT_ID)
     player: str = Field(min_length=1, max_length=24)
@@ -83,12 +87,15 @@ async def post_take(
         samples, sr = await asyncio.to_thread(decode_wav, raw)
     except (sf.LibsndfileError, RuntimeError, ValueError):
         raise HTTPException(status_code=422, detail="bad_audio") from None
-    if samples.size < sr // 10:
+    if sr < 8000 or samples.size < max(sr // 10, 1):
         raise HTTPException(status_code=422, detail="bad_audio")
     if samples.size / sr > state.settings.max_take_s:
         raise HTTPException(status_code=413, detail="take_too_long")
     async with state.score_sem:
-        result, timings = await asyncio.to_thread(evaluate, state, ref, samples, sr, m)
+        try:
+            result, timings = await asyncio.to_thread(evaluate, state, ref, samples, sr, m)
+        except ValueError:
+            raise HTTPException(status_code=422, detail="bad_audio") from None
     take_id = f"tk_{secrets.token_hex(4)}"
     takes_dir = state.settings.data_dir / "takes"
     takes_dir.mkdir(parents=True, exist_ok=True)

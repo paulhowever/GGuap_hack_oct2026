@@ -17,3 +17,4 @@ docs/.obsidian/plugins/*/data.json
 docs/.obsidian/graph.json
 docs/.obsidian/appearance.json
 docs/.obsidian/hotkeys.json
+.coverage

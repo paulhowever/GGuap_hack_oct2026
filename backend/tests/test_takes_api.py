@@ -113,3 +113,30 @@ def test_take_stores_client_id(client, settings, demo_ref):
 
 def test_take_rejects_bad_client_id(client, demo_ref):
     assert post(client, wav_bytes(synth_take(demo_ref)), meta(client_id="nope")).status_code == 422
+
+
+def test_tiny_samplerate_rejected(client):
+    r = post(client, wav_bytes(np.zeros(20, dtype=np.float32), sr=5), meta())
+    assert r.status_code == 422
+    assert r.json()["detail"] == "bad_audio"
+
+
+def test_nan_meta_rejected(client, demo_ref):
+    m = meta(lag_ms=0).replace('"lag_ms": 0', '"lag_ms": NaN')
+    r = post(client, wav_bytes(synth_take(demo_ref)), m)
+    assert r.status_code == 422
+    assert r.json()["detail"] == "bad_meta"
+
+
+def test_engine_value_error_is_bad_audio(client, demo_ref):
+    class Boom:
+        name = "boom"
+        version = "0"
+
+        def track(self, audio, sr):
+            raise ValueError("nope")
+
+    client.app.state.f0 = Boom()
+    r = post(client, wav_bytes(synth_take(demo_ref)), meta())
+    assert r.status_code == 422
+    assert r.json()["detail"] == "bad_audio"

@@ -1,6 +1,8 @@
+from datetime import UTC, datetime
 from pathlib import Path
 
 from sqlalchemy import text
+from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 
 from app.store.models import Base, Player, Take
@@ -27,15 +29,15 @@ async def save_take(sessions: async_sessionmaker, take: Take) -> None:
 
 
 async def upsert_player(sessions: async_sessionmaker, client_id: str, nickname: str, avatar: str) -> Player:
+    stmt = insert(Player).values(client_id=client_id, nickname=nickname, avatar=avatar)
+    stmt = stmt.on_conflict_do_update(
+        index_elements=[Player.client_id],
+        set_={"nickname": nickname, "avatar": avatar, "updated_at": datetime.now(UTC)},
+    )
     async with sessions() as session, session.begin():
-        player = await session.get(Player, client_id)
-        if player is None:
-            player = Player(client_id=client_id, nickname=nickname, avatar=avatar)
-            session.add(player)
-        else:
-            player.nickname = nickname
-            player.avatar = avatar
-    return player
+        await session.execute(stmt)
+    async with sessions() as session:
+        return await session.get(Player, client_id)
 
 
 async def get_player(sessions: async_sessionmaker, client_id: str) -> Player | None:

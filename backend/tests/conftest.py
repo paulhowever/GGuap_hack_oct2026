@@ -24,6 +24,9 @@ def settings(tmp_path, demo_ref) -> Settings:
     song.mkdir(parents=True)
     (song / "reference.json").write_text(json.dumps(demo_ref, ensure_ascii=False), encoding="utf-8")
     return Settings(
+        _env_file=None,
+        pipeline_url=None,
+        f0_engine="swiftf0",
         songs_dir=tmp_path / "songs",
         web_dir=None,
         data_dir=tmp_path / "data",
