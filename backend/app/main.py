@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from app.api import health, songs
+from app.api import health, songs, takes
 from app.core.config import Settings, get_settings
 from app.core.logging import RequestIdMiddleware, configure_logging, log_event
 from app.core.version import app_version
@@ -53,6 +53,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(health.router)
     app.include_router(health.api)
     app.include_router(songs.router)
+    app.include_router(takes.router)
     if settings.songs_dir.is_dir():
         app.mount("/media", StaticFiles(directory=settings.songs_dir), name="media")
     if settings.web_dir is not None and settings.web_dir.is_dir():
