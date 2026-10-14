@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Как тестировать (волт docs/65 QA)
+    url: https://github.com/paulhowever/GGuap_hack_oct2026/tree/main/docs
+    about: Смоук-тест, тест-кейсы, золотые дубли, красная команда
