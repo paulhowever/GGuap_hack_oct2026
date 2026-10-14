@@ -8,6 +8,7 @@ from app.scoring.grid import PITCHED, Grid, ref_arrays, shifted, song_duration, 
 from app.scoring.latency import estimate_latency, steps_for
 from app.scoring.metrics import LineMetrics, NoteMetrics
 from app.scoring.pitch import fold_cents
+from app.scoring.tips import build_tips
 
 EDGE_TRIM_S = 0.03
 ONSET_PRE_S = 0.15
@@ -172,7 +173,7 @@ def score_take(
         score = round(100 * (0.7 * p + 0.3 * r))
         lines.append(LineMetrics(line["i"], line["text"], score, cfg.line_grade(score), p, r, cov))
     bounds = {x["i"]: (x["t0"], x["t1"]) for x in ref["lines"]}
-    return {
+    result = {
         "version": cfg.version,
         "latency": latency.as_dict(),
         "score": {
@@ -214,3 +215,8 @@ def score_take(
         "tips": [],
         "octave_shift": octave_shift(grid, ref_midi),
     }
+    tips, per_line = build_tips([m for _, m in pairs], lines, latency, result["octave_shift"], tol)
+    result["tips"] = tips
+    for item in result["lines"]:
+        item["tip"] = per_line.get(item["i"])
+    return result
