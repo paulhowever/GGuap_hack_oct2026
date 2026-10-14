@@ -8,9 +8,10 @@ export class PcmRecorder {
   }
 
   push(block, frame) {
+    if (this.n >= this.max) return
     if (this.firstFrame === null) this.firstFrame = frame
     const gap = frame - (this.firstFrame + this.n)
-    if (gap > 0) this.append(new Float32Array(gap))
+    if (gap > 0) this.append(new Float32Array(Math.min(gap, this.max - this.n)))
     this.append(gap < 0 ? block.subarray(Math.min(block.length, -gap)) : block)
   }
 

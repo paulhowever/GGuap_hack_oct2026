@@ -92,3 +92,44 @@ test('PcmRecorder stops at the maximum duration', () => {
   assert.equal(r.samples().length, 10)
   assert.equal(r.duration, 1)
 })
+
+function allocationsDuring(fn) {
+  const Native = globalThis.Float32Array
+  const sizes = []
+  globalThis.Float32Array = class extends Native {
+    constructor(...args) {
+      if (typeof args[0] === 'number') sizes.push(args[0])
+      super(...args)
+    }
+  }
+  try {
+    fn()
+  } finally {
+    globalThis.Float32Array = Native
+  }
+  return sizes
+}
+
+test('PcmRecorder ignores blocks after the cap without allocating, even with a huge frame index', () => {
+  const r = new PcmRecorder(10, 1)
+  r.push(new Float32Array(10), 0)
+  const block = new Float32Array(4)
+  let sizes
+  assert.doesNotThrow(() => {
+    sizes = allocationsDuring(() => r.push(block, 2 ** 40))
+  })
+  assert.deepEqual(sizes, [])
+  assert.equal(r.samples().length, 10)
+})
+
+test('PcmRecorder bounds a zero-fill gap by the remaining capacity', () => {
+  const r = new PcmRecorder(10, 1)
+  r.push(Float32Array.from([1, 2, 3, 4]), 0)
+  const block = new Float32Array(4)
+  let sizes
+  assert.doesNotThrow(() => {
+    sizes = allocationsDuring(() => r.push(block, 2 ** 40))
+  })
+  assert.deepEqual(sizes, [6])
+  assert.deepEqual(Array.from(r.samples()), [1, 2, 3, 4, 0, 0, 0, 0, 0, 0])
+})

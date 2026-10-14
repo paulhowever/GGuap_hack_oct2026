@@ -161,19 +161,34 @@ export function createVoice(cfg = {}, env = globalThis) {
     return true
   }
 
+  function openContext() {
+    const AC = env.AudioContext || env.webkitAudioContext
+    s.ctx = new AC({ latencyHint: 'interactive' })
+    s.sr = s.ctx.sampleRate
+    env.document?.addEventListener('pointerdown', () => {
+      if (s.ctx.state !== 'running') s.ctx.resume().catch(() => {})
+    })
+  }
+
+  async function runUnlock() {
+    if (!s.ctx) {
+      try {
+        openContext()
+      } catch (e) {
+        return fail(ERR.LOCKED, e)
+      }
+    }
+    try {
+      return await finishUnlock(s.ctx.resume())
+    } catch (e) {
+      return fail(ERR.WORKLET, e)
+    }
+  }
+
   function unlock() {
     if (s.unlocking) return s.unlocking
     if (!env.isSecureContext || !env.navigator?.mediaDevices?.getUserMedia) return Promise.resolve(fail(ERR.INSECURE, 'getUserMedia unavailable: use https or localhost'))
-    if (!s.ctx) {
-      const AC = env.AudioContext || env.webkitAudioContext
-      s.ctx = new AC({ latencyHint: 'interactive' })
-      s.sr = s.ctx.sampleRate
-      env.document?.addEventListener('pointerdown', () => {
-        if (s.ctx.state !== 'running') s.ctx.resume().catch(() => {})
-      })
-    }
-    const resumed = s.ctx.resume()
-    s.unlocking = finishUnlock(resumed).then(ok => {
+    s.unlocking = runUnlock().then(ok => {
       if (!ok) s.unlocking = null
       return ok
     })

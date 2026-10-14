@@ -102,7 +102,7 @@ export function createMockVoice(mode, cfg = {}, env = globalThis) {
       env.setTimeout(async () => {
         const r = await firstJson([`${base}mock/result.${m}.json`, `${base}mock/result.perfect.json`])
         if (!r) return fail(ERR.NET, 'mock result not found')
-        bus.emit('on_result', { ...r, player: player || r.player, challenge: challengeId ? r.challenge : null })
+        bus.emit('on_result', { ...r, player: player || r.player, challenge: challengeId ? r.challenge : null, client_id: clientId(env) })
       }, SUBMIT_DELAY_MS)
     },
     client_id() {

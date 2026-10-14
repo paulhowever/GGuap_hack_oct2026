@@ -136,3 +136,17 @@ test('mock emits on_note_judged for every note and exposes client_id', async () 
   assert.ok(judged.every(j => j.hit >= 0.8))
   assert.match(v.client_id(), /^[0-9a-f-]{36}$/)
 })
+
+test('on_result carries the same client_id as client_id()', async () => {
+  const env = fakeEnv({ 'mock/demo.reference.json': ref, 'mock/result.perfect.json': result })
+  env.crypto = crypto
+  const voice = createMockVoice('perfect', CFG, env)
+  const events = []
+  voice.subscribe((name, json) => events.push([name, JSON.parse(json)]))
+  await voice.load_song('demo')
+  voice.submit('Паша', '')
+  await env.advance(500)
+  const id = voice.client_id()
+  assert.match(id, /^[0-9a-f-]{36}$/)
+  assert.equal(events.filter(e => e[0] === 'on_result').at(-1)[1].client_id, id)
+})

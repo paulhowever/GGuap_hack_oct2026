@@ -26,7 +26,14 @@
 1. `make backend`: FastAPI отдаёт `web/` на `/`.
 2. http://localhost:8000/dev.html, нажать «Нажми, чтобы начать», разрешить микрофон.
 3. Без микрофона: http://localhost:8000/dev.html?mock=perfect (ещё `offkey`, `octave`, `late200`, `silent`).
-4. Без бэкенда: `cd web && python3 -m http.server 8000` — работает мок и живой питч, без load_song/submit (нужен бэкенд из ветки pasha/backend).
+4. Без бэкенда: `cd web && python3 -m http.server 8000`. Мок (`?mock=…`) и живой питч работают и на статическом сервере; бэкенд из ветки pasha/backend нужен только настоящему движку для `load_song` и `submit`.
+
+## Для Godot (шелл и VoiceBridge)
+
+- `unlock()` возвращает `Promise<boolean>`. Оверлей прячем только при `true`; при `false` показываем ошибку из `on_error` и даём нажать ещё раз: повторный `unlock()` пробует заново.
+- `on_error`, пришедший до `subscribe`, повторно не доставляется: липкий только `on_unlocked`.
+- Повтор `on_unlocked` приходит синхронно внутри `subscribe()`, поэтому VoiceBridge должен сохранить payload и переизлучить сигнал через `call_deferred`.
+- Дорожку нот рисовать только в `state: "playing"` из `poll()`; `level` использовать для индикатора микрофона.
 
 ## Задержка
 

@@ -4,7 +4,7 @@ import { createVoice, installVoice } from '../voice.js'
 import { createMockVoice } from '../voice.mock.js'
 import { parseWavHeader } from '../lib/wav.js'
 
-const BRIDGE = ['subscribe', 'unlock', 'configure', 'load_song', 'start', 'stop', 'poll', 'submit', 'calibrate']
+const BRIDGE = ['subscribe', 'unlock', 'configure', 'load_song', 'start', 'stop', 'poll', 'submit', 'calibrate', 'client_id']
 
 function listen(voice) {
   const events = []
@@ -240,4 +240,44 @@ test('the js resampler downsamples to 16 kHz from a faster context', async () =>
   assert.equal(take.resampler, 'js')
   assert.equal(take.meta.wav_sr, 16000)
   assert.equal(parseWavHeader(take.wav).sampleRate, 16000)
+})
+
+test('an AudioContext constructor that throws reports audio_locked and a later unlock retries', async () => {
+  const env = recordingEnv()
+  const Working = env.AudioContext
+  let attempts = 0
+  env.AudioContext = function () {
+    attempts++
+    if (attempts === 1) throw new Error('no audio hardware')
+    return new Working()
+  }
+  const v = createVoice({}, env)
+  const events = listen(v)
+  assert.equal(await v.unlock(), false)
+  assert.deepEqual(events, [['on_error', { code: 'audio_locked', msg: 'no audio hardware' }]])
+  assert.equal(await v.unlock(), true)
+  assert.equal(attempts, 2)
+  assert.equal(events.at(-1)[0], 'on_unlocked')
+  assert.deepEqual(errorCodes(events), ['audio_locked'])
+})
+
+test('an unexpected throw while wiring the graph reports worklet_failed and a later unlock retries', async () => {
+  const env = recordingEnv()
+  const Base = env.AudioContext
+  let sources = 0
+  env.AudioContext = class extends Base {
+    createMediaStreamSource() {
+      sources++
+      if (sources === 1) throw new Error('graph broke')
+      return super.createMediaStreamSource()
+    }
+  }
+  const v = createVoice({}, env)
+  const events = listen(v)
+  assert.equal(await v.unlock(), false)
+  assert.deepEqual(events, [['on_error', { code: 'worklet_failed', msg: 'graph broke' }]])
+  assert.equal(await v.unlock(), true)
+  assert.equal(sources, 2)
+  assert.equal(events.at(-1)[0], 'on_unlocked')
+  assert.deepEqual(errorCodes(events), ['worklet_failed'])
 })
