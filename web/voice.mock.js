@@ -5,6 +5,8 @@ import { MODES, MOCK_HOP, rng, mockFrames } from './lib/mock.js'
 import { postTake } from './lib/upload.js'
 import { round } from './lib/num.js'
 import { toMs } from './lib/timing.js'
+import { createJudge } from './lib/judge.js'
+import { clientId } from './lib/profile.js'
 
 const BASE = new URL('./', import.meta.url).href
 const START_DELAY_MS = 150
@@ -40,6 +42,7 @@ export function createMockVoice(mode, cfg = {}, env = globalThis) {
   function finish() {
     if (s.state !== 'playing') return
     s.state = 'ended'
+    for (const j of s.judge?.flush() ?? []) bus.emit('on_note_judged', j)
     bus.emit('on_song_end', { t: round(tNow(), 3) })
   }
 
@@ -74,6 +77,7 @@ export function createMockVoice(mode, cfg = {}, env = globalThis) {
       s.startAt = env.performance.now() + START_DELAY_MS
       s.lastT = -START_DELAY_MS / 1000
       queue.drain()
+      s.judge = createJudge(s.ref, { tolCents: tol() })
       s.timer = env.setTimeout(finish, START_DELAY_MS + s.ref.audio.duration * 1000)
       return true
     },
@@ -87,6 +91,7 @@ export function createMockVoice(mode, cfg = {}, env = globalThis) {
       if (s.state === 'playing') {
         const frames = mockFrames(s.ref, m, Math.max(s.lastT, t - 2000 * MOCK_HOP), t, rand)
         queue.push(...frames)
+        for (const f of frames) for (const j of s.judge.push(f)) bus.emit('on_note_judged', j)
         if (frames.length) s.level = frames.at(-1).rms
         s.lastT = t
       }
@@ -99,6 +104,9 @@ export function createMockVoice(mode, cfg = {}, env = globalThis) {
         if (!r) return fail(ERR.NET, 'mock result not found')
         bus.emit('on_result', { ...r, player: player || r.player, challenge: challengeId ? r.challenge : null })
       }, SUBMIT_DELAY_MS)
+    },
+    client_id() {
+      return clientId(env)
     },
     calibrate() {
       env.setTimeout(() => bus.emit('on_calibrated', { lag_ms: s.lag, hits: 8 }), CALIBRATE_DELAY_MS)

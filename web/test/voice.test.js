@@ -185,7 +185,7 @@ function recordingEnv({ sampleRate = 16000, takes, offline = false } = {}) {
     AbortController,
     clearTimeout: () => {},
     navigator: { userAgent: 'test', mediaDevices: { getUserMedia: () => Promise.resolve(stream) } },
-    fetch: (u, o) => (o?.method === 'POST' ? takes() : reply({ id: 'demo', audio: { minus: '/media/demo.mp3' } }))
+    fetch: (u, o) => (o?.method === 'POST' ? takes() : reply({ id: 'demo', audio: { minus: '/media/demo.mp3' }, lines: [] }))
   }
   if (offline) env.OfflineAudioContext = undefined
   return env

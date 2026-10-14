@@ -114,3 +114,25 @@ test('calibrate reports the current lag with 8 hits', async () => {
 test('unknown mode falls back to perfect', () => {
   assert.equal(createMockVoice('bogus', CFG, fakeEnv({}))._mode, 'perfect')
 })
+
+test('mock emits on_note_judged for every note and exposes client_id', async () => {
+  let now = 0
+  const env = {
+    performance: { now: () => now },
+    setTimeout: () => 0,
+    clearTimeout() {},
+    fetch: async () => ({ ok: true, json: async () => ref }),
+    localStorage: { getItem: () => null, setItem() {} },
+    crypto
+  }
+  const v = createMockVoice('perfect', { tol_cents: { normal: 120 }, mock_base: 'http://x/' }, env)
+  const events = []
+  v.subscribe((name, json) => events.push([name, JSON.parse(json)]))
+  await v.load_song('demo')
+  v.start()
+  for (now = 0; now <= (ref.audio.duration + 1) * 1000; now += 50) v.poll()
+  const judged = events.filter(([n]) => n === 'on_note_judged').map(([, p]) => p)
+  assert.deepEqual(judged.map(j => j.i), [0, 1, 2, 3, 4, 5])
+  assert.ok(judged.every(j => j.hit >= 0.8))
+  assert.match(v.client_id(), /^[0-9a-f-]{36}$/)
+})

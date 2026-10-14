@@ -7,6 +7,8 @@ import { downsample } from './lib/resample.js'
 import { encodeWav } from './lib/wav.js'
 import { buildMeta } from './lib/meta.js'
 import { postTake } from './lib/upload.js'
+import { createJudge } from './lib/judge.js'
+import { clientId } from './lib/profile.js'
 import { CLICK_LEAD, CLICK_LEN, clickTimes, detectOnsets, estimateLag, onsetThreshold } from './lib/calibration.js'
 import { clamp, round } from './lib/num.js'
 import { createMockVoice, attachPlanB } from './voice.mock.js'
@@ -96,6 +98,7 @@ export function createVoice(cfg = {}, env = globalThis) {
     s.level = f.rms
     queue.push(f)
     if (s.state === 'playing' && s.takeFrames.length < MAX_TAKE_FRAMES) s.takeFrames.push(f)
+    if (s.state === 'playing' && s.judge) for (const j of s.judge.push(f)) bus.emit('on_note_judged', j)
   }
 
   function onTap(d) {
@@ -235,12 +238,14 @@ export function createVoice(cfg = {}, env = globalThis) {
     src.onended = () => {
       if (s.src !== src) return
       const t = songNow()
+      for (const j of s.judge?.flush() ?? []) bus.emit('on_note_judged', j)
       stop()
       bus.emit('on_song_end', { t: round(t, 3) })
     }
     s.t0 = ctx.currentTime + START_DELAY
     s.rec = new PcmRecorder(s.sr, MAX_TAKE_SECONDS)
     s.takeFrames = []
+    s.judge = createJudge(s.ref, { tolCents: tol() })
     s.take = null
     s.takeJob = null
     queue.drain()
@@ -312,6 +317,7 @@ export function createVoice(cfg = {}, env = globalThis) {
     const ctx = s.ctx
     return buildMeta({
       songId: take.song_id,
+      clientId: clientId(env),
       player,
       difficulty: take.difficulty,
       challengeId,
@@ -378,6 +384,9 @@ export function createVoice(cfg = {}, env = globalThis) {
     poll,
     submit,
     calibrate,
+    client_id() {
+      return clientId(env)
+    },
     _take() {
       const take = s.take
       return take ? { wav: take.wav, meta: metaFor(take, 'dev', null), resampler: take.resampler } : null
