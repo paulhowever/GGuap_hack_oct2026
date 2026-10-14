@@ -23,6 +23,7 @@ signal song_ready(ref: Dictionary)
 signal song_ended
 signal result_received(r: Dictionary)
 signal calibrated(d: Dictionary)
+signal note_judged(v: Dictionary)
 signal bridge_error(code: String)
 var _js: JavaScriptObject
 var _cb: JavaScriptObject
@@ -49,6 +50,11 @@ func submit(player: String, challenge_id := "") -> void:
 	if _mock: _mock.submit(player, challenge_id) else: _js.submit(player, challenge_id)
 func calibrate() -> void:
 	if _mock: _mock.calibrate() else: _js.calibrate()
+func client_id() -> String:
+	if _mock:
+		return "00000000-0000-4000-8000-000000000000"
+	var v = _js.client_id()
+	return "" if v == null else str(v)
 func poll() -> Dictionary:
 	var s: String = _mock.poll() if _mock else str(_js.poll())
 	var p = JSON.parse_string(s)
@@ -65,9 +71,10 @@ func _dispatch(name: String, json: String) -> void:
 		"on_song_end": song_ended.emit()
 		"on_result": result_received.emit(p)
 		"on_calibrated": calibrated.emit(p)
+		"on_note_judged": note_judged.emit(p)
 		"on_error": bridge_error.emit(str(p.get("code", "")))
 ```
-`mock_voice.gd` отдаёт poll из `res://mock/<id>.reference.json` и результат из `res://mock/result.json`. Фикстуры копируются из `contracts/fixtures` скриптом, руками не правятся.
+`mock_voice.gd` отдаёт poll из `res://mock/<id>.reference.json` и результат из `res://mock/result.perfect.json`, а также шлёт `on_note_judged` по нотам. Фикстуры копируются из `contracts/fixtures` скриптом, руками не правятся.
 
 **NoteLane (Control, `_draw`).**
 - Страница = текущая строка, как в UltraStar. Скролл — stretch.
