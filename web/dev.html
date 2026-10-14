@@ -89,8 +89,8 @@ voice.subscribe((name, json) => {
 })
 
 $('unlock').onclick = () => {
-  voice.unlock()
   $('overlay').style.display = 'none'
+  voice.unlock()
 }
 
 async function loadSongs() {
