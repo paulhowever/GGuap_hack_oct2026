@@ -33,3 +33,26 @@ test('broken storage still yields an id, no crypto yields null', () => {
   assert.match(clientId({ localStorage: broken, crypto }), UUID)
   assert.equal(clientId({ localStorage: storage() }), null)
 })
+
+test('unusable storage keeps one id per env, a fresh env gets its own', () => {
+  const broken = { getItem() { throw new Error('denied') }, setItem() { throw new Error('denied') } }
+  const env = { localStorage: broken, crypto }
+  const first = clientId(env)
+  assert.match(first, UUID)
+  assert.equal(clientId(env), first)
+  assert.equal(clientId(env), first)
+  assert.notEqual(clientId({ localStorage: broken, crypto }), first)
+
+  const blocked = { crypto }
+  Object.defineProperty(blocked, 'localStorage', { get() { throw new Error('blocked') } })
+  const second = clientId(blocked)
+  assert.match(second, UUID)
+  assert.equal(clientId(blocked), second)
+})
+
+test('a missing id is not cached so a later call can retry', () => {
+  const env = { localStorage: storage() }
+  assert.equal(clientId(env), null)
+  env.crypto = crypto
+  assert.match(clientId(env), UUID)
+})
