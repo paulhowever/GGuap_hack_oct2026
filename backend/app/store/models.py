@@ -1,0 +1,34 @@
+from datetime import UTC, datetime
+
+from sqlalchemy import DateTime, Integer, String, Text
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+
+
+class Base(DeclarativeBase):
+    pass
+
+
+class Take(Base):
+    __tablename__ = "takes"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    song_id: Mapped[str] = mapped_column(String(64), index=True)
+    client_id: Mapped[str | None] = mapped_column(String(36), index=True, nullable=True)
+    player: Mapped[str] = mapped_column(String(24))
+    difficulty: Mapped[str] = mapped_column(String(8))
+    total: Mapped[int] = mapped_column(Integer)
+    grade: Mapped[str] = mapped_column(String(2))
+    result_json: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+
+
+class Player(Base):
+    __tablename__ = "players"
+
+    client_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    nickname: Mapped[str] = mapped_column(String(24))
+    avatar: Mapped[str] = mapped_column(Text, default="{}")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC)
+    )
