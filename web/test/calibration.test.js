@@ -57,5 +57,6 @@ test('estimateLag rejects lags that alias into the neighbouring click window', (
   for (const lag of [0.41, 0.45]) {
     const r = estimateLag(clicks, clicks.map(c => c + lag))
     assert.equal(r.lag_ms, null, `lag ${lag}`)
+    assert.equal(r.hits, 0, `lag ${lag}`)
   }
 })

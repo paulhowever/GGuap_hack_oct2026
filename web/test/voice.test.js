@@ -2,6 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createVoice, installVoice } from '../voice.js'
 import { createMockVoice } from '../voice.mock.js'
+import { parseWavHeader } from '../lib/wav.js'
 
 const BRIDGE = ['subscribe', 'unlock', 'configure', 'load_song', 'start', 'stop', 'poll', 'submit', 'calibrate']
 
@@ -123,4 +124,120 @@ test('installVoice picks the mock by ?mock= and the real engine otherwise', () =
   assert.equal(installVoice(win('?mock=octave'))._mode, 'octave')
   assert.equal(installVoice(win('?mock'))._mode, 'perfect')
   assert.equal(installVoice(win(''))._mode, 'real')
+})
+
+function recordingEnv({ sampleRate = 16000, takes, offline = false } = {}) {
+  const taps = []
+  class Node {
+    constructor() {
+      this.gain = { value: 1 }
+      this.buffer = null
+    }
+    connect() {}
+    disconnect() {}
+    start() {}
+    stop() {}
+  }
+  class Ctx extends Node {
+    constructor() {
+      super()
+      this.state = 'suspended'
+      this.sampleRate = sampleRate
+      this.currentTime = 0
+      this.destination = new Node()
+      this.audioWorklet = { addModule: () => Promise.resolve() }
+    }
+    resume() {
+      this.state = 'running'
+      return Promise.resolve()
+    }
+    createMediaStreamSource() {
+      return new Node()
+    }
+    createGain() {
+      return new Node()
+    }
+    createBufferSource() {
+      return new Node()
+    }
+    decodeAudioData() {
+      return Promise.resolve({})
+    }
+  }
+  class Tap {
+    constructor() {
+      this.port = { onmessage: null, postMessage() {} }
+      taps.push(this)
+    }
+    connect() {}
+  }
+  const stream = { getTracks: () => [], getAudioTracks: () => [{ getSettings: () => ({ latency: 0.01 }) }] }
+  const reply = body => Promise.resolve({ ok: true, status: 200, json: async () => body, arrayBuffer: async () => new ArrayBuffer(8) })
+  const env = {
+    ...instant,
+    taps,
+    isSecureContext: true,
+    performance: { now: () => 0 },
+    AudioContext: Ctx,
+    AudioWorkletNode: Tap,
+    FormData,
+    Blob,
+    AbortController,
+    clearTimeout: () => {},
+    navigator: { userAgent: 'test', mediaDevices: { getUserMedia: () => Promise.resolve(stream) } },
+    fetch: (u, o) => (o?.method === 'POST' ? takes() : reply({ id: 'demo', audio: { minus: '/media/demo.mp3' } }))
+  }
+  if (offline) env.OfflineAudioContext = undefined
+  return env
+}
+
+async function recordedTake(env) {
+  const v = createVoice({}, env)
+  const events = listen(v)
+  await v.unlock()
+  await v.load_song('demo')
+  v.start()
+  env.taps[0].port.onmessage({ data: { pcm: new Float32Array(1600).fill(0.1), F: 4800 } })
+  await v.stop()
+  return { v, events }
+}
+
+const errorCodes = events => events.filter(e => e[0] === 'on_error').map(e => e[1].code)
+
+test('submit maps a network failure or timeout to net', async () => {
+  for (const err of [new TypeError('fetch failed'), Object.assign(new Error('aborted'), { name: 'AbortError' })]) {
+    const { v, events } = await recordedTake(recordingEnv({ takes: () => Promise.reject(err) }))
+    assert.equal(await v.submit('Паша', ''), false)
+    assert.deepEqual(errorCodes(events), ['net'], err.name)
+  }
+})
+
+test('submit maps a non-2xx response to upload_failed', async () => {
+  const takes = () => Promise.resolve({ ok: false, status: 422, text: async () => '{"detail":"bad_meta"}' })
+  const { v, events } = await recordedTake(recordingEnv({ takes }))
+  assert.equal(await v.submit('Паша', ''), false)
+  assert.deepEqual(errorCodes(events), ['upload_failed'])
+})
+
+test('submit emits on_result for a 2xx response', async () => {
+  const takes = () => Promise.resolve({ ok: true, status: 200, json: async () => ({ total: 1 }) })
+  const { v, events } = await recordedTake(recordingEnv({ takes }))
+  assert.equal(await v.submit('Паша', ''), true)
+  assert.deepEqual(events.at(-1), ['on_result', { total: 1 }])
+})
+
+test('the js resampler labels the wav with the real rate when the context is below 16 kHz', async () => {
+  const { v } = await recordedTake(recordingEnv({ sampleRate: 8000, takes: () => Promise.reject(new TypeError('x')), offline: true }))
+  const take = v._take()
+  assert.equal(take.resampler, 'js')
+  assert.equal(take.meta.wav_sr, 8000)
+  assert.equal(parseWavHeader(take.wav).sampleRate, 8000)
+})
+
+test('the js resampler downsamples to 16 kHz from a faster context', async () => {
+  const { v } = await recordedTake(recordingEnv({ sampleRate: 48000, takes: () => Promise.reject(new TypeError('x')), offline: true }))
+  const take = v._take()
+  assert.equal(take.resampler, 'js')
+  assert.equal(take.meta.wav_sr, 16000)
+  assert.equal(parseWavHeader(take.wav).sampleRate, 16000)
 })

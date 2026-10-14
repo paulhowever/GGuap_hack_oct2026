@@ -39,6 +39,6 @@ export function estimateLag(clicks, onsets, { early = 0.1, late = 0.4, outlier =
   const kept = diffs.filter(d => Math.abs(d - m) <= outlier)
   if (kept.length < minHits) return { lag_ms: null, hits: kept.length }
   const lag = Math.round(median(kept) * 1000)
-  if (lag < range[0] || lag > range[1]) return { lag_ms: null, hits: kept.length }
+  if (lag < range[0] || lag > range[1]) return { lag_ms: null, hits: 0 }
   return { lag_ms: lag, hits: kept.length }
 }

@@ -265,7 +265,8 @@ export function createVoice(cfg = {}, env = globalThis) {
       const out = await off.startRendering()
       return { data: out.getChannelData(0), rate: TARGET_SR, resampler: 'offline' }
     } catch {
-      return { data: downsample(pcm, sr, TARGET_SR), rate: TARGET_SR, resampler: 'js' }
+      const rate = Math.min(sr, TARGET_SR)
+      return { data: downsample(pcm, sr, rate), rate, resampler: 'js' }
     }
   }
 
@@ -330,7 +331,7 @@ export function createVoice(cfg = {}, env = globalThis) {
       bus.emit('on_result', result)
       return true
     } catch (e) {
-      return fail(ERR.UPLOAD, e)
+      return fail(e?.name === 'TypeError' || e?.name === 'AbortError' ? ERR.NET : ERR.UPLOAD, e)
     }
   }
 
