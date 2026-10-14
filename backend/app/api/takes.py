@@ -11,6 +11,7 @@ import soundfile as sf
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from pydantic import BaseModel, Field, ValidationError
 
+from app.api.players import CLIENT_ID
 from app.core.logging import log_event
 from app.f0.frames import FramesEngine
 from app.scoring.core import score_take
@@ -30,6 +31,7 @@ class Frame(BaseModel):
 
 class TakeMeta(BaseModel):
     song_id: str = Field(pattern=r"^[a-z0-9_-]{1,64}$")
+    client_id: str | None = Field(default=None, pattern=CLIENT_ID)
     player: str = Field(min_length=1, max_length=24)
     difficulty: Literal["easy", "normal", "hard"] = "normal"
     challenge_id: str | None = None
@@ -94,6 +96,7 @@ async def post_take(
     body = {
         "take_id": take_id,
         "song_id": m.song_id,
+        "client_id": m.client_id,
         "player": m.player,
         "difficulty": m.difficulty,
         "engine": {"final": f"{state.f0.name}-{state.f0.version}", "live": "pitchy-mpm"},
@@ -106,6 +109,7 @@ async def post_take(
         Take(
             id=take_id,
             song_id=m.song_id,
+            client_id=m.client_id,
             player=m.player,
             difficulty=m.difficulty,
             total=result["score"]["total"],
@@ -118,6 +122,7 @@ async def post_take(
         "take_scored",
         take_id=take_id,
         song_id=m.song_id,
+        client_id=m.client_id,
         difficulty=m.difficulty,
         dur_s=round(samples.size / sr, 2),
         lag_hint_ms=m.lag_ms,

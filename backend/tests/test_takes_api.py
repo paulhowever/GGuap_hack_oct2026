@@ -1,6 +1,8 @@
 import io
 import json
 import os
+import sqlite3
+import uuid
 
 import numpy as np
 import soundfile as sf
@@ -98,3 +100,16 @@ def test_oversized_upload_rejected_before_decode(client):
 def test_too_long(client, demo_ref):
     client.app.state.settings.max_take_s = 1.0
     assert post(client, wav_bytes(synth_take(demo_ref)), meta()).status_code == 413
+
+
+def test_take_stores_client_id(client, settings, demo_ref):
+    c = str(uuid.uuid4())
+    r = post(client, wav_bytes(synth_take(demo_ref)), meta(client_id=c))
+    assert r.status_code == 200
+    with sqlite3.connect(settings.data_dir / "app.db") as db:
+        row = db.execute("select client_id from takes where id = ?", (r.json()["take_id"],)).fetchone()
+    assert row == (c,)
+
+
+def test_take_rejects_bad_client_id(client, demo_ref):
+    assert post(client, wav_bytes(synth_take(demo_ref)), meta(client_id="nope")).status_code == 422

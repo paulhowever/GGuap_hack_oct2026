@@ -3,7 +3,7 @@ from pathlib import Path
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 
-from app.store.models import Base, Take
+from app.store.models import Base, Player, Take
 
 
 def make_engine(data_dir: Path) -> AsyncEngine:
@@ -24,3 +24,20 @@ async def ping(engine: AsyncEngine) -> str:
 async def save_take(sessions: async_sessionmaker, take: Take) -> None:
     async with sessions() as session, session.begin():
         session.add(take)
+
+
+async def upsert_player(sessions: async_sessionmaker, client_id: str, nickname: str, avatar: str) -> Player:
+    async with sessions() as session, session.begin():
+        player = await session.get(Player, client_id)
+        if player is None:
+            player = Player(client_id=client_id, nickname=nickname, avatar=avatar)
+            session.add(player)
+        else:
+            player.nickname = nickname
+            player.avatar = avatar
+    return player
+
+
+async def get_player(sessions: async_sessionmaker, client_id: str) -> Player | None:
+    async with sessions() as session:
+        return await session.get(Player, client_id)
