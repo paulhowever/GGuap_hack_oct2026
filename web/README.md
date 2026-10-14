@@ -30,7 +30,7 @@
 
 ## Задержка
 
-`lag_ms` берётся по приоритету: `configure`/`calibrate` в текущей сессии, затем `lag_ms` в `config.js` (на демо зашивается после калибровки на целевой цепочке), затем `localStorage['voice.lag_ms']`, затем оценка `outputLatency + baseLatency + latency трека` (0,02 с, если браузер её не отдаёт). Калибровка не удалась, если в `on_calibrated` `hits < 5` или `lag_ms` не изменился: `lag_ms` тогда прежний.
+`lag_ms` берётся по приоритету: `configure`/`calibrate` в текущей сессии, затем `lag_ms` в `config.js` (на демо зашивается после калибровки на целевой цепочке), затем `localStorage['voice.lag_ms']`, затем оценка `outputLatency + baseLatency + latency трека` (0,02 с, если браузер её не отдаёт). Калибровка не удалась, если в `on_calibrated` `hits < 5`: `lag_ms` тогда прежний.
 
 ## План Б
 

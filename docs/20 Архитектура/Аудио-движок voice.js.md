@@ -1,7 +1,7 @@
 ---
 tags: [архитектура, audio, паша]
 status: draft
-updated: 2026-10-08
+updated: 2026-10-14
 ---
 
 # Аудио-движок voice.js
@@ -61,6 +61,23 @@ registerProcessor('tap',Tap)
 - getUserMedia и AudioContext запускаются только из обработчика клика по HTML-оверлею. Дополнительно стоит `document.onpointerdown → ctx.resume()`.
 - Локально подходит `http://localhost:8000`, онлайн нужен HTTPS.
 - Минус в mp3, звуки во время пения через Godot не играем.
+
+## Отличия реализации от дизайна
+- `gate = min(0.05, max(0.01, 3·noise_floor))`: без верхней границы громкая секунда замера шума поднимала gate выше уровня пения.
+- `lag_ms` по умолчанию считается после секунды замера шума: сразу после `resume()` Chromium отдаёт `outputLatency = 0`.
+- `unlock()` ждёт `resume()` не больше 1 с, затем `on_error{audio_locked}`.
+- Приоритет задержки: `configure`/`calibrate` в сессии → `lag_ms` в `config.js` → `localStorage['voice.lag_ms']` → оценка.
+- `on_unlocked` повторяется новому подписчику: оверлей может сработать раньше `subscribe` из Godot.
+- Неудачная калибровка: `on_calibrated{lag_ms: прежний, hits < 5}`.
+- WAV: `OfflineAudioContext`, при исключении — `web/lib/resample.js` (ФНЧ + интерполяция).
+- PCM из worklet идёт блоками по 4096 сэмплов; после `{rec:false}` worklet досылает хвост и `{recDone:true}`.
+- Мок: offkey = +250 центов, octave = −12 на чётных строках и +12 на нечётных. План Б — Alt+Shift+R.
+- Отладочные поля моста `_mode`, `_state()`, `_take()`, `_planB()` Godot не использует.
+- Калибровка принимается только при задержке от −20 до 400 мс; отклонённая по диапазону даёт `on_calibrated{lag_ms: прежний, hits: 0}`.
+- `submit`: сетевой сбой и таймаут 10 с → `on_error{net}`, ответ не 2xx → `on_error{upload_failed}`.
+- WAV в JS-фолбэке пишется с частотой `min(sr, 16000)`, а не с родной.
+- Ник в meta режется до 24 code points (не UTF-16 единиц), пустой заменяется на «Игрок».
+- Живой судья (`on_note_judged`): окно онсета ноты начинается за 0,15 с до неё, но не раньше конца предыдущей ноты — как в бэкенде.
 
 ## Связанные
 - [[Контракты]]
