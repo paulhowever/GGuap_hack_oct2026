@@ -1,3 +1,6 @@
+import copy
+from itertools import pairwise
+
 import numpy as np
 import pytest
 
@@ -80,3 +83,19 @@ def test_muted_line_drops_only_that_line(demo_ref, cfg):
     res = run(demo_ref, cfg, synth_take(demo_ref, mute_lines=frozenset({1})))
     assert res["lines"][0]["grade"] == "Perfect"
     assert res["lines"][1]["score"] <= 10
+
+
+@pytest.mark.parametrize("difficulty", ["easy", "normal"])
+def test_contiguous_notes_keep_their_own_onset(demo_ref, cfg, difficulty):
+    ref = copy.deepcopy(demo_ref)
+    notes = ref["lines"][1]["notes"]
+    notes[1]["midi"] = 65
+    notes[2]["midi"] = 66
+    for prev, cur in pairwise(notes):
+        cur["t"] = round(prev["t"] + prev["d"], 3)
+    res = run(ref, cfg, synth_take(ref), difficulty)
+    assert res["score"]["total"] >= 9500
+    for k in (4, 5):
+        assert res["notes"][k]["onset_ms"] is not None
+        assert abs(res["notes"][k]["onset_ms"]) <= cfg.onset_ok_ms
+        assert res["notes"][k]["perfect"] is True

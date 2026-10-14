@@ -20,8 +20,9 @@ def note_dc(midi: np.ndarray, voiced: np.ndarray, target: float) -> np.ndarray:
     return np.where(voiced, fold_cents(100.0 * (np.nan_to_num(midi) - target)), np.inf)
 
 
-def find_onset(t, ok, t0: float, d: float) -> float | None:
-    window = np.flatnonzero((t >= t0 - ONSET_PRE_S) & (t <= t0 + min(0.4, 0.6 * d)))
+def find_onset(t, ok, t0: float, d: float, prev_end: float | None) -> float | None:
+    start = t0 - ONSET_PRE_S if prev_end is None else max(t0 - ONSET_PRE_S, prev_end)
+    window = np.flatnonzero((t >= start) & (t <= t0 + min(0.4, 0.6 * d)))
     for k in window:
         if k + 2 < ok.size and ok[k] and ok[k + 1] and ok[k + 2]:
             return round(float((t[k] - t0) * 1000.0), 1)
@@ -37,7 +38,9 @@ def stability(t, voiced, dc, t0: float, t1: float) -> float | None:
     return round(float(np.std(x[half : half + ma.size] - ma)), 1)
 
 
-def measure_note(i: int, line: int, note: dict, grid: Grid, tol: float, cfg: ScoringConfig) -> NoteMetrics:
+def measure_note(
+    i: int, line: int, note: dict, grid: Grid, tol: float, cfg: ScoringConfig, prev_end: float | None
+) -> NoteMetrics:
     t0, t1 = note["t"], note["t"] + note["d"]
     body = (grid.t >= t0 + EDGE_TRIM_S) & (grid.t < t1 - EDGE_TRIM_S)
     if not body.any():
@@ -50,7 +53,7 @@ def measure_note(i: int, line: int, note: dict, grid: Grid, tol: float, cfg: Sco
     hit = float((sung & (np.abs(dc) <= tol)).sum() / n) if pitched and n else coverage
     cents = round(float(np.median(dc[sung])), 1) if pitched and sung.any() else None
     onset_ok = grid.voiced & (np.abs(dc) <= tol + 50) if pitched else grid.voiced
-    onset = find_onset(grid.t, onset_ok, t0, note["d"])
+    onset = find_onset(grid.t, onset_ok, t0, note["d"], prev_end)
     stab = stability(grid.t, grid.voiced, dc, t0, t1) if pitched else None
     perfect = hit >= 0.9 and onset is not None and abs(onset) <= cfg.onset_ok_ms
     return NoteMetrics(
@@ -150,10 +153,11 @@ def score_take(
     latency = estimate_latency(raw, ref_mask, ref_midi, cfg, tol, lag_hint_ms)
     s = steps_for(latency.applied_ms)
     grid = Grid(raw.t, shifted(raw.voiced, s, False), shifted(raw.midi, s, np.nan))
+    ordered = [(line["i"], note) for line in ref["lines"] for note in line["notes"]]
+    ends = [None] + [note["t"] + note["d"] for _, note in ordered[:-1]]
     measured = [
-        (note, measure_note(note["i"], line["i"], note, grid, tol, cfg))
-        for line in ref["lines"]
-        for note in line["notes"]
+        (note, measure_note(note["i"], line_i, note, grid, tol, cfg, prev_end))
+        for (line_i, note), prev_end in zip(ordered, ends, strict=True)
     ]
     scored = note_points(measured, cfg)
     pairs = [(n, m) for (n, _), m in zip(measured, scored, strict=True)]
