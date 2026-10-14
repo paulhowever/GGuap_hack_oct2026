@@ -6,6 +6,7 @@ import time
 import uuid
 
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import PlainTextResponse
 
 request_id_var: contextvars.ContextVar[str] = contextvars.ContextVar("request_id", default="-")
 log = logging.getLogger("karaoke")
@@ -47,15 +48,22 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
         rid = request.headers.get("x-request-id") or uuid.uuid4().hex[:12]
         token = request_id_var.set(rid)
         start = time.perf_counter()
-        response = await call_next(request)
+        error = None
+        try:
+            response = await call_next(request)
+        except Exception as exc:
+            error = exc
+            response = PlainTextResponse("Internal Server Error", status_code=500)
+        fields = {
+            "method": request.method,
+            "path": request.url.path,
+            "status": response.status_code,
+            "ms": round((time.perf_counter() - start) * 1000, 1),
+        }
+        if error is None:
+            log_event(log, "request", **fields)
+        else:
+            log.error("request", extra={"fields": fields}, exc_info=error)
         response.headers["x-request-id"] = rid
-        log_event(
-            log,
-            "request",
-            method=request.method,
-            path=request.url.path,
-            status=response.status_code,
-            ms=round((time.perf_counter() - start) * 1000, 1),
-        )
         request_id_var.reset(token)
         return response

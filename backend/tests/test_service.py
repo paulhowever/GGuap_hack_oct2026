@@ -70,3 +70,30 @@ def test_json_formatter():
     assert out["msg"] == "take_scored"
     assert out["total"] == 9100
     assert out["level"] == "INFO"
+
+
+def _boom_client(client):
+    async def boom():
+        raise RuntimeError("route exploded")
+
+    client.app.add_api_route("/boom", boom)
+    return TestClient(client.app, raise_server_exceptions=False)
+
+
+def test_unhandled_error_keeps_request_id(client):
+    r = _boom_client(client).get("/boom", headers={"x-request-id": "rq500"})
+    assert r.status_code == 500
+    assert r.text == "Internal Server Error"
+    assert r.headers["x-request-id"] == "rq500"
+
+
+def test_unhandled_error_is_logged_with_request_id(client, caplog):
+    caplog.handler.setFormatter(JsonFormatter())
+    _boom_client(client).get("/boom", headers={"x-request-id": "rq501"})
+    lines = [json.loads(line) for line in caplog.text.splitlines() if line.startswith("{")]
+    requests = [x for x in lines if x["msg"] == "request" and x["path"] == "/boom"]
+    assert len(requests) == 1
+    assert requests[0]["request_id"] == "rq501"
+    assert requests[0]["status"] == 500
+    assert requests[0]["level"] == "ERROR"
+    assert "route exploded" in requests[0]["exc"]
