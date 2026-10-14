@@ -72,6 +72,17 @@ test('buildMeta produces the contract 3.3 shape', () => {
   assert.equal(buildMeta({ player: '', wavT0: 0, lagMs: 0 }).player, 'Игрок')
 })
 
+test('buildMeta cuts the nickname by code points', () => {
+  const cut = buildMeta({ player: 'a' + '😀'.repeat(13), wavT0: 0, lagMs: 0 }).player
+  assert.equal(cut.isWellFormed(), true)
+  assert.ok(Array.from(cut).length <= 24)
+  assert.equal(Array.from(cut).length, 14)
+  const full = buildMeta({ player: '😀'.repeat(24), wavT0: 0, lagMs: 0 }).player
+  assert.equal(Array.from(full).length, 24)
+  assert.equal(full, '😀'.repeat(24))
+  assert.equal(Array.from(buildMeta({ player: '😀'.repeat(30), wavT0: 0, lagMs: 0 }).player).length, 24)
+})
+
 test('parseOptions accepts JSON strings and objects and ignores junk', () => {
   assert.deepEqual(parseOptions('{"lag_ms":40}'), { lag_ms: 40 })
   assert.deepEqual(parseOptions({ aec: true }), { aec: true })
