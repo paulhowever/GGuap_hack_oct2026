@@ -29,7 +29,7 @@ export function detectOnsets(frames, { sr, threshold, hop = 512, refractory = 0.
   return out
 }
 
-export function estimateLag(clicks, onsets, { early = 0.1, late = 0.4, outlier = 0.06, minHits = 5, range = [-100, 500] } = {}) {
+export function estimateLag(clicks, onsets, { early = 0.1, late = 0.4, outlier = 0.06, minHits = 5, range = [-20, 400] } = {}) {
   const diffs = []
   for (const c of clicks) {
     const o = onsets.find(t => t >= c - early && t < c + late)

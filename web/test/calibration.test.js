@@ -51,3 +51,11 @@ test('estimateLag works end to end from frames', () => {
   assert.equal(r.hits, 8)
   assert.ok(Math.abs(r.lag_ms - 200) <= 11, `lag ${r.lag_ms}`)
 })
+
+test('estimateLag rejects lags that alias into the neighbouring click window', () => {
+  const clicks = clickTimes(1)
+  for (const lag of [0.41, 0.45]) {
+    const r = estimateLag(clicks, clicks.map(c => c + lag))
+    assert.equal(r.lag_ms, null, `lag ${lag}`)
+  }
+})
