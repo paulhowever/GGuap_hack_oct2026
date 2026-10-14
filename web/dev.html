@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>voice.js dev</title>
+<style>
+  body { font: 14px/1.4 system-ui, sans-serif; margin: 0; background: #111; color: #eee }
+  #overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, .85); z-index: 10 }
+  #overlay button { font-size: 24px; padding: 24px 48px }
+  main { padding: 12px; display: grid; gap: 10px; max-width: 980px }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center }
+  #bt { display: none; background: #a30; padding: 8px }
+  canvas { background: #1b1b1b; width: 960px; height: 320px; max-width: 100% }
+  #meter { display: inline-block; width: 240px; height: 12px; background: #333 }
+  #meter div { height: 100%; width: 0; background: #3c3 }
+  pre { background: #1b1b1b; padding: 8px; max-height: 320px; overflow: auto; margin: 0; white-space: pre-wrap }
+  dl { display: grid; grid-template-columns: max-content auto; gap: 2px 12px; margin: 0 }
+  dt { color: #999 }
+  dd { margin: 0 }
+</style>
+</head>
+<body>
+<div id="overlay"><button id="unlock">Нажми, чтобы начать</button></div>
+<main>
+  <div id="bt">Похоже на Bluetooth: outputLatency больше 100 мс. Подключи наушники проводом.</div>
+  <div class="row">
+    <select id="song"></select>
+    <select id="difficulty"><option>easy</option><option selected>normal</option><option>hard</option></select>
+    <button id="load">Загрузить</button>
+    <button id="start">Старт</button>
+    <button id="stop">Стоп</button>
+    <button id="calibrate" title="8 щелчков, хлопай в такт каждому">Калибровка</button>
+    <button id="lagMinus">lag −10</button>
+    <button id="lagPlus">lag +10</button>
+  </div>
+  <div class="row">
+    <input id="player" value="Паша" maxlength="32">
+    <button id="submit">Отправить</button>
+    <button id="download">Скачать дубль</button>
+    <span id="meter"><div></div></span>
+    <span id="db"></span>
+  </div>
+  <canvas id="lane" width="960" height="320"></canvas>
+  <dl id="stats"></dl>
+  <pre id="result"></pre>
+  <pre id="log"></pre>
+</main>
+<script src="config.js"></script>
+<script type="module" src="voice.js"></script>
+<script type="module">
+import { hzToMidi, foldToNote, isHit } from './lib/pitch.js'
+import { parseWavHeader } from './lib/wav.js'
+
+const voice = window.voice
+const $ = id => document.getElementById(id)
+const UNLOCK_ERRORS = ['insecure_context', 'mic_denied', 'mic_not_found', 'audio_locked', 'worklet_failed']
+const st = { ref: null, tol: 120, frames: [], tNow: 0, state: 'idle', level: 0, unlocked: null, lastFrames: 0, count: 0, fps: 0, wav: null }
+
+function log(name, data) {
+  const line = `${new Date().toISOString().slice(11, 23)} ${name} ${JSON.stringify(data)}`
+  $('log').textContent = `${line}\n${$('log').textContent}`.slice(0, 20000)
+}
+
+function summary(name, data) {
+  if (name === 'on_ready') return { id: data.id, lines: data.lines.length, scoring: data.scoring, lag_ms: data.lag_ms }
+  if (name === 'on_result') return { total: data.score?.total, grade: data.score?.grade, latency: data.latency }
+  return data
+}
+
+voice.subscribe((name, json) => {
+  const data = JSON.parse(json)
+  log(name, summary(name, data))
+  if (name === 'on_unlocked') {
+    st.unlocked = data
+    $('bt').style.display = data.bt_suspect ? 'block' : 'none'
+  }
+  if (name === 'on_ready') {
+    st.ref = data
+    st.tol = data.scoring.tol_cents
+    st.frames = []
+  }
+  if (name === 'on_song_end') showTake()
+  if (name === 'on_result') $('result').textContent = JSON.stringify(data, null, 2)
+  if (name === 'on_error') {
+    $('result').textContent = `Ошибка ${data.code}: ${data.msg}`
+    if (UNLOCK_ERRORS.includes(data.code)) $('overlay').style.display = 'flex'
+  }
+})
+
+$('unlock').onclick = () => {
+  $('overlay').style.display = 'none'
+  voice.unlock()
+}
+
+async function loadSongs() {
+  let list = []
+  try {
+    const r = await fetch('/api/v1/songs')
+    if (r.ok) list = await r.json()
+  } catch {}
+  if (!list.some(s => s.id === 'demo')) list.push({ id: 'demo', title: 'demo' })
+  for (const s of list) $('song').add(new Option(`${s.title} (${s.id})`, s.id))
+}
+
+async function showTake() {
+  await voice.stop()
+  const take = voice._take()
+  if (!take) return
+  const h = parseWavHeader(take.wav)
+  st.wav = `${h.sampleRate} Гц, ${h.duration.toFixed(2)} с, wav_t0 ${take.meta.wav_t0}, кадров ${take.meta.frames.length}, ресемплер ${take.resampler}`
+}
+
+function save(name, blob) {
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = name
+  a.click()
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000)
+}
+
+function downloadTake() {
+  const take = voice._take()
+  if (!take) return log('dev', 'нет дубля')
+  save('take.wav', new Blob([take.wav], { type: 'audio/wav' }))
+  save('take.meta.json', new Blob([JSON.stringify(take.meta)], { type: 'application/json' }))
+}
+
+function nudge(d) {
+  voice.configure(JSON.stringify({ lag_ms: voice._state().lag_ms + d }))
+}
+
+$('load').onclick = () => {
+  voice.configure(JSON.stringify({ difficulty: $('difficulty').value }))
+  voice.load_song($('song').value)
+}
+$('start').onclick = () => {
+  st.frames = []
+  st.wav = null
+  $('result').textContent = ''
+  voice.start()
+}
+$('stop').onclick = showTake
+$('calibrate').onclick = () => voice.calibrate()
+$('lagMinus').onclick = () => nudge(-10)
+$('lagPlus').onclick = () => nudge(10)
+$('submit').onclick = () => {
+  $('result').textContent = 'Судья слушает…'
+  voice.submit($('player').value, new URLSearchParams(location.search).get('challenge') || '')
+}
+$('download').onclick = downloadTake
+
+const lane = $('lane')
+const g = lane.getContext('2d')
+
+function currentLine(t) {
+  const lines = st.ref?.lines || []
+  return lines.find(l => t < l.t1 + 0.3) || lines.at(-1) || null
+}
+
+function drawFree(W, H) {
+  const recent = st.frames.slice(-400)
+  const lo = 36
+  const hi = 88
+  g.fillStyle = '#4d4'
+  recent.forEach((f, i) => {
+    if (f.hz > 0) g.fillRect((i * W) / 400, H - ((hzToMidi(f.hz) - lo) / (hi - lo)) * H, 2, 2)
+  })
+}
+
+function drawLine(line, W, H) {
+  const midis = line.notes.map(n => n.midi)
+  const lo = Math.min(...midis) - 2
+  const hi = Math.max(Math.min(...midis) + 12, Math.max(...midis) + 2)
+  const x = t => ((t - line.t0) / (line.t1 - line.t0)) * W
+  const y = m => H - ((m - lo) / (hi - lo)) * H
+  const row = H / (hi - lo)
+  for (const n of line.notes) {
+    g.fillStyle = n.type === 'golden' ? '#c90' : '#3a6ea5'
+    g.fillRect(x(n.t), y(n.midi) - row / 2, x(n.t + n.d) - x(n.t), row)
+  }
+  for (const f of st.frames) {
+    if (f.hz <= 0 || f.t < line.t0 - 0.5 || f.t > line.t1 + 0.5) continue
+    const n = line.notes.find(k => f.t >= k.t && f.t < k.t + k.d)
+    const m = foldToNote(hzToMidi(f.hz), n ? n.midi : (lo + hi) / 2)
+    g.fillStyle = n && isHit(f.hz, n.midi, st.tol) ? '#4d4' : '#e84'
+    g.fillRect(x(f.t) - 1.5, y(m) - 1.5, 3, 3)
+  }
+  g.fillStyle = '#fff'
+  g.fillRect(x(st.tNow), 0, 1, H)
+  g.font = '14px system-ui'
+  g.fillText(line.text, 8, 18)
+}
+
+function draw() {
+  const W = lane.width
+  const H = lane.height
+  g.fillStyle = '#1b1b1b'
+  g.fillRect(0, 0, W, H)
+  const line = st.state === 'idle' ? null : currentLine(st.tNow)
+  if (line) drawLine(line, W, H)
+  else drawFree(W, H)
+  $('meter').firstElementChild.style.width = `${Math.min(100, st.level * 400)}%`
+  $('db').textContent = st.level > 0 ? `${(20 * Math.log10(st.level)).toFixed(1)} dBFS` : ''
+}
+
+function tick() {
+  const p = JSON.parse(voice.poll())
+  st.tNow = p.t_now
+  st.state = p.state
+  st.level = p.level
+  st.lastFrames = p.frames.length
+  st.count += p.frames.length
+  for (const f of p.frames) st.frames.push(f)
+  if (st.frames.length > 4000) st.frames.splice(0, st.frames.length - 4000)
+  draw()
+  requestAnimationFrame(tick)
+}
+
+const ms = v => (v == null ? '—' : `${(v * 1000).toFixed(1)} мс`)
+
+function stats() {
+  const vs = voice._state()
+  const last = st.frames.findLast(f => f.hz > 0)
+  const rows = [
+    ['режим', voice._mode],
+    ['состояние', `${st.state}, t_now ${st.tNow.toFixed(3)}`],
+    ['sr / ctx', `${vs.sr ?? '—'} / ${vs.ctx_state ?? '—'}`],
+    ['outputLatency', ms(vs.output_latency)],
+    ['baseLatency', ms(vs.base_latency)],
+    ['lag_ms применён / оценка', `${vs.lag_ms} / ${vs.est_lag_ms ?? '—'}`],
+    ['шум / gate', `${st.unlocked?.noise_db ?? '—'} dB / ${vs.gate ?? '—'}`],
+    ['кадров/с, за poll', `${st.fps}, ${st.lastFrames}`],
+    ['последний тон', last ? `${last.hz} Гц, midi ${hzToMidi(last.hz).toFixed(2)}, conf ${last.conf}` : '—'],
+    ['дубль', st.wav ?? '—']
+  ]
+  $('stats').replaceChildren(...rows.flatMap(([k, v]) => {
+    const dt = document.createElement('dt')
+    const dd = document.createElement('dd')
+    dt.textContent = k
+    dd.textContent = v
+    return [dt, dd]
+  }))
+}
+
+setInterval(() => {
+  st.fps = st.count
+  st.count = 0
+}, 1000)
+setInterval(stats, 250)
+loadSongs()
+requestAnimationFrame(tick)
+</script>
+</body>
+</html>

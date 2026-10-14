@@ -1,0 +1,18 @@
+{"take_id":"tk_demo","song_id":"demo","player":"Мок","difficulty":"normal","version":"score-v1",
+ "engine":{"final":"mock","live":"pitchy-mpm"},
+ "latency":{"hint_ms":40,"estimated_ms":52,"applied_ms":52,"residual_ms":0,"confidence":0.9},
+ "score":{"total":9420,"max":10000,"grade":"S","pitch_pct":95.0,"rhythm_pct":91.0,"extras_pct":83.0,"live_total":9310,"source":"final"},
+ "lines":[
+  {"i":0,"t0":2.5,"t1":5.5,"text":"до ре ми","score":96,"grade":"Perfect","pitch_pct":97,"rhythm_pct":94,"tip":null},
+  {"i":1,"t0":6.0,"t1":8.9,"text":"фа соль ля","score":88,"grade":"Great","pitch_pct":92,"rhythm_pct":80,"tip":"«фа соль ля» чуть позже на ~110 мс"}],
+ "notes":[
+  {"i":0,"line":0,"hit":0.97,"cents":-8,"onset_ms":20,"stab_c":12,"perfect":true,"pts":1600},
+  {"i":1,"line":0,"hit":0.96,"cents":5,"onset_ms":35,"stab_c":15,"perfect":true,"pts":1600},
+  {"i":2,"line":0,"hit":0.98,"cents":-3,"onset_ms":10,"stab_c":10,"perfect":true,"pts":2000},
+  {"i":3,"line":1,"hit":0.93,"cents":12,"onset_ms":110,"stab_c":20,"perfect":false,"pts":1500},
+  {"i":4,"line":1,"hit":0.91,"cents":-15,"onset_ms":105,"stab_c":22,"perfect":false,"pts":1400},
+  {"i":5,"line":1,"hit":0.92,"cents":9,"onset_ms":95,"stab_c":18,"perfect":false,"pts":1320}],
+ "chart":{"hop_ms":20,"t0":2.0,"sung":[null,null,59.9,60.0,60.1]},
+ "tips":[{"code":"late","sev":"info","line":1,"text":"«фа соль ля» чуть позже на ~110 мс"}],
+ "challenge":null,
+ "leaderboard":{"rank":1,"of":1,"personal_best":true}}
