@@ -53,6 +53,7 @@ def test_silence_falls_back_to_hint(demo_ref, cfg):
     lat = estimate_latency(g, mask, midi, cfg, cfg.tol("normal"), 48.0)
     assert lat.confidence == 0.0
     assert lat.applied_ms == 48.0
+    assert lat.residual_ms == 0.0
     assert not g.voiced.any()
 
 

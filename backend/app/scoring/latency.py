@@ -66,6 +66,6 @@ def estimate_latency(
         hint_ms=hint_ms,
         estimated_ms=estimated,
         applied_ms=float(applied),
-        residual_ms=float(estimated - applied),
+        residual_ms=0.0 if rho < cfg.rho_min else float(estimated - applied),
         confidence=round(max(rho, 0.0), 3),
     )
