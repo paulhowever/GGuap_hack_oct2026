@@ -74,12 +74,14 @@ async def post_take(
     ref = state.songs.get(m.song_id)
     if ref is None:
         raise HTTPException(status_code=404, detail="song_not_found")
+    if audio.size is not None and audio.size > int(state.settings.max_take_s * 48000 * 4) + 65536:
+        raise HTTPException(status_code=413, detail="take_too_long")
     raw = await audio.read()
     try:
         samples, sr = await asyncio.to_thread(decode_wav, raw)
     except (sf.LibsndfileError, RuntimeError, ValueError):
         raise HTTPException(status_code=422, detail="bad_audio") from None
-    if samples.size == 0:
+    if samples.size < sr // 10:
         raise HTTPException(status_code=422, detail="bad_audio")
     if samples.size / sr > state.settings.max_take_s:
         raise HTTPException(status_code=413, detail="take_too_long")

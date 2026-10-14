@@ -1,5 +1,6 @@
 import io
 import json
+import os
 
 import numpy as np
 import soundfile as sf
@@ -79,6 +80,19 @@ def test_empty_audio(client):
     r = post(client, wav_bytes(np.zeros(0, dtype=np.float32)), meta())
     assert r.status_code == 422
     assert r.json()["detail"] == "bad_audio"
+
+
+def test_short_audio(client):
+    r = post(client, wav_bytes(np.zeros(10, dtype=np.float32)), meta())
+    assert r.status_code == 422
+    assert r.json()["detail"] == "bad_audio"
+
+
+def test_oversized_upload_rejected_before_decode(client):
+    client.app.state.settings.max_take_s = 1.0
+    r = post(client, os.urandom(300_000), meta())
+    assert r.status_code == 413
+    assert r.json()["detail"] == "take_too_long"
 
 
 def test_too_long(client, demo_ref):
