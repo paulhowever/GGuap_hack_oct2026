@@ -3,7 +3,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "vendor": "esbuild node_modules/pitchy/dist/index.js --bundle --format=esm --outfile=vendor/pitchy.bundle.js"
+    "vendor": "esbuild node_modules/pitchy/index.js --bundle --format=esm --minify --outfile=vendor/pitchy.bundle.js",
+    "pretest": "npm run vendor",
+    "test": "node --test"
   },
   "dependencies": {
     "pitchy": "^4.1.0"
