@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 
-from sqlalchemy import DateTime, Integer, String, Text
+from sqlalchemy import DateTime, Index, Integer, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -10,10 +10,12 @@ class Base(DeclarativeBase):
 
 class Take(Base):
     __tablename__ = "takes"
+    __table_args__ = (Index("ix_takes_board", "song_id", "difficulty", "integrity_status", "total"),)
 
     id: Mapped[str] = mapped_column(String(32), primary_key=True)
     song_id: Mapped[str] = mapped_column(String(64), index=True)
     client_id: Mapped[str | None] = mapped_column(String(36), index=True, nullable=True)
+    integrity_status: Mapped[str] = mapped_column(String(10), default="ok")
     player: Mapped[str] = mapped_column(String(24))
     difficulty: Mapped[str] = mapped_column(String(8))
     total: Mapped[int] = mapped_column(Integer)

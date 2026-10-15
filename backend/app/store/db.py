@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 from pathlib import Path
 
-from sqlalchemy import text
+from sqlalchemy import select, text, update
 from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 
@@ -43,3 +43,21 @@ async def upsert_player(sessions: async_sessionmaker, client_id: str, nickname: 
 async def get_player(sessions: async_sessionmaker, client_id: str) -> Player | None:
     async with sessions() as session:
         return await session.get(Player, client_id)
+
+
+async def get_take(sessions: async_sessionmaker, take_id: str) -> Take | None:
+    async with sessions() as session:
+        return await session.get(Take, take_id)
+
+
+async def set_result_json(sessions: async_sessionmaker, take_id: str, result_json: str) -> None:
+    async with sessions() as session, session.begin():
+        await session.execute(update(Take).where(Take.id == take_id).values(result_json=result_json))
+
+
+async def players_by_id(sessions: async_sessionmaker, client_ids: list[str]) -> dict[str, Player]:
+    if not client_ids:
+        return {}
+    async with sessions() as session:
+        rows = await session.execute(select(Player).where(Player.client_id.in_(client_ids)))
+        return {p.client_id: p for p in rows.scalars()}

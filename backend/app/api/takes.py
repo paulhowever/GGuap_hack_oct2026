@@ -12,10 +12,11 @@ from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from app.api.players import CLIENT_ID
+from app.board import placement
 from app.core.logging import log_event
 from app.f0.frames import FramesEngine
 from app.scoring.core import score_take
-from app.store.db import save_take
+from app.store.db import get_take, save_take, set_result_json
 from app.store.models import Take
 
 router = APIRouter(prefix="/api/v1")
@@ -111,19 +112,21 @@ async def post_take(
         "challenge": None,
         "leaderboard": None,
     }
-    await save_take(
-        state.sessions,
-        Take(
-            id=take_id,
-            song_id=m.song_id,
-            client_id=m.client_id,
-            player=m.player,
-            difficulty=m.difficulty,
-            total=result["score"]["total"],
-            grade=result["score"]["grade"],
-            result_json=json.dumps(body, ensure_ascii=False),
-        ),
+    take = Take(
+        id=take_id,
+        song_id=m.song_id,
+        client_id=m.client_id,
+        player=m.player,
+        difficulty=m.difficulty,
+        total=result["score"]["total"],
+        grade=result["score"]["grade"],
+        integrity_status="ok",
+        result_json=json.dumps(body, ensure_ascii=False),
     )
+    await save_take(state.sessions, take)
+    if take.integrity_status == "ok":
+        body["leaderboard"] = await placement(state.sessions, take)
+    await set_result_json(state.sessions, take_id, json.dumps(body, ensure_ascii=False))
     log_event(
         log,
         "take_scored",
@@ -144,3 +147,11 @@ async def post_take(
         **timings,
     )
     return body
+
+
+@router.get("/takes/{take_id}")
+async def read_take(take_id: str, request: Request) -> dict:
+    take = await get_take(request.app.state.sessions, take_id)
+    if take is None:
+        raise HTTPException(status_code=404, detail="take_not_found")
+    return json.loads(take.result_json)
