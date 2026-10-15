@@ -3,14 +3,17 @@ from typing import Annotated
 from fastapi import APIRouter, HTTPException, Path, Request
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.duel import CHALLENGE_ID, new_challenge_id, verdict
 from app.store.db import add_row, challenge_for_take, get_challenge, get_take, rival_takes
-from app.store.models import Challenge
+from app.store.models import Challenge, Take
 
 router = APIRouter(prefix="/api/v1")
 short = APIRouter()
+
+MAX_ATTEMPTS = 3
 
 
 class ChallengeIn(BaseModel):
@@ -24,6 +27,24 @@ async def unused_id(sessions: async_sessionmaker) -> str:
             return challenge_id
 
 
+async def create_challenge(sessions: async_sessionmaker, take: Take) -> Challenge:
+    failure = None
+    for _ in range(MAX_ATTEMPTS):
+        challenge = Challenge(
+            id=await unused_id(sessions), take_id=take.id, song_id=take.song_id, difficulty=take.difficulty
+        )
+        try:
+            await add_row(sessions, challenge)
+        except IntegrityError as error:
+            existing = await challenge_for_take(sessions, take.id)
+            if existing is not None:
+                return existing
+            failure = error
+        else:
+            return challenge
+    raise failure
+
+
 @router.post("/challenges")
 async def post_challenge(body: ChallengeIn, request: Request) -> dict:
     sessions = request.app.state.sessions
@@ -32,10 +53,7 @@ async def post_challenge(body: ChallengeIn, request: Request) -> dict:
         raise HTTPException(status_code=404, detail="take_not_found")
     challenge = await challenge_for_take(sessions, take.id)
     if challenge is None:
-        challenge = Challenge(
-            id=await unused_id(sessions), take_id=take.id, song_id=take.song_id, difficulty=take.difficulty
-        )
-        await add_row(sessions, challenge)
+        challenge = await create_challenge(sessions, take)
     return {"id": challenge.id, "url": f"{request.base_url}c/{challenge.id}"}
 
 
