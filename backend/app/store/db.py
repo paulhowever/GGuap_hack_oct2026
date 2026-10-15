@@ -83,7 +83,7 @@ async def rival_takes(sessions: async_sessionmaker, challenge_id: str) -> list[T
     query = (
         select(Take)
         .join(Rival, Rival.take_id == Take.id)
-        .where(Rival.challenge_id == challenge_id)
+        .where(Rival.challenge_id == challenge_id, Take.integrity_status == "ok")
         .order_by(Take.total.desc(), Take.created_at)
     )
     async with sessions() as session:

@@ -136,3 +136,21 @@ def test_challenge_errors(client, submit):
     r = client.get("/api/v1/challenges/zzzzzz")
     assert r.status_code == 404
     assert r.json()["detail"] == "challenge_not_found"
+
+
+def test_only_ok_rivals_are_listed(client, submit, partial):
+    owner, r = make_challenge(client, submit)
+    cid = r.json()["id"]
+    ok = submit(player="Саня", challenge_id=cid).json()
+    flat = submit(player="Вася", challenge_id=cid, synth={"jitter_cents": 0.0}).json()
+    early = submit(player="Петя", challenge_id=cid, audio=partial()).json()
+    unsigned = submit(player="Коля", challenge_id=cid, session=False, synth={"cents": 20}).json()
+    assert flat["integrity"]["status"] == "suspect"
+    assert early["integrity"]["status"] == "incomplete"
+    assert unsigned["integrity"]["status"] == "unverified"
+    for body in (flat, early, unsigned):
+        assert body["challenge"]["id"] == cid
+        assert body["challenge"]["opponent"] == "Макс"
+    view = client.get(f"/api/v1/challenges/{cid}").json()
+    assert [t["take_id"] for t in view["rivals"]] == [ok["take_id"]]
+    assert view["owner"]["take_id"] == owner["take_id"]

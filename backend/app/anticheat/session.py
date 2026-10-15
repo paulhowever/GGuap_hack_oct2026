@@ -69,7 +69,7 @@ async def session_flags(
     song_id: str,
     client_id: str | None,
     difficulty: str,
-    duration: float,
+    covered_s: float,
 ) -> list[str]:
     if not token:
         return ["no_session"]
@@ -79,6 +79,6 @@ async def session_flags(
         return ["bad_session"]
     if not await consume_session(sessions, token_hash(token), t):
         return ["bad_session"]
-    if t < issued_at + duration - TOO_FAST_SLACK_S:
+    if t < issued_at + covered_s - TOO_FAST_SLACK_S:
         return ["too_fast"]
     return []

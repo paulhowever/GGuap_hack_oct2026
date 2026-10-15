@@ -98,6 +98,15 @@ def submit(client, demo_ref, clock):
 
 
 @pytest.fixture
+def partial(demo_ref):
+    def go(share=0.6):
+        x = synth_take(demo_ref, jitter_cents=20.0)
+        return x[: int(round(x.size * share))]
+
+    return go
+
+
+@pytest.fixture
 def seed(client):
     def go(take_id, total, player="A", client_id=None, difficulty="normal", status="ok"):
         take = Take(

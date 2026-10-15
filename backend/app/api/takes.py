@@ -13,7 +13,7 @@ from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from app.anticheat.integrity import integrity_of
+from app.anticheat.integrity import completion_of, integrity_of
 from app.anticheat.session import session_flags
 from app.anticheat.signal import SignalCheck, check_signal, skipped_check
 from app.api.players import CLIENT_ID
@@ -135,11 +135,15 @@ async def post_take(
         raise HTTPException(status_code=413, detail="take_too_long")
     sha = hashlib.sha256(raw).hexdigest()
     duration = float(ref["audio"]["duration"])
+    covered_end = m.wav_t0 + samples.size / sr
+    covered_s = max(0.0, min(duration, covered_end))
     flags = await session_flags(
-        state.sessions, state.secret, m.session_token, m.song_id, m.client_id, m.difficulty, duration
+        state.sessions, state.secret, m.session_token, m.song_id, m.client_id, m.difficulty, covered_s
     )
     if await sha_seen(state.sessions, sha):
         flags.append("duplicate")
+    completion, completion_flags = completion_of(ref, covered_end)
+    flags += completion_flags
     async with state.score_sem:
         try:
             result, timings, signal = await asyncio.to_thread(evaluate, state, ref, samples, sr, m)
@@ -159,6 +163,7 @@ async def post_take(
         "engine": {"final": f"{state.f0.name}-{state.f0.version}", "live": "pitchy-mpm"},
         **result,
         "integrity": integrity,
+        "completion": completion,
         "challenge": compare(duel[0], duel[1], result) if duel else None,
         "leaderboard": None,
     }

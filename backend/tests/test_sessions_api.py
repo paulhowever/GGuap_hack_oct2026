@@ -36,6 +36,7 @@ def test_issue_errors(client):
 def test_honest_take_is_ok(submit, settings):
     body = submit().json()
     assert body["integrity"] == {"status": "ok", "flags": []}
+    assert body["completion"] == {"ratio": 1.0}
     assert body["leaderboard"] == {"rank": 1, "of": 1, "personal_best": True}
     with sqlite3.connect(settings.data_dir / "app.db") as db:
         status, sha = db.execute("select integrity_status, audio_sha256 from takes").fetchone()
@@ -69,6 +70,69 @@ def test_too_fast(client, submit, clock, wait, flags):
     token = issue(client).json()["token"]
     clock.advance(wait)
     assert submit(session=False, session_token=token).json()["integrity"]["flags"] == flags
+
+
+def test_full_take_sent_too_early_is_suspect(client, submit, clock):
+    token = issue(client).json()["token"]
+    clock.advance(9.9)
+    body = submit(session=False, session_token=token).json()
+    assert body["integrity"] == {"status": "suspect", "flags": ["too_fast"]}
+    assert body["completion"] == {"ratio": 1.0}
+    assert body["leaderboard"] is None
+
+
+def test_recorded_length_is_capped_by_song_duration(client, submit, clock):
+    token = issue(client).json()["token"]
+    clock.advance(10.0)
+    body = submit(session=False, session_token=token, wav_t0=5.0).json()
+    assert "too_fast" not in body["integrity"]["flags"]
+    assert body["completion"] == {"ratio": 1.0}
+
+
+def test_early_exit_is_incomplete(client, submit, clock, partial, settings):
+    token = issue(client).json()["token"]
+    clock.advance(7.2)
+    body = submit(session=False, session_token=token, audio=partial()).json()
+    assert body["integrity"] == {"status": "incomplete", "flags": ["incomplete"]}
+    assert body["completion"] == {"ratio": 0.73}
+    assert body["leaderboard"] is None
+    assert body["score"]["total"] > 0
+    keys = list(body)
+    assert keys.index("completion") == keys.index("integrity") + 1
+    assert client.get(f"/api/v1/takes/{body['take_id']}").json() == body
+    assert client.get("/api/v1/leaderboard/demo").json()["items"] == []
+    assert client.get("/api/v1/songs").json()[0]["top"] is None
+    with sqlite3.connect(settings.data_dir / "app.db") as db:
+        assert db.execute("select integrity_status from takes").fetchone() == ("incomplete",)
+
+
+def test_early_exit_with_session_helper_is_incomplete(submit, partial):
+    body = submit(audio=partial(0.4)).json()
+    assert body["integrity"] == {"status": "incomplete", "flags": ["incomplete"]}
+    assert 0.0 < body["completion"]["ratio"] < 0.5
+    assert body["leaderboard"] is None
+
+
+@pytest.mark.parametrize(("wait", "flags"), [(5.1, ["too_fast", "incomplete"]), (5.3, ["incomplete"])])
+def test_too_fast_counts_only_the_recorded_length(client, submit, clock, partial, wait, flags):
+    token = issue(client).json()["token"]
+    clock.advance(wait)
+    body = submit(session=False, session_token=token, audio=partial()).json()
+    assert body["integrity"]["flags"] == flags
+    assert body["integrity"]["status"] == ("suspect" if "too_fast" in flags else "incomplete")
+
+
+def test_no_session_early_exit_is_incomplete(submit, partial):
+    body = submit(session=False, audio=partial()).json()
+    assert body["integrity"] == {"status": "incomplete", "flags": ["no_session", "incomplete"]}
+
+
+def test_recorded_length_includes_wav_t0(client, submit, clock, partial):
+    token = issue(client).json()["token"]
+    clock.advance(9.0)
+    body = submit(session=False, session_token=token, audio=partial(), wav_t0=1.5).json()
+    assert "incomplete" not in body["integrity"]["flags"]
+    assert body["completion"] == {"ratio": 0.97}
 
 
 @pytest.mark.parametrize(
