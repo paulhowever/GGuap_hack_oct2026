@@ -20,7 +20,7 @@
   "lines": 2,
   "range_midi": [
    60,
-   67
+   69
   ],
   "difficulty": 1,
   "first_note": 2.5,
@@ -103,8 +103,8 @@
      "d": 0.9,
      "beat": 110,
      "len": 18,
-     "midi": 67,
-     "pc": 7,
+     "midi": 69,
+     "pc": 9,
      "type": "normal",
      "syl": "ля"
     }
