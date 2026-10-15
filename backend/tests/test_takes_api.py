@@ -179,3 +179,26 @@ def test_mock_results_have_the_real_keys(submit, path):
     mock = json.loads((ROOT / path).read_text(encoding="utf-8"))
     assert list(mock) == list(body)
     assert list(mock["score"]) == list(body["score"])
+
+
+def logged_scored(caplog):
+    return [r.fields for r in caplog.records if r.getMessage() == "take_scored"]
+
+
+@pytest.mark.parametrize(
+    ("source", "applied"), [("estimated", 300), ("config", 300), (None, 300), ("calibrated", 160)]
+)
+def test_lag_source_decides_the_clip(submit, caplog, source, applied):
+    extra = {} if source is None else {"lag_source": source}
+    r = submit(synth={"delay_s": 0.3}, lag_ms=40, **extra)
+    assert r.status_code == 200
+    body = r.json()
+    assert body["latency"]["applied_ms"] == pytest.approx(applied, abs=20)
+    if source != "calibrated":
+        assert body["score"]["total"] >= 9000
+    assert logged_scored(caplog)[0]["lag_source"] == source
+
+
+def test_unknown_lag_source_is_bad_meta(client, demo_ref):
+    r = post(client, wav_bytes(synth_take(demo_ref)), meta(lag_source="guess"))
+    assert r.status_code == 422

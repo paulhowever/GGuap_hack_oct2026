@@ -112,6 +112,25 @@ test('stored lag is used when config does not pin one', () => {
   assert.equal(createVoice({ lag_ms: 33 }, { localStorage })._state().lag_ms, 33)
 })
 
+function memoryStore(init = {}) {
+  const store = { ...init }
+  return { store, localStorage: { getItem: k => store[k] ?? null, setItem: (k, v) => { store[k] = String(v) } } }
+}
+
+test('lag_source follows where the applied lag came from', () => {
+  const { store, localStorage } = memoryStore()
+  const v = createVoice({}, { localStorage })
+  assert.equal(v._state().lag_source, 'estimated')
+  v.configure({ lag_ms: 55 })
+  assert.equal(v._state().lag_source, 'config')
+  assert.equal(store['voice.lag_src'], 'config')
+  assert.equal(createVoice({}, { localStorage })._state().lag_source, 'config')
+  assert.equal(createVoice({ lag_ms: 33 }, memoryStore({ 'voice.lag_ms': '77', 'voice.lag_src': 'calibrated' }))._state().lag_source, 'config')
+  assert.equal(createVoice({}, memoryStore({ 'voice.lag_ms': '77', 'voice.lag_src': 'calibrated' }))._state().lag_source, 'calibrated')
+  assert.equal(createVoice({}, memoryStore({ 'voice.lag_ms': '77' }))._state().lag_source, 'calibrated')
+  assert.equal(createVoice({}, memoryStore({ 'voice.lag_src': 'calibrated' }))._state().lag_source, 'estimated')
+})
+
 test('broken localStorage does not break the engine', () => {
   const localStorage = { getItem() { throw new Error('denied') }, setItem() { throw new Error('denied') } }
   const v = createVoice({}, { localStorage })
@@ -280,4 +299,104 @@ test('an unexpected throw while wiring the graph reports worklet_failed and a la
   assert.equal(sources, 2)
   assert.equal(events.at(-1)[0], 'on_unlocked')
   assert.deepEqual(errorCodes(events), ['worklet_failed'])
+})
+
+function calibrationEnv(store) {
+  const env = recordingEnv()
+  const Base = env.AudioContext
+  env.oscillators = []
+  env.AudioContext = class extends Base {
+    createOscillator() {
+      const osc = Object.assign(this.createGain(), { frequency: { value: 0 }, starts: [] })
+      osc.start = t => osc.starts.push(t)
+      env.oscillators.push(osc)
+      return osc
+    }
+  }
+  env.localStorage = store.localStorage
+  return env
+}
+
+function clapFrames(sr, claps, seconds) {
+  const frames = []
+  for (let E = 512; E / sr < seconds; E += 512) {
+    const t = (E - 256) / sr
+    frames.push({ E, rms: claps.some(c => t >= c && t < c + 0.08) ? 0.3 : 0.003, hz: 0, clarity: 0 })
+  }
+  return frames
+}
+
+async function calibrated(mode, claps) {
+  const store = memoryStore()
+  const env = calibrationEnv(store)
+  const v = createVoice({}, env)
+  const events = listen(v)
+  await v.unlock()
+  env.setTimeout = () => 0
+  const run = mode === undefined ? v.calibrate() : v.calibrate(mode)
+  const starts = env.oscillators.map(o => o.starts[0])
+  env.taps[0].port.onmessage({ data: { frames: clapFrames(16000, claps(starts), starts.at(-1) + 1.2) } })
+  return { ok: await run, v, store, starts, result: events.filter(e => e[0] === 'on_calibrated').at(-1)[1] }
+}
+
+test('speakers calibration plays 8 clicks and reports the mode', async () => {
+  const { ok, v, store, starts, result } = await calibrated(undefined, s => s.map(c => c + 0.2))
+  assert.equal(ok, true)
+  assert.equal(starts.length, 8)
+  assert.equal(result.mode, 'speakers')
+  assert.equal(result.hits, 8)
+  assert.ok(Math.abs(result.lag_ms - 200) <= 33, `lag ${result.lag_ms}`)
+  assert.deepEqual(Object.keys(result), ['lag_ms', 'hits', 'mode'])
+  assert.equal(v._state().lag_source, 'calibrated')
+  assert.equal(store.store['voice.lag_src'], 'calibrated')
+})
+
+test('headphones calibration adds two lead-in clicks and ignores their claps', async () => {
+  const { ok, v, starts, result } = await calibrated('headphones', s => [s[0] + 0.05, s[1] + 0.35, ...s.slice(2).map(c => c + 0.2)])
+  assert.equal(ok, true)
+  assert.equal(starts.length, 10)
+  assert.equal(result.mode, 'headphones')
+  assert.equal(result.hits, 8)
+  assert.ok(Math.abs(result.lag_ms - 200) <= 33, `lag ${result.lag_ms}`)
+  assert.equal(v._state().lag_source, 'calibrated')
+})
+
+test('headphones calibration spaces clicks by 0.8 s and measures long Bluetooth chains', async () => {
+  for (const lag of [0.55, 0.25]) {
+    const { ok, starts, result } = await calibrated('headphones', s => s.map(c => c + lag))
+    assert.equal(ok, true)
+    assert.ok(Math.abs(starts[1] - starts[0] - 0.8) < 1e-9)
+    assert.equal(result.hits, 8)
+    assert.ok(Math.abs(result.lag_ms - lag * 1000) <= 33, `lag ${lag}: ${result.lag_ms}`)
+  }
+})
+
+test('speakers calibration keeps the 0.5 s gap', async () => {
+  const { ok, starts, result } = await calibrated(undefined, s => s.map(c => c + 0.3))
+  assert.ok(Math.abs(starts[1] - starts[0] - 0.5) < 1e-9)
+  assert.equal(ok, true)
+  assert.ok(Math.abs(result.lag_ms - 300) <= 33, `lag ${result.lag_ms}`)
+})
+
+test('a stray clap just before the first measured click does not shift the headphones result', async () => {
+  const { ok, result } = await calibrated('headphones', s => [s[0] + 0.25, s[1] + 0.25, s[2] - 0.05, ...s.slice(2).map(c => c + 0.25)])
+  assert.equal(ok, true)
+  assert.ok(result.hits >= 7)
+  assert.ok(Math.abs(result.lag_ms - 250) <= 33, `lag ${result.lag_ms}`)
+})
+
+test('a failed calibration keeps the previous lag source', async () => {
+  const { ok, v, result } = await calibrated('headphones', () => [])
+  assert.equal(ok, false)
+  assert.equal(result.mode, 'headphones')
+  assert.equal(result.hits, 0)
+  assert.equal(v._state().lag_source, 'estimated')
+})
+
+test('the take meta carries lag_source right after lag_ms', async () => {
+  const { v } = await recordedTake(recordingEnv({ takes: () => Promise.reject(new TypeError('x')) }))
+  const meta = v._take().meta
+  assert.equal(meta.lag_source, 'estimated')
+  const keys = Object.keys(meta)
+  assert.equal(keys[keys.indexOf('lag_ms') + 1], 'lag_source')
 })

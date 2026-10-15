@@ -40,6 +40,7 @@ def estimate_latency(
     cfg: ScoringConfig,
     tol: float,
     hint_ms: float | None,
+    lag_source: str | None = None,
 ) -> Latency:
     lo, hi = cfg.lag_range_ms
     lags = np.arange(lo, hi + 1, 10.0)
@@ -58,7 +59,7 @@ def estimate_latency(
         estimated = coarse
     if rho < cfg.rho_min:
         applied = hint_ms if hint_ms is not None else 0.0
-    elif hint_ms is None:
+    elif hint_ms is None or lag_source != "calibrated":
         applied = estimated
     else:
         applied = float(np.clip(estimated, hint_ms - cfg.lag_clip_ms, hint_ms + cfg.lag_clip_ms))
