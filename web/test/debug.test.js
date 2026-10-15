@@ -34,7 +34,9 @@ test('debugText formats a full snapshot', () => {
     fps: 93.75,
     clientId: CID,
     verdict: { i: 3, line: 1, type: 'normal', hit: 0.82, cents: 12, onset_ms: 35 },
-    integrity: { status: 'suspect', flags: ['playback', 'flat_pitch'] }
+    integrity: { status: 'suspect', flags: ['replay', 'not_voice'] },
+    ratio: 0.73,
+    takeId: 'tk_ab12cd34'
   })
   assert.equal(text, [
     'api 0.3.1 4f1c2d3 · score-v1 · swiftf0-0.3.0',
@@ -46,7 +48,7 @@ test('debugText formats a full snapshot', () => {
     `client ${CID}`,
     'session ok',
     'note #3 hit 0.82 · +12c · onset 35 ms',
-    'integrity suspect: playback, flat_pitch'
+    'integrity suspect: replay, not_voice · 73% · tk_ab12cd34'
   ].join('\n'))
 })
 
@@ -74,7 +76,16 @@ test('debugText handles silence, missing cents and an ok integrity', () => {
   }).split('\n')
   assert.equal(text[4], 'pitch — · midi — · conf 0.00')
   assert.equal(text[8], 'note #0 hit 0.00 · — · onset —')
-  assert.equal(text[9], 'integrity ok')
+  assert.equal(text[9], 'integrity ok · — · —')
+})
+
+test('debugText shows the take id and completion as a whole percent', () => {
+  const line = extra => debugText({ mode: 'real', ...extra }).split('\n')
+  assert.equal(line({ integrity: { status: 'ok', flags: [] }, ratio: 1, takeId: 'tk_ab12cd34' }).length, 10)
+  assert.equal(line({ integrity: { status: 'ok', flags: [] }, ratio: 1, takeId: 'tk_ab12cd34' })[9], 'integrity ok · 100% · tk_ab12cd34')
+  assert.equal(line({ integrity: { status: 'incomplete', flags: ['incomplete'] }, ratio: 0.29, takeId: 'tk_1' })[9], 'integrity incomplete: incomplete · 29% · tk_1')
+  assert.equal(line({ integrity: { status: 'ok', flags: [] }, ratio: 0, takeId: null })[9], 'integrity ok · 0% · —')
+  assert.equal(line({ ratio: null, takeId: 'tk_old' })[9], 'integrity — · — · tk_old')
 })
 
 test('tracker keeps the last frame and counts frames per second', () => {
@@ -97,25 +108,46 @@ test('tracker keeps the last frame and counts frames per second', () => {
   assert.equal(tr.snapshot().frame.hz, 119)
 })
 
-test('tracker remembers the last verdict and integrity and resets them on a new song', () => {
+const pick = ({ verdict, integrity, takeId, ratio }) => ({ verdict, integrity, takeId, ratio })
+const blank = { verdict: null, integrity: null, takeId: null, ratio: null }
+
+test('tracker remembers the last verdict, integrity, take id and ratio and resets them on a new song', () => {
   const tr = createDebugTracker(() => 0)
   tr.onEvent('on_note_judged', JSON.stringify({ i: 0, hit: 1 }))
   tr.onEvent('on_note_judged', JSON.stringify({ i: 1, hit: 0.4 }))
-  tr.onEvent('on_result', JSON.stringify({ take_id: 'tk_1', integrity: { status: 'unverified', flags: ['no_session'] } }))
-  assert.equal(tr.snapshot().verdict.i, 1)
-  assert.equal(tr.snapshot().integrity.status, 'unverified')
+  tr.onEvent('on_result', JSON.stringify({ take_id: 'tk_1', integrity: { status: 'unverified', flags: ['no_session'] }, completion: { ratio: 0.73 } }))
+  assert.deepEqual(pick(tr.snapshot()), { verdict: { i: 1, hit: 0.4 }, integrity: { status: 'unverified', flags: ['no_session'] }, takeId: 'tk_1', ratio: 0.73 })
   tr.onEvent('on_result', JSON.stringify({ take_id: 'tk_2' }))
   assert.equal(tr.snapshot().integrity, null)
+  assert.equal(tr.snapshot().takeId, 'tk_2')
+  assert.equal(tr.snapshot().ratio, null)
   tr.onEvent('on_note_judged', JSON.stringify({ i: 2, hit: 1 }))
   tr.onEvent('on_ready', JSON.stringify({ id: 'demo' }))
-  assert.equal(tr.snapshot().verdict, null)
+  assert.deepEqual(pick(tr.snapshot()), blank)
+})
+
+test('tracker resets the take fields when a poll switches to playing', () => {
+  const tr = createDebugTracker(() => 0)
+  const poll = state => tr.onPoll(JSON.stringify({ t_now: 0, state, level: 0, frames: [] }))
+  poll('playing')
+  tr.onEvent('on_note_judged', JSON.stringify({ i: 0, hit: 1 }))
+  poll('playing')
+  assert.deepEqual(tr.snapshot().verdict, { i: 0, hit: 1 })
+  poll('ended')
+  tr.onEvent('on_result', JSON.stringify({ take_id: 'tk_1', integrity: { status: 'ok', flags: [] }, completion: { ratio: 1 } }))
+  poll('ended')
+  assert.deepEqual(pick(tr.snapshot()), { verdict: { i: 0, hit: 1 }, integrity: { status: 'ok', flags: [] }, takeId: 'tk_1', ratio: 1 })
+  poll('playing')
+  assert.deepEqual(pick(tr.snapshot()), blank)
 })
 
 function fakeWindow(search = '') {
   const children = []
   const listeners = {}
+  const captures = {}
   const copied = []
   const fetched = []
+  const cleared = []
   const win = {
     location: { search },
     VOICE_CONFIG: { api: '' },
@@ -124,10 +156,18 @@ function fakeWindow(search = '') {
     copied,
     fetched,
     listeners,
+    cleared,
     document: {
       body: { appendChild: el => children.push(el) },
-      createElement: tag => ({ tagName: tag.toUpperCase(), id: '', style: {}, textContent: '' }),
-      addEventListener() {}
+      createElement: tag => {
+        const el = { tagName: tag.toUpperCase(), id: '', style: {}, textContent: '' }
+        el.remove = () => {
+          if (children.includes(el)) children.splice(children.indexOf(el), 1)
+        }
+        return el
+      },
+      addEventListener() {},
+      removeEventListener() {}
     },
     children,
     setInterval(fn, ms) {
@@ -135,9 +175,13 @@ function fakeWindow(search = '') {
       win.period = ms
       return 1
     },
-    clearInterval() {},
-    addEventListener: (type, fn) => {
+    clearInterval: id => cleared.push(id),
+    addEventListener: (type, fn, capture) => {
       listeners[type] = fn
+      captures[type] = capture
+    },
+    removeEventListener: (type, fn, capture) => {
+      if (listeners[type] === fn && captures[type] === capture) delete listeners[type]
     },
     navigator: { clipboard: { writeText: async t => copied.push(t) } },
     async fetch(url, init) {
@@ -185,6 +229,45 @@ test('attachDebug mounts a click-through overlay and refreshes it on a timer', a
   assert.equal(lines[4], 'pitch 261.6 Hz · midi 60.00 · conf 0.95')
   assert.equal(lines[6], `client ${CID}`)
   assert.equal(lines[8], 'note #4 hit 0.90 · -8c · onset 20 ms')
+  assert.equal(lines[9], 'integrity —')
+  voice.emit('on_result', { take_id: 'tk_ab12cd34', integrity: { status: 'ok', flags: [] }, completion: { ratio: 1 } })
+  win.tick()
+  assert.equal(d.el.textContent.split('\n')[9], 'integrity ok · 100% · tk_ab12cd34')
+})
+
+test('stop tears the overlay down and ignores later events', () => {
+  const win = fakeWindow('?debug=1')
+  const voice = stubVoice()
+  const original = voice.poll
+  const d = attachDebug(win, voice, { apiUrl: '/api/v1/version', versionUrl: 'http://x/version.json' })
+  assert.notEqual(voice.poll, original)
+  assert.equal(typeof win.listeners.keydown, 'function')
+  d.stop()
+  assert.deepEqual(win.cleared, [1])
+  assert.equal(win.listeners.keydown, undefined)
+  assert.equal(win.children.length, 0)
+  assert.equal(voice.poll, original)
+  voice.emit('on_result', { take_id: 'tk_late', integrity: { status: 'ok', flags: [] }, completion: { ratio: 1 } })
+  voice.emit('on_note_judged', { i: 1, hit: 1, cents: 0, onset_ms: 0 })
+  const lines = d.render().split('\n')
+  assert.equal(lines[8], 'note —')
+  assert.equal(lines[9], 'integrity —')
+})
+
+test('stop unsubscribes once when the bus offers it', () => {
+  const win = fakeWindow('?debug=1')
+  const voice = stubVoice()
+  const subscribe = voice.subscribe
+  let unsubscribed = 0
+  voice.subscribe = cb => {
+    subscribe(cb)
+    return () => unsubscribed++
+  }
+  const d = attachDebug(win, voice, { apiUrl: '/api/v1/version', versionUrl: 'http://x/version.json' })
+  d.stop()
+  d.stop()
+  assert.equal(unsubscribed, 1)
+  assert.deepEqual(win.cleared, [1])
 })
 
 test('Alt+Shift+D copies the overlay text', async () => {

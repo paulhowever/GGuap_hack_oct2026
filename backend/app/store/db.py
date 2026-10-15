@@ -1,11 +1,15 @@
+import logging
 from datetime import UTC, datetime
 from pathlib import Path
 
-from sqlalchemy import select, text, update
+from sqlalchemy import inspect, select, text, update
 from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 
 from app.store.models import Base, Challenge, GameSession, Player, Rival, Take
+
+log = logging.getLogger("karaoke.store")
+TAKE_COLUMNS = frozenset({"integrity_status", "audio_sha256"})
 
 
 def make_engine(data_dir: Path) -> AsyncEngine:
@@ -13,8 +17,19 @@ def make_engine(data_dir: Path) -> AsyncEngine:
     return create_async_engine(f"sqlite+aiosqlite:///{data_dir / 'app.db'}")
 
 
+def missing_take_columns(conn) -> list[str]:
+    inspector = inspect(conn)
+    if not inspector.has_table("takes"):
+        return []
+    return sorted(TAKE_COLUMNS - {column["name"] for column in inspector.get_columns("takes")})
+
+
 async def init_db(engine: AsyncEngine) -> None:
     async with engine.begin() as conn:
+        missing = await conn.run_sync(missing_take_columns)
+        if missing:
+            log.warning("schema_reset", extra={"fields": {"missing": missing}})
+            await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
 
 

@@ -85,7 +85,7 @@ def evaluate(state, ref: dict, audio: np.ndarray, sr: int, m: TakeMeta) -> tuple
             state.scoring.conf_min,
         )
     except Exception as e:
-        log_event(log, "anticheat_failed", error=repr(e))
+        log.warning("anticheat_failed", extra={"fields": {"error": repr(e)}}, exc_info=True)
         signal = skipped_check()
     timings = {
         "f0_ms": round((t1 - t0) * 1000, 1),
@@ -133,6 +133,8 @@ async def post_take(
         raise HTTPException(status_code=422, detail="bad_audio")
     if samples.size / sr > state.settings.max_take_s:
         raise HTTPException(status_code=413, detail="take_too_long")
+    if not np.isfinite(samples).all():
+        raise HTTPException(status_code=422, detail="bad_audio")
     sha = hashlib.sha256(raw).hexdigest()
     duration = float(ref["audio"]["duration"])
     covered_end = m.wav_t0 + samples.size / sr
@@ -203,6 +205,7 @@ async def post_take(
         live_total=result["score"]["live_total"],
         integrity=integrity["status"],
         flags=integrity["flags"],
+        completion=completion["ratio"],
         f0_engine=state.f0.name,
         **timings,
         **signal.metrics,

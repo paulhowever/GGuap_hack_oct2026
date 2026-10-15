@@ -24,7 +24,7 @@ const MAX_TAKE_FRAMES = 8000
 const UPLOAD_TIMEOUT_MS = 10000
 const REC_FLUSH_TIMEOUT_MS = 500
 const RESUME_TIMEOUT_MS = 1000
-const SESSION_TIMEOUT_MS = 5000
+const SESSION_TIMEOUT_MS = 2000
 
 export function createVoice(cfg = {}, env = globalThis) {
   const bus = createBus({ sticky: ['on_unlocked'] })

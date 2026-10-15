@@ -106,6 +106,13 @@ def test_early_exit_is_incomplete(client, submit, clock, partial, settings):
         assert db.execute("select integrity_status from takes").fetchone() == ("incomplete",)
 
 
+def test_take_scored_logs_completion(submit, partial, caplog):
+    submit(audio=partial())
+    submit(synth={"cents": 20})
+    scored = [r.fields for r in caplog.records if r.getMessage() == "take_scored"]
+    assert [s["completion"] for s in scored] == [0.73, 1.0]
+
+
 def test_early_exit_with_session_helper_is_incomplete(submit, partial):
     body = submit(audio=partial(0.4)).json()
     assert body["integrity"] == {"status": "incomplete", "flags": ["incomplete"]}
@@ -132,7 +139,7 @@ def test_recorded_length_includes_wav_t0(client, submit, clock, partial):
     clock.advance(9.0)
     body = submit(session=False, session_token=token, audio=partial(), wav_t0=1.5).json()
     assert "incomplete" not in body["integrity"]["flags"]
-    assert body["completion"] == {"ratio": 0.97}
+    assert body["completion"] == {"ratio": 1.0}
 
 
 @pytest.mark.parametrize(

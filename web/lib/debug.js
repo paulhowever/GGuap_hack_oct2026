@@ -39,13 +39,14 @@ function noteLine(v) {
   return `note #${v.i} hit ${fixed(v.hit, 2)} · ${cents} · onset ${ms(v.onset_ms)}`
 }
 
-function integrityLine(x) {
-  if (!x || !x.status) return `integrity ${DASH}`
-  const flags = Array.isArray(x.flags) && x.flags.length ? `: ${x.flags.join(', ')}` : ''
-  return `integrity ${x.status}${flags}`
+function integrityLine(x, ratio, takeId) {
+  if (!x?.status && !takeId) return `integrity ${DASH}`
+  const flags = Array.isArray(x?.flags) && x.flags.length ? `: ${x.flags.join(', ')}` : ''
+  const share = isNum(ratio) ? `${Math.round(ratio * 100)}%` : DASH
+  return `integrity ${x?.status || DASH}${flags} · ${share} · ${takeId || DASH}`
 }
 
-export function debugText({ mode, api = null, web = null, state = {}, frame = null, fps = 0, clientId = null, verdict = null, integrity = null } = {}) {
+export function debugText({ mode, api = null, web = null, state = {}, frame = null, fps = 0, clientId = null, verdict = null, integrity = null, ratio = null, takeId = null } = {}) {
   return [
     apiLine(api),
     webLine(web),
@@ -56,7 +57,7 @@ export function debugText({ mode, api = null, web = null, state = {}, frame = nu
     `client ${clientId || DASH}`,
     `session ${state.session ?? DASH}`,
     noteLine(verdict),
-    integrityLine(integrity)
+    integrityLine(integrity, ratio, takeId)
   ].join('\n')
 }
 
@@ -69,7 +70,13 @@ function parse(json) {
 }
 
 export function createDebugTracker(now, windowMs = 1000) {
-  const t = { frame: null, verdict: null, integrity: null, polls: [] }
+  const t = { frame: null, verdict: null, integrity: null, takeId: null, ratio: null, state: null, polls: [] }
+  const clearTake = () => {
+    t.verdict = null
+    t.integrity = null
+    t.takeId = null
+    t.ratio = null
+  }
   const fps = () => {
     const at = now()
     while (t.polls.length && at - t.polls[0].at > windowMs) t.polls.shift()
@@ -78,6 +85,8 @@ export function createDebugTracker(now, windowMs = 1000) {
   return {
     onPoll(json) {
       const p = parse(json)
+      if (p?.state === 'playing' && t.state !== 'playing') clearTake()
+      if (typeof p?.state === 'string') t.state = p.state
       const frames = Array.isArray(p?.frames) ? p.frames : null
       if (!frames) return
       if (frames.length) t.frame = frames.at(-1)
@@ -87,14 +96,15 @@ export function createDebugTracker(now, windowMs = 1000) {
     onEvent(name, json) {
       const p = parse(json)
       if (name === 'on_note_judged') t.verdict = p
-      if (name === 'on_result') t.integrity = p?.integrity ?? null
-      if (name === 'on_ready') {
-        t.verdict = null
-        t.integrity = null
+      if (name === 'on_result') {
+        t.integrity = p?.integrity ?? null
+        t.takeId = typeof p?.take_id === 'string' && p.take_id ? p.take_id : null
+        t.ratio = p?.completion?.ratio ?? null
       }
+      if (name === 'on_ready') clearTake()
     },
     snapshot() {
-      return { frame: t.frame, fps: fps(), verdict: t.verdict, integrity: t.integrity }
+      return { frame: t.frame, fps: fps(), verdict: t.verdict, integrity: t.integrity, takeId: t.takeId, ratio: t.ratio }
     }
   }
 }
@@ -131,13 +141,17 @@ export function attachDebug(win, voice, { apiUrl, versionUrl, periodMs = DEBUG_P
   el.id = 'voice-debug'
   Object.assign(el.style, STYLE)
   const tracker = createDebugTracker(() => win.performance.now())
+  let live = true
   const poll = voice.poll
-  voice.poll = (...args) => {
+  const wrapped = (...args) => {
     const out = poll.apply(voice, args)
-    tracker.onPoll(out)
+    if (live) tracker.onPoll(out)
     return out
   }
-  voice.subscribe((name, json) => tracker.onEvent(name, json))
+  voice.poll = wrapped
+  const unsubscribe = voice.subscribe((name, json) => {
+    if (live) tracker.onEvent(name, json)
+  })
   const clientId = voice.client_id?.() ?? null
   const info = { api: null, web: null }
   const render = () => {
@@ -151,8 +165,19 @@ export function attachDebug(win, voice, { apiUrl, versionUrl, periodMs = DEBUG_P
   else doc.addEventListener('DOMContentLoaded', mount)
   render()
   const timer = win.setInterval(render, periodMs)
-  win.addEventListener?.('keydown', e => {
+  const onKey = e => {
     if (e.code === 'KeyD' && e.altKey && e.shiftKey && !e.repeat) win.navigator?.clipboard?.writeText(render()).catch(() => {})
-  }, true)
-  return { el, render, stop: () => win.clearInterval(timer) }
+  }
+  win.addEventListener?.('keydown', onKey, true)
+  const stop = () => {
+    if (!live) return
+    live = false
+    win.clearInterval(timer)
+    win.removeEventListener?.('keydown', onKey, true)
+    doc.removeEventListener('DOMContentLoaded', mount)
+    el.remove()
+    if (voice.poll === wrapped) voice.poll = poll
+    if (typeof unsubscribe === 'function') unsubscribe()
+  }
+  return { el, render, stop }
 }

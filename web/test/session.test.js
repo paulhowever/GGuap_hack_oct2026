@@ -50,6 +50,7 @@ class AudioStub {
 }
 
 function studio(sessionReplies, takeReplies = []) {
+  const delays = []
   const sessions = []
   const takes = []
   const errors = []
@@ -96,7 +97,11 @@ function studio(sessionReplies, takeReplies = []) {
   }
   const track = { stop() {}, getSettings: () => ({}) }
   const env = {
-    ...timers,
+    setTimeout: (fn, ms) => {
+      delays.push(ms)
+      return timers.setTimeout(fn, ms)
+    },
+    clearTimeout,
     isSecureContext: true,
     performance,
     crypto,
@@ -130,7 +135,7 @@ function studio(sessionReplies, takeReplies = []) {
     sing()
     assert.equal(await voice.submit('Паша', ''), true)
   }
-  return { voice, sessions, takes, errors, take, sing, store }
+  return { voice, sessions, takes, errors, take, sing, store, delays }
 }
 
 const ok = token => async () => reply({ token, issued_at: 1, expires_in: 900 })
@@ -170,6 +175,20 @@ test('a failed session request leaves the token null without an error event', as
     assert.equal(st.voice._state().session, 'none')
     assert.deepEqual(st.errors, [])
   }
+})
+
+test('the session request gives up after 2 s', async () => {
+  const hang = init => new Promise((_, reject) => init.signal.addEventListener('abort', () => reject(new Error('aborted'))))
+  const st = studio([hang])
+  await st.voice.unlock()
+  await st.voice.load_song('demo')
+  const before = st.delays.length
+  assert.equal(st.voice.start(), true)
+  assert.deepEqual(st.delays.slice(before), [2000])
+  st.sing()
+  assert.equal(await st.voice.submit('Паша', ''), true)
+  assert.equal(st.takes[0].session_token, null)
+  assert.equal(st.voice._state().session, 'none')
 })
 
 test('every start gets its own token', async () => {

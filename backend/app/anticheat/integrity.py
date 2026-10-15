@@ -1,3 +1,5 @@
+import math
+
 FLAGS = ("no_session", "bad_session", "too_fast", "duplicate", "replay", "not_voice", "incomplete")
 SUSPECT = frozenset({"bad_session", "too_fast", "duplicate", "replay", "not_voice"})
 INCOMPLETE_SLACK_S = 0.5
@@ -26,6 +28,7 @@ def song_span(ref: dict) -> tuple[float, float]:
 
 def completion_of(ref: dict, covered_end: float) -> tuple[dict, list[str]]:
     first, last = song_span(ref)
-    ratio = 1.0 if last <= first else round(min(1.0, max(0.0, (covered_end - first) / (last - first))), 2)
-    flags = ["incomplete"] if covered_end < last - INCOMPLETE_SLACK_S else []
-    return {"ratio": ratio}, flags
+    if covered_end >= last - INCOMPLETE_SLACK_S:
+        return {"ratio": 1.0}, []
+    raw = 1.0 if last <= first else min(1.0, max(0.0, (covered_end - first) / (last - first)))
+    return {"ratio": min(0.99, math.floor(raw * 100) / 100)}, ["incomplete"]

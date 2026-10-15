@@ -63,6 +63,9 @@ def test_signal_check_failure_fails_open(submit, monkeypatch, caplog):
     assert response.status_code == 200
     assert response.json()["integrity"] == {"status": "ok", "flags": []}
     assert logged(caplog, "anticheat_failed")[0]["error"] == "ValueError('boom')"
+    failed = next(r for r in caplog.records if r.getMessage() == "anticheat_failed")
+    assert failed.levelname == "WARNING"
+    assert failed.exc_info[0] is ValueError
     scored = logged(caplog, "take_scored")[0]
     assert all(
         scored[k] is None for k in ("replay_guide_c", "replay_minus_c", "jitter_c", "harm", "long_notes")

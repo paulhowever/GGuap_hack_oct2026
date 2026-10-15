@@ -46,8 +46,9 @@ def test_integrity_flags_put_incomplete_last():
     [
         (12.0, 1.0, []),
         (8.9, 1.0, []),
-        (8.4, 0.92, []),
+        (8.4, 1.0, []),
         (8.39, 0.92, ["incomplete"]),
+        (7.4, 0.76, ["incomplete"]),
         (7.2, 0.73, ["incomplete"]),
         (2.5, 0.0, ["incomplete"]),
         (-1.0, 0.0, ["incomplete"]),
@@ -61,7 +62,7 @@ def test_completion(demo_ref, covered_end, ratio, flags):
 def test_completion_falls_back_to_notes_without_stats(demo_ref):
     ref = {**demo_ref, "stats": {}}
     assert completion_of(ref, 7.2) == ({"ratio": 0.73}, ["incomplete"])
-    assert completion_of(ref, 8.4) == ({"ratio": 0.92}, [])
+    assert completion_of(ref, 8.4) == ({"ratio": 1.0}, [])
     assert completion_of({k: v for k, v in demo_ref.items() if k != "stats"}, 7.2) == (
         {"ratio": 0.73},
         ["incomplete"],
@@ -73,9 +74,16 @@ def test_completion_prefers_stats_over_notes(demo_ref):
     assert completion_of(ref, 5.0) == ({"ratio": 0.5}, ["incomplete"])
 
 
-def test_completion_of_degenerate_span_is_full(demo_ref):
+def test_completion_of_incomplete_take_never_reaches_one(demo_ref):
+    ref = {**demo_ref, "stats": {**demo_ref["stats"], "first_note": 0.0, "last_end": 1000.0}}
+    assert completion_of(ref, 999.0) == ({"ratio": 0.99}, ["incomplete"])
+    assert completion_of(ref, 999.5) == ({"ratio": 1.0}, [])
+
+
+def test_completion_of_degenerate_span(demo_ref):
     ref = {**demo_ref, "stats": {**demo_ref["stats"], "first_note": 5.0, "last_end": 5.0}}
-    assert completion_of(ref, 1.0)[0] == {"ratio": 1.0}
+    assert completion_of(ref, 1.0) == ({"ratio": 0.99}, ["incomplete"])
+    assert completion_of(ref, 4.5) == ({"ratio": 1.0}, [])
 
 
 def test_token_roundtrip():

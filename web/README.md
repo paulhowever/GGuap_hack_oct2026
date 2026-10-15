@@ -26,6 +26,7 @@
 1. `make backend`: FastAPI отдаёт `web/` на `/`.
 2. http://localhost:8000/dev.html, нажать «Нажми, чтобы начать», разрешить микрофон.
 3. Без микрофона: http://localhost:8000/dev.html?mock=perfect (ещё `offkey`, `octave`, `late200`, `silent`).
+   `?mock=silent` отдаёт `integrity.status = incomplete` и `completion.ratio = 0` для проверки экрана «не в рейтинге».
 4. Без бэкенда: `cd web && python3 -m http.server 8000`. Мок (`?mock=…`) и живой питч работают и на статическом сервере; бэкенд из ветки pasha/backend нужен только настоящему движку для `load_song` и `submit`.
 5. Отладка: добавить `?debug=1` (можно вместе с `?mock=…`). В правом нижнем углу появится оверлей: версии api и web, режим, sr, задержки, текущий тон, кадры/с, client_id, статус токена сессии, последний вердикт ноты и integrity. Alt+Shift+D копирует его текст в буфер обмена для баг-репорта. Строка `web —` значит, что статика отдаётся из `web/` без `make assemble`.
 

@@ -20,7 +20,7 @@ assemble:
 	printf '{"git_sha": "%s%s", "built_at": "%s"}\n' "$$(git rev-parse HEAD)" "$$(git diff --quiet HEAD -- web godot || echo -dirty)" "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" > dist/web/version.json
 
 backend:
-	cd backend && uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
+	cd backend && KARAOKE_GIT_SHA=$$(git rev-parse HEAD) uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 dev: export-web assemble backend
 
