@@ -5,7 +5,7 @@ from sqlalchemy import select, text, update
 from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 
-from app.store.models import Base, Player, Take
+from app.store.models import Base, Challenge, Player, Rival, Take
 
 
 def make_engine(data_dir: Path) -> AsyncEngine:
@@ -61,3 +61,30 @@ async def players_by_id(sessions: async_sessionmaker, client_ids: list[str]) -> 
     async with sessions() as session:
         rows = await session.execute(select(Player).where(Player.client_id.in_(client_ids)))
         return {p.client_id: p for p in rows.scalars()}
+
+
+async def add_row(sessions: async_sessionmaker, row: Base) -> None:
+    async with sessions() as session, session.begin():
+        session.add(row)
+
+
+async def get_challenge(sessions: async_sessionmaker, challenge_id: str) -> Challenge | None:
+    async with sessions() as session:
+        return await session.get(Challenge, challenge_id)
+
+
+async def challenge_for_take(sessions: async_sessionmaker, take_id: str) -> Challenge | None:
+    async with sessions() as session:
+        rows = await session.execute(select(Challenge).where(Challenge.take_id == take_id))
+        return rows.scalar_one_or_none()
+
+
+async def rival_takes(sessions: async_sessionmaker, challenge_id: str) -> list[Take]:
+    query = (
+        select(Take)
+        .join(Rival, Rival.take_id == Take.id)
+        .where(Rival.challenge_id == challenge_id)
+        .order_by(Take.total.desc(), Take.created_at)
+    )
+    async with sessions() as session:
+        return list((await session.execute(query)).scalars())

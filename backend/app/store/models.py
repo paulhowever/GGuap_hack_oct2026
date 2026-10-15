@@ -34,3 +34,22 @@ class Player(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC)
     )
+
+
+class Challenge(Base):
+    __tablename__ = "challenges"
+
+    id: Mapped[str] = mapped_column(String(6), primary_key=True)
+    take_id: Mapped[str] = mapped_column(String(32), unique=True)
+    song_id: Mapped[str] = mapped_column(String(64))
+    difficulty: Mapped[str] = mapped_column(String(8))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+
+
+class Rival(Base):
+    __tablename__ = "challenge_rivals"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    challenge_id: Mapped[str] = mapped_column(String(6), index=True)
+    take_id: Mapped[str] = mapped_column(String(32))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))

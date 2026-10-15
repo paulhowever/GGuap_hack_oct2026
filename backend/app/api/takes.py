@@ -10,14 +10,16 @@ import numpy as np
 import soundfile as sf
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.api.players import CLIENT_ID
 from app.board import placement
 from app.core.logging import log_event
+from app.duel import compare
 from app.f0.frames import FramesEngine
 from app.scoring.core import score_take
-from app.store.db import get_take, save_take, set_result_json
-from app.store.models import Take
+from app.store.db import add_row, get_challenge, get_take, save_take, set_result_json
+from app.store.models import Rival, Take
 
 router = APIRouter(prefix="/api/v1")
 log = logging.getLogger("karaoke.takes")
@@ -69,6 +71,18 @@ def evaluate(state, ref: dict, audio: np.ndarray, sr: int, m: TakeMeta) -> tuple
     return result, timings
 
 
+async def challenge_owner(sessions: async_sessionmaker, m: TakeMeta) -> tuple[str, dict] | None:
+    if m.challenge_id is None:
+        return None
+    challenge = await get_challenge(sessions, m.challenge_id)
+    if challenge is None or challenge.song_id != m.song_id:
+        raise HTTPException(status_code=404, detail="challenge_not_found")
+    if challenge.difficulty != m.difficulty:
+        raise HTTPException(status_code=422, detail="challenge_difficulty")
+    owner = await get_take(sessions, challenge.take_id)
+    return challenge.id, json.loads(owner.result_json)
+
+
 @router.post("/takes")
 async def post_take(
     request: Request, audio: Annotated[UploadFile, File()], meta: Annotated[str, Form()]
@@ -81,6 +95,7 @@ async def post_take(
     ref = state.songs.get(m.song_id)
     if ref is None:
         raise HTTPException(status_code=404, detail="song_not_found")
+    duel = await challenge_owner(state.sessions, m)
     if audio.size is not None and audio.size > int(state.settings.max_take_s * 48000 * 4) + 65536:
         raise HTTPException(status_code=413, detail="take_too_long")
     raw = await audio.read()
@@ -109,7 +124,7 @@ async def post_take(
         "difficulty": m.difficulty,
         "engine": {"final": f"{state.f0.name}-{state.f0.version}", "live": "pitchy-mpm"},
         **result,
-        "challenge": None,
+        "challenge": compare(duel[0], duel[1], result) if duel else None,
         "leaderboard": None,
     }
     take = Take(
@@ -124,6 +139,8 @@ async def post_take(
         result_json=json.dumps(body, ensure_ascii=False),
     )
     await save_take(state.sessions, take)
+    if duel:
+        await add_row(state.sessions, Rival(challenge_id=duel[0], take_id=take_id))
     if take.integrity_status == "ok":
         body["leaderboard"] = await placement(state.sessions, take)
     await set_result_json(state.sessions, take_id, json.dumps(body, ensure_ascii=False))
