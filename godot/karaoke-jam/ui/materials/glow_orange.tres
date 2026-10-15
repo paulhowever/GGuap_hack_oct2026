@@ -1,0 +1,11 @@
+[gd_resource type="ShaderMaterial" load_steps=2 format=3]
+
+[ext_resource type="Shader" path="res://ui/shaders/soft_glow.gdshader" id="1_glow"]
+
+[resource]
+resource_local_to_scene = true
+shader = ExtResource("1_glow")
+shader_parameter/glow_color = Color(1, 0.478, 0.239, 1)
+shader_parameter/intensity = 0.45
+shader_parameter/falloff = 2.4
+shader_parameter/inner_radius = 0.0

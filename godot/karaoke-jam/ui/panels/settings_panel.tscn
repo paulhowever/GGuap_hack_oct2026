@@ -1,0 +1,144 @@
+[gd_scene format=3 uid="uid://d2s636ykjydjh"]
+
+[ext_resource type="Script" uid="uid://b76uxxagj625m" path="res://ui/panels/settings_panel.gd" id="1_set"]
+
+[node name="SettingsPanel" type="Control" unique_id=949476538 node_paths=PackedStringArray("initial_focus")]
+visible = false
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_set")
+initial_focus = NodePath("Center/Card/VBox/Grid/VolumeRow/VolumeSlider")
+
+[node name="Dim" type="ColorRect" parent="." unique_id=1362599475]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.07, 0.06, 0.09, 0.72)
+
+[node name="Center" type="CenterContainer" parent="." unique_id=359648073]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Card" type="PanelContainer" parent="Center" unique_id=1903049024]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(900, 0)
+layout_mode = 2
+theme_type_variation = &"CardPanel"
+
+[node name="VBox" type="VBoxContainer" parent="Center/Card" unique_id=1362274617]
+layout_mode = 2
+theme_override_constants/separation = 30
+
+[node name="Title" type="Label" parent="Center/Card/VBox" unique_id=1015737117]
+layout_mode = 2
+theme_type_variation = &"HeadingLabel"
+text = "Настройки"
+horizontal_alignment = 1
+
+[node name="Grid" type="GridContainer" parent="Center/Card/VBox" unique_id=1974518422]
+layout_mode = 2
+theme_override_constants/h_separation = 32
+theme_override_constants/v_separation = 26
+columns = 2
+
+[node name="VolumeCaption" type="Label" parent="Center/Card/VBox/Grid" unique_id=2036398409]
+layout_mode = 2
+text = "Громкость музыки"
+
+[node name="VolumeRow" type="HBoxContainer" parent="Center/Card/VBox/Grid" unique_id=1898022333]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 16
+
+[node name="VolumeSlider" type="HSlider" parent="Center/Card/VBox/Grid/VolumeRow" unique_id=404625937]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 32)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+value = 80.0
+
+[node name="VolumeValue" type="Label" parent="Center/Card/VBox/Grid/VolumeRow" unique_id=445125197]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+theme_type_variation = &"AccentLabel"
+text = "80%"
+horizontal_alignment = 2
+
+[node name="LagCaption" type="Label" parent="Center/Card/VBox/Grid" unique_id=814353301]
+layout_mode = 2
+text = "Задержка звука"
+
+[node name="LagRow" type="HBoxContainer" parent="Center/Card/VBox/Grid" unique_id=180119800]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="LagMinus" type="Button" parent="Center/Card/VBox/Grid/LagRow" unique_id=462567970]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"GhostButton"
+theme_override_font_sizes/font_size = 24
+text = "−10"
+
+[node name="LagValue" type="Label" parent="Center/Card/VBox/Grid/LagRow" unique_id=1772781833]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(240, 0)
+layout_mode = 2
+theme_type_variation = &"AccentLabel"
+text = "120 мс"
+horizontal_alignment = 1
+
+[node name="LagPlus" type="Button" parent="Center/Card/VBox/Grid/LagRow" unique_id=398853916]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"GhostButton"
+theme_override_font_sizes/font_size = 24
+text = "+10"
+
+[node name="CalibrateButton" type="Button" parent="Center/Card/VBox/Grid/LagRow" unique_id=975384393]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "Калибровать"
+
+[node name="NickCaption" type="Label" parent="Center/Card/VBox/Grid" unique_id=724188110]
+layout_mode = 2
+text = "Ник"
+
+[node name="NickEdit" type="LineEdit" parent="Center/Card/VBox/Grid" unique_id=1178765007]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "Гость"
+max_length = 24
+
+[node name="HeadphonesCaption" type="Label" parent="Center/Card/VBox/Grid" unique_id=1760992008]
+layout_mode = 2
+text = "Наушники"
+
+[node name="HeadphonesCheck" type="CheckBox" parent="Center/Card/VBox/Grid" unique_id=42764748]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Пою в проводных наушниках"
+
+[node name="CloseButton" type="Button" parent="Center/Card/VBox" unique_id=1555842761]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 4
+theme_type_variation = &"PrimaryButton"
+theme_override_font_sizes/font_size = 34
+text = "Готово"

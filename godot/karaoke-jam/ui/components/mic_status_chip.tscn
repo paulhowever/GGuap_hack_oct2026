@@ -1,0 +1,40 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://ui/components/mic_status_chip.gd" id="1_chip"]
+[ext_resource type="Texture2D" path="res://ui/icons/mic.svg" id="2_mic"]
+
+[node name="MicStatusChip" type="PanelContainer"]
+theme_type_variation = &"Chip"
+script = ExtResource("1_chip")
+
+[node name="Row" type="HBoxContainer" parent="."]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 12
+
+[node name="Icon" type="TextureRect" parent="Row"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(30, 30)
+layout_mode = 2
+size_flags_vertical = 4
+mouse_filter = 2
+texture = ExtResource("2_mic")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="StateLabel" type="Label" parent="Row"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 22
+text = "Микрофон выкл."
+
+[node name="Level" type="ProgressBar" parent="Row"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(70, 10)
+layout_mode = 2
+size_flags_vertical = 4
+mouse_filter = 2
+max_value = 1.0
+step = 0.001
+show_percentage = false

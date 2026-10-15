@@ -1,0 +1,66 @@
+[gd_scene format=3 uid="uid://b7o0bab3bm00r"]
+
+[ext_resource type="Script" uid="uid://b8f1q7wwuiqac" path="res://scenes/select/select.gd" id="1_sel"]
+[ext_resource type="PackedScene" uid="uid://kvfxehvfomao" path="res://ui/components/studio_background.tscn" id="2_bg"]
+[ext_resource type="Theme" uid="uid://jo2ye60ryjcu" path="res://ui/theme/main_theme.tres" id="3_theme"]
+
+[node name="Select" type="Control" unique_id=1457299988]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = ExtResource("3_theme")
+script = ExtResource("1_sel")
+
+[node name="StudioBackground" parent="." unique_id=379877059 instance=ExtResource("2_bg")]
+layout_mode = 1
+
+[node name="Center" type="CenterContainer" parent="." unique_id=727913362]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Card" type="PanelContainer" parent="Center" unique_id=1473557801]
+custom_minimum_size = Vector2(760, 0)
+layout_mode = 2
+theme_type_variation = &"CardPanel"
+
+[node name="VBox" type="VBoxContainer" parent="Center/Card" unique_id=763377724]
+layout_mode = 2
+theme_override_constants/separation = 28
+
+[node name="Title" type="Label" parent="Center/Card/VBox" unique_id=600588292]
+layout_mode = 2
+theme_type_variation = &"HeadingLabel"
+text = "Выбор песни"
+horizontal_alignment = 1
+
+[node name="Text" type="Label" parent="Center/Card/VBox" unique_id=823016624]
+layout_mode = 2
+theme_type_variation = &"HintLabel"
+theme_override_font_sizes/font_size = 26
+text = "Скоро здесь будет список песен."
+horizontal_alignment = 1
+
+[node name="BackButton" type="Button" parent="Center/Card/VBox" unique_id=1125648411]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 4
+theme_type_variation = &"GhostButton"
+text = "← Назад"
+
+[node name="Fade" type="ColorRect" parent="." unique_id=93252359]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.118, 0.102, 0.141, 1)

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
+  <g fill="#ffffff">
+    <rect x="21" y="3" width="6" height="10" rx="2"/>
+    <rect x="21" y="35" width="6" height="10" rx="2"/>
+    <rect x="3" y="21" width="10" height="6" rx="2"/>
+    <rect x="35" y="21" width="10" height="6" rx="2"/>
+    <rect x="21" y="3" width="6" height="10" rx="2" transform="rotate(45 24 24)"/>
+    <rect x="21" y="35" width="6" height="10" rx="2" transform="rotate(45 24 24)"/>
+    <rect x="3" y="21" width="10" height="6" rx="2" transform="rotate(45 24 24)"/>
+    <rect x="35" y="21" width="10" height="6" rx="2" transform="rotate(45 24 24)"/>
+  </g>
+  <path fill="#ffffff" fill-rule="evenodd" d="M24 11 a13 13 0 1 0 0.001 0 Z M24 18 a6 6 0 1 1 -0.001 0 Z"/>
+</svg>

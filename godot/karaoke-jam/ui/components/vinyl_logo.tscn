@@ -1,0 +1,96 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://ui/components/vinyl_logo.gd" id="1_logo"]
+[ext_resource type="Material" path="res://ui/materials/glow_orange.tres" id="2_glow"]
+[ext_resource type="Material" path="res://ui/materials/vinyl.tres" id="3_vinyl"]
+[ext_resource type="Script" path="res://ui/behaviours/beat_reactor.gd" id="4_beat"]
+
+[node name="VinylLogo" type="VBoxContainer"]
+custom_minimum_size = Vector2(560, 0)
+offset_right = 560.0
+offset_bottom = 560.0
+mouse_filter = 2
+theme_override_constants/separation = 4
+alignment = 1
+script = ExtResource("1_logo")
+
+[node name="DiscArea" type="Control" parent="."]
+custom_minimum_size = Vector2(0, 340)
+layout_mode = 2
+mouse_filter = 2
+
+[node name="Glow" type="ColorRect" parent="DiscArea"]
+material = ExtResource("2_glow")
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -300.0
+offset_top = -300.0
+offset_right = 300.0
+offset_bottom = 300.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="GlowPulse" type="Node" parent="DiscArea/Glow"]
+script = ExtResource("4_beat")
+target = 4
+shader_param = &"intensity"
+strength = 0.35
+base_value = 0.3
+decay = 5.0
+
+[node name="Disc" type="ColorRect" parent="DiscArea"]
+unique_name_in_owner = true
+material = ExtResource("3_vinyl")
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -160.0
+offset_top = -160.0
+offset_right = 160.0
+offset_bottom = 160.0
+grow_horizontal = 2
+grow_vertical = 2
+pivot_offset = Vector2(160, 160)
+mouse_filter = 2
+
+[node name="DiscScale" type="Node" parent="DiscArea/Disc"]
+script = ExtResource("4_beat")
+strength = 0.045
+decay = 8.0
+
+[node name="DiscShader" type="Node" parent="DiscArea/Disc"]
+script = ExtResource("4_beat")
+target = 4
+shader_param = &"pulse"
+strength = 1.0
+decay = 6.0
+
+[node name="Title" type="Label" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+theme_override_constants/outline_size = 0
+text = "KaraokeJam"
+horizontal_alignment = 1
+
+[node name="TitleBeat" type="Node" parent="Title"]
+script = ExtResource("4_beat")
+trigger = 1
+strength = 0.03
+decay = 6.0
+
+[node name="Subtitle" type="Label" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"AccentLabel"
+theme_override_font_sizes/font_size = 34
+text = "пой в ритм"
+horizontal_alignment = 1

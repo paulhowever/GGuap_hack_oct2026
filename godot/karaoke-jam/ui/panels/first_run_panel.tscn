@@ -1,0 +1,101 @@
+[gd_scene format=3 uid="uid://bajfvq6khidw2"]
+
+[ext_resource type="Script" uid="uid://dxafy64ukd6ua" path="res://ui/panels/first_run_panel.gd" id="1_fr"]
+[ext_resource type="Texture2D" uid="uid://wkupnuu6558u" path="res://ui/icons/headphones.svg" id="2_hp"]
+
+[node name="FirstRunPanel" type="Control" unique_id=1662901920 node_paths=PackedStringArray("initial_focus")]
+visible = false
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_fr")
+allow_close = false
+initial_focus = NodePath("Center/Card/VBox/Buttons/CalibrateButton")
+
+[node name="Dim" type="ColorRect" parent="." unique_id=493840138]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.07, 0.06, 0.09, 0.72)
+
+[node name="Center" type="CenterContainer" parent="." unique_id=1529217651]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Card" type="PanelContainer" parent="Center" unique_id=757711699]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(860, 0)
+layout_mode = 2
+theme_type_variation = &"CardPanel"
+
+[node name="VBox" type="VBoxContainer" parent="Center/Card" unique_id=2147428009]
+layout_mode = 2
+theme_override_constants/separation = 26
+
+[node name="Greeting" type="Label" parent="Center/Card/VBox" unique_id=1772780923]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"HeadingLabel"
+text = "Привет, Гость!"
+horizontal_alignment = 1
+
+[node name="Icon" type="TextureRect" parent="Center/Card/VBox" unique_id=43180181]
+modulate = Color(1, 0.478, 0.239, 1)
+custom_minimum_size = Vector2(0, 110)
+layout_mode = 2
+texture = ExtResource("2_hp")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Text" type="Label" parent="Center/Card/VBox" unique_id=283886649]
+custom_minimum_size = Vector2(740, 0)
+layout_mode = 2
+theme_override_font_sizes/font_size = 28
+text = "Пойте в проводных наушниках — иначе микрофон услышит музыку, и оценка будет неточной."
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="Text2" type="Label" parent="Center/Card/VBox" unique_id=932642524]
+custom_minimum_size = Vector2(740, 0)
+layout_mode = 2
+theme_type_variation = &"HintLabel"
+theme_override_font_sizes/font_size = 26
+text = "Чтобы голос совпадал с ритмом, за 15 секунд откалибруем задержку вашего устройства."
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="HeadphonesCheck" type="CheckBox" parent="Center/Card/VBox" unique_id=965408598]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 4
+text = "Я в проводных наушниках"
+
+[node name="Buttons" type="HBoxContainer" parent="Center/Card/VBox" unique_id=1328008160]
+layout_mode = 2
+theme_override_constants/separation = 24
+alignment = 1
+
+[node name="SkipButton" type="Button" parent="Center/Card/VBox/Buttons" unique_id=269423683]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"GhostButton"
+text = "Пропустить"
+
+[node name="CalibrateButton" type="Button" parent="Center/Card/VBox/Buttons" unique_id=1014491494]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"PrimaryButton"
+theme_override_font_sizes/font_size = 36
+text = "Откалибровать"

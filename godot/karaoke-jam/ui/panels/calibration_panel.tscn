@@ -1,0 +1,150 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://ui/panels/calibration_panel.gd" id="1_cal"]
+
+[node name="CalibrationPanel" type="Control" node_paths=PackedStringArray("initial_focus")]
+visible = false
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_cal")
+initial_focus = NodePath("Center/Card/VBox/Buttons/StartButton")
+
+[node name="Dim" type="ColorRect" parent="."]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.07, 0.06, 0.09, 0.72)
+
+[node name="Center" type="CenterContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Card" type="PanelContainer" parent="Center"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(820, 0)
+layout_mode = 2
+theme_type_variation = &"CardPanel"
+
+[node name="VBox" type="VBoxContainer" parent="Center/Card"]
+layout_mode = 2
+theme_override_constants/separation = 24
+
+[node name="CalTitle" type="Label" parent="Center/Card/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"HeadingLabel"
+text = "Калибровка задержки"
+horizontal_alignment = 1
+
+[node name="CalHint" type="Label" parent="Center/Card/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 26
+text = "Наденьте наушники."
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="BeatRing" type="Control" parent="Center/Card/VBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 200)
+layout_mode = 2
+mouse_filter = 2
+
+[node name="Dots" type="HBoxContainer" parent="Center/Card/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 14
+alignment = 1
+
+[node name="ResultBox" type="VBoxContainer" parent="Center/Card/VBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="ResultCaption" type="Label" parent="Center/Card/VBox/ResultBox"]
+layout_mode = 2
+theme_type_variation = &"HintLabel"
+text = "Задержка"
+horizontal_alignment = 1
+
+[node name="ResultRow" type="HBoxContainer" parent="Center/Card/VBox/ResultBox"]
+layout_mode = 2
+theme_override_constants/separation = 28
+alignment = 1
+
+[node name="MinusButton" type="Button" parent="Center/Card/VBox/ResultBox/ResultRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(96, 0)
+layout_mode = 2
+size_flags_vertical = 4
+theme_type_variation = &"GhostButton"
+text = "−10"
+
+[node name="ResultValue" type="Label" parent="Center/Card/VBox/ResultBox/ResultRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(320, 0)
+layout_mode = 2
+theme_type_variation = &"BigNumberLabel"
+text = "120 мс"
+horizontal_alignment = 1
+
+[node name="PlusButton" type="Button" parent="Center/Card/VBox/ResultBox/ResultRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(96, 0)
+layout_mode = 2
+size_flags_vertical = 4
+theme_type_variation = &"GhostButton"
+text = "+10"
+
+[node name="MicRow" type="HBoxContainer" parent="Center/Card/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 16
+alignment = 1
+
+[node name="MicCaption" type="Label" parent="Center/Card/VBox/MicRow"]
+layout_mode = 2
+theme_type_variation = &"HintLabel"
+text = "Уровень микрофона"
+
+[node name="MicLevel" type="ProgressBar" parent="Center/Card/VBox/MicRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(260, 12)
+layout_mode = 2
+size_flags_vertical = 4
+max_value = 1.0
+step = 0.001
+show_percentage = false
+
+[node name="Buttons" type="HBoxContainer" parent="Center/Card/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 24
+alignment = 1
+
+[node name="StartButton" type="Button" parent="Center/Card/VBox/Buttons"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"PrimaryButton"
+theme_override_font_sizes/font_size = 36
+text = "Начать"
+
+[node name="DoneButton" type="Button" parent="Center/Card/VBox/Buttons"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_type_variation = &"PrimaryButton"
+theme_override_font_sizes/font_size = 36
+text = "Готово"

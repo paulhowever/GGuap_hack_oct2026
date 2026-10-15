@@ -1,0 +1,225 @@
+[gd_scene format=3 uid="uid://f1llbariuxvr"]
+
+[ext_resource type="Script" uid="uid://bueekbg68k6cl" path="res://scenes/boot/boot.gd" id="1_boot"]
+[ext_resource type="PackedScene" uid="uid://kvfxehvfomao" path="res://ui/components/studio_background.tscn" id="2_bg"]
+[ext_resource type="PackedScene" path="res://ui/components/vinyl_logo.tscn" id="3_logo"]
+[ext_resource type="Script" uid="uid://fjuk3b7rmstf" path="res://ui/components/menu_button.gd" id="4_btn"]
+[ext_resource type="Script" uid="uid://yex6ia27s6ti" path="res://ui/components/on_air_sign.gd" id="5_onair"]
+[ext_resource type="PackedScene" path="res://ui/components/mic_status_chip.tscn" id="6_mic"]
+[ext_resource type="Texture2D" uid="uid://coner633d6l0r" path="res://ui/icons/gear.svg" id="7_gear"]
+[ext_resource type="Texture2D" uid="uid://wkupnuu6558u" path="res://ui/icons/headphones.svg" id="8_hp"]
+[ext_resource type="PackedScene" path="res://ui/panels/first_run_panel.tscn" id="9_fr"]
+[ext_resource type="PackedScene" path="res://ui/panels/calibration_panel.tscn" id="10_cal"]
+[ext_resource type="PackedScene" uid="uid://d2s636ykjydjh" path="res://ui/panels/settings_panel.tscn" id="11_set"]
+[ext_resource type="Theme" uid="uid://jo2ye60ryjcu" path="res://ui/theme/main_theme.tres" id="12_theme"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_3837e"]
+content_margin_left = 28.0
+content_margin_top = 8.0
+content_margin_right = 28.0
+content_margin_bottom = 10.0
+bg_color = Color(0.11764706, 0.101960786, 0.14117648, 1)
+border_width_left = 4
+border_width_top = 4
+border_width_right = 4
+border_width_bottom = 4
+border_color = Color(0.88994646, 0.43574393, 0.23254578, 1)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_right = 12
+corner_radius_bottom_left = 12
+shadow_color = Color(1, 0.47843137, 0.23921569, 0.37346277)
+shadow_size = 14
+
+[node name="Boot" type="Control" unique_id=1582119351]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = ExtResource("12_theme")
+script = ExtResource("1_boot")
+
+[node name="StudioBackground" parent="." unique_id=1775947766 instance=ExtResource("2_bg")]
+layout_mode = 1
+
+[node name="Center" type="CenterContainer" parent="." unique_id=245545367]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = 40.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Row" type="HBoxContainer" parent="Center" unique_id=1574311636]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 120
+alignment = 1
+
+[node name="VinylLogo" parent="Center/Row" unique_id=69667275 instance=ExtResource("3_logo")]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="Menu" type="VBoxContainer" parent="Center/Row" unique_id=691042597]
+custom_minimum_size = Vector2(460, 0)
+layout_mode = 2
+size_flags_vertical = 4
+mouse_filter = 2
+theme_override_constants/separation = 28
+
+[node name="SingButton" type="Button" parent="Center/Row/Menu" unique_id=946709448]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 130)
+layout_mode = 2
+focus_neighbor_bottom = NodePath("../SettingsButton")
+theme_type_variation = &"PrimaryButton"
+theme_override_font_sizes/font_size = 64
+text = "Петь"
+script = ExtResource("4_btn")
+beat_when_idle = true
+
+[node name="SettingsButton" type="Button" parent="Center/Row/Menu" unique_id=968161902]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 88)
+layout_mode = 2
+focus_neighbor_top = NodePath("../SingButton")
+theme_type_variation = &"GhostButton"
+theme_override_font_sizes/font_size = 36
+text = "Настройки"
+script = ExtResource("4_btn")
+beat_scale = 0.02
+
+[node name="MenuHint" type="Label" parent="Center/Row/Menu" unique_id=225128047]
+layout_mode = 2
+theme_type_variation = &"HintLabel"
+text = "Enter — выбрать   ·   Esc — настройки"
+horizontal_alignment = 1
+
+[node name="TopBar" type="PanelContainer" parent="." unique_id=2092436194]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 88.0
+grow_horizontal = 2
+theme_type_variation = &"BarPanel"
+
+[node name="Row" type="HBoxContainer" parent="TopBar" unique_id=1558877078]
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="OnAirSign" type="PanelContainer" parent="TopBar/Row" unique_id=1534443835]
+layout_mode = 2
+size_flags_vertical = 4
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_3837e")
+script = ExtResource("5_onair")
+
+[node name="Spacer" type="Control" parent="TopBar/Row" unique_id=501621540]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+
+[node name="MicStatusChip" parent="TopBar/Row" unique_id=1227851745 instance=ExtResource("6_mic")]
+layout_mode = 2
+size_flags_vertical = 4
+
+[node name="NickChip" type="PanelContainer" parent="TopBar/Row" unique_id=584377146]
+layout_mode = 2
+size_flags_vertical = 4
+theme_type_variation = &"Chip"
+
+[node name="NickLabel" type="Label" parent="TopBar/Row/NickChip" unique_id=1488332872]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"AccentLabel"
+theme_override_font_sizes/font_size = 24
+text = "Гость"
+
+[node name="GearButton" type="Button" parent="TopBar/Row" unique_id=2004508024]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(60, 56)
+layout_mode = 2
+size_flags_vertical = 4
+tooltip_text = "Настройки"
+focus_mode = 0
+theme_type_variation = &"IconButton"
+icon = ExtResource("7_gear")
+icon_alignment = 1
+expand_icon = true
+
+[node name="BottomBar" type="PanelContainer" parent="." unique_id=1612557122]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -76.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_type_variation = &"BarPanel"
+
+[node name="Row" type="HBoxContainer" parent="BottomBar" unique_id=501885007]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="HpIcon" type="TextureRect" parent="BottomBar/Row" unique_id=2092807101]
+modulate = Color(0.373, 0.827, 0.737, 1)
+custom_minimum_size = Vector2(30, 30)
+layout_mode = 2
+size_flags_vertical = 4
+texture = ExtResource("8_hp")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="HeadphonesHint" type="Label" parent="BottomBar/Row" unique_id=66606512]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"HintLabel"
+text = "Пойте в проводных наушниках"
+
+[node name="Spacer" type="Control" parent="BottomBar/Row" unique_id=1922514765]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+
+[node name="LagLabel" type="Label" parent="BottomBar/Row" unique_id=1715118637]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"HintLabel"
+text = "Задержка: 120 мс"
+
+[node name="CalibrateLink" type="Button" parent="BottomBar/Row" unique_id=1937782475]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 4
+focus_mode = 0
+theme_type_variation = &"GhostButton"
+theme_override_font_sizes/font_size = 22
+text = "Калибровать"
+
+[node name="FirstRunPanel" parent="." unique_id=1366539156 instance=ExtResource("9_fr")]
+unique_name_in_owner = true
+layout_mode = 1
+
+[node name="CalibrationPanel" parent="." unique_id=1449080679 instance=ExtResource("10_cal")]
+unique_name_in_owner = true
+layout_mode = 1
+
+[node name="SettingsPanel" parent="." unique_id=423924944 instance=ExtResource("11_set")]
+unique_name_in_owner = true
+layout_mode = 1
+
+[node name="Fade" type="ColorRect" parent="." unique_id=1654993882]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.118, 0.102, 0.141, 1)

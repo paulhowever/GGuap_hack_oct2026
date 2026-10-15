@@ -1,0 +1,22 @@
+[gd_resource type="ShaderMaterial" load_steps=2 format=3]
+
+[ext_resource type="Shader" path="res://ui/shaders/studio_bg.gdshader" id="1_bg"]
+
+[resource]
+shader = ExtResource("1_bg")
+shader_parameter/color_top = Color(0.169, 0.141, 0.188, 1)
+shader_parameter/color_bottom = Color(0.118, 0.102, 0.141, 1)
+shader_parameter/light_color = Color(1, 0.7, 0.42, 1)
+shader_parameter/wave_color = Color(1, 0.478, 0.239, 1)
+shader_parameter/wave_color_2 = Color(0.373, 0.827, 0.737, 1)
+shader_parameter/light_pos = Vector2(0.5, 0.42)
+shader_parameter/light_radius = 0.55
+shader_parameter/light_strength = 0.2
+shader_parameter/panel_tiles = 11.0
+shader_parameter/panel_strength = 0.35
+shader_parameter/wave_y = 0.82
+shader_parameter/wave_strength = 0.3
+shader_parameter/vignette = 0.9
+shader_parameter/grain = 0.03
+shader_parameter/beat_pulse = 0.0
+shader_parameter/measure_pulse = 0.0

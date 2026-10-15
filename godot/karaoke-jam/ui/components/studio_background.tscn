@@ -1,0 +1,146 @@
+[gd_scene format=3 uid="uid://kvfxehvfomao"]
+
+[ext_resource type="Script" uid="uid://t7kxecgoibdd" path="res://ui/components/studio_background.gd" id="1_bg"]
+[ext_resource type="Material" path="res://ui/materials/studio_bg.tres" id="2_mat"]
+[ext_resource type="Script" uid="uid://2c2dvcjeytwd" path="res://ui/behaviours/beat_reactor.gd" id="3_beat"]
+[ext_resource type="Script" uid="uid://d0kopagy2atqg" path="res://ui/components/eq_bars.gd" id="4_eq"]
+[ext_resource type="Texture2D" uid="uid://gq0x78b3jmkt" path="res://ui/icons/note.svg" id="5_note"]
+[ext_resource type="Texture2D" uid="uid://bvkwliauwec8p" path="res://ui/icons/note_single.svg" id="6_note1"]
+
+[sub_resource type="Curve" id="Curve_scale"]
+_data = [Vector2(0, 0), 0.0, 4.0, 0, 0, Vector2(0.2, 1), 0.0, 0.0, 0, 0, Vector2(1, 0.7), 0.0, 0.0, 0, 0]
+point_count = 3
+
+[sub_resource type="Gradient" id="Gradient_notes"]
+offsets = PackedFloat32Array(0, 0.15, 0.7, 1)
+colors = PackedColorArray(0.953, 0.902, 0.827, 0, 0.953, 0.902, 0.827, 0.18, 0.373, 0.827, 0.737, 0.12, 0.373, 0.827, 0.737, 0)
+
+[sub_resource type="CanvasItemMaterial" id="Mat_add"]
+blend_mode = 1
+
+[sub_resource type="Gradient" id="Gradient_accent"]
+offsets = PackedFloat32Array(0, 0.1, 0.6, 1)
+colors = PackedColorArray(1, 0.478, 0.239, 0, 1, 0.478, 0.239, 0.55, 1, 0.7, 0.42, 0.25, 1, 0.7, 0.42, 0)
+
+[node name="StudioBackground" type="Control" unique_id=1633526913]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("1_bg")
+
+[node name="Shader" type="ColorRect" parent="." unique_id=1786788103]
+material = ExtResource("2_mat")
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="BeatPulse" type="Node" parent="Shader" unique_id=1652900389]
+script = ExtResource("3_beat")
+target = 4
+strength = 1.0
+decay = 5.0
+
+[node name="MeasurePulse" type="Node" parent="Shader" unique_id=2106054093]
+script = ExtResource("3_beat")
+trigger = 1
+target = 4
+shader_param = &"measure_pulse"
+strength = 1.0
+decay = 3.0
+
+[node name="EqLeft" type="Control" parent="." unique_id=1454476603]
+modulate = Color(1, 1, 1, 0.55)
+layout_mode = 1
+anchors_preset = 9
+anchor_bottom = 1.0
+offset_left = 36.0
+offset_top = 220.0
+offset_right = 196.0
+offset_bottom = -220.0
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("4_eq")
+bar_count = 10
+segments = 12
+horizontal = true
+
+[node name="EqRight" type="Control" parent="." unique_id=1313070906]
+modulate = Color(1, 1, 1, 0.55)
+layout_mode = 1
+anchors_preset = 11
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -196.0
+offset_top = 220.0
+offset_right = -36.0
+offset_bottom = -220.0
+grow_horizontal = 0
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("4_eq")
+bar_count = 10
+segments = 12
+horizontal = true
+flip_horizontal = true
+freq_min = 400.0
+freq_max = 12000.0
+
+[node name="Notes" type="CPUParticles2D" parent="." unique_id=1077375971]
+unique_name_in_owner = true
+position = Vector2(960, 1120)
+amount = 22
+texture = ExtResource("6_note1")
+lifetime = 11.0
+preprocess = 11.0
+emission_shape = 3
+emission_rect_extents = Vector2(960, 10)
+direction = Vector2(0, -1)
+spread = 12.0
+gravity = Vector2(0, 0)
+initial_velocity_min = 70.0
+initial_velocity_max = 130.0
+angular_velocity_min = -20.0
+angular_velocity_max = 20.0
+angle_min = -25.0
+angle_max = 25.0
+scale_amount_min = 0.35
+scale_amount_max = 0.8
+scale_amount_curve = SubResource("Curve_scale")
+color_ramp = SubResource("Gradient_notes")
+
+[node name="NotesAccent" type="CPUParticles2D" parent="." unique_id=1336519880]
+unique_name_in_owner = true
+material = SubResource("Mat_add")
+position = Vector2(960, 1120)
+emitting = false
+amount = 6
+texture = ExtResource("5_note")
+lifetime = 5.0
+one_shot = true
+explosiveness = 0.85
+emission_shape = 3
+emission_rect_extents = Vector2(960, 10)
+direction = Vector2(0, -1)
+spread = 18.0
+gravity = Vector2(0, 0)
+initial_velocity_min = 180.0
+initial_velocity_max = 280.0
+angular_velocity_min = -40.0
+angular_velocity_max = 40.0
+damping_min = 20.0
+damping_max = 35.0
+angle_min = -25.0
+angle_max = 25.0
+scale_amount_min = 0.5
+scale_amount_max = 0.9
+scale_amount_curve = SubResource("Curve_scale")
+color_ramp = SubResource("Gradient_accent")

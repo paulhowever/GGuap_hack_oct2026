@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="TrackInfo" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://audio/track_info.gd" id="1_track"]
+[ext_resource type="AudioStream" path="res://SFX/For Ag (True).mp3" id="2_song"]
+
+[resource]
+script = ExtResource("1_track")
+title = "For Ag (True)"
+stream = ExtResource("2_song")
+bpm = 130.0
+beats_per_measure = 4
+beat_anchor_sec = 44.0
+nudge_ms = 0.0
+start_sec = -1.0
+loop_start_sec = -1.0
+loop_end_sec = 0.0
