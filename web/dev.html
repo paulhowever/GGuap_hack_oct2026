@@ -31,14 +31,15 @@
 <body>
 <div id="overlay"><div id="overlayBox"><button id="unlock">Нажми, чтобы начать</button><div id="unlockReason"></div></div></div>
 <main>
-  <div id="bt">Похоже на Bluetooth: outputLatency больше 100 мс. Подключи наушники проводом.</div>
+  <div id="bt"></div>
   <div class="row">
     <select id="song"></select>
     <select id="difficulty"><option>easy</option><option selected>normal</option><option>hard</option></select>
     <button id="load">Загрузить</button>
     <button id="start">Старт</button>
     <button id="stop">Стоп</button>
-    <button id="calibrate" title="8 щелчков, хлопай в такт каждому">Калибровка</button>
+    <button id="calibSpeakers" title="8 щелчков через динамики, микрофон слушает их сам">Калибровка: динамики</button>
+    <button id="calibHeadphones" title="10 щелчков в наушниках, хлопай в такт">Калибровка: наушники (хлопай)</button>
     <button id="lagMinus">lag −10</button>
     <button id="lagPlus">lag +10</button>
   </div>
@@ -66,6 +67,18 @@ const voice = window.voice
 const $ = id => document.getElementById(id)
 const CALIB_MIN_HITS = 5
 const CALIB_CLICKS = 8
+const CALIB_MODES = {
+  speakers: {
+    label: 'динамики',
+    before: 'Сними наушники, сделай погромче и посиди тихо — 8 щелчков.',
+    failed: hits => `Калибровка (динамики) не удалась: микрофон не услышал щелчки (${hits} из ${CALIB_CLICKS}). Сними наушники — калибровка идёт через динамики, сделай громче, проверь, что звук не идёт через Bluetooth, и выключи подавление шума и эха в настройках микрофона Windows/macOS. В наушниках выбери «Калибровка: наушники».`
+  },
+  headphones: {
+    label: 'наушники',
+    before: 'Надень наушники. Услышишь 10 щелчков: на первых двух поймай ритм, дальше хлопай в такт тому, что слышишь.',
+    failed: hits => `Калибровка (наушники) не удалась: микрофон не услышал хлопки (${hits} из ${CALIB_CLICKS}). Хлопай громче и ровно в такт щелчкам, держи микрофон ближе и выключи подавление шума в настройках микрофона Windows/macOS.`
+  }
+}
 const UNLOCK_ERRORS = ['insecure_context', 'mic_denied', 'mic_not_found', 'audio_locked', 'worklet_failed']
 const UNLOCK_REASONS = {
   mic_denied: 'Нет доступа к микрофону. Разреши его в настройках сайта (значок слева от адреса) и нажми ещё раз.',
@@ -83,11 +96,24 @@ function log(name, data) {
 
 function showCalibration(data) {
   const hint = $('calibHint')
+  const mode = CALIB_MODES[data.mode] || CALIB_MODES.speakers
   const failed = data.hits < CALIB_MIN_HITS
   hint.classList.toggle('fail', failed)
   hint.textContent = failed
-    ? `Калибровка не удалась: микрофон не услышал щелчки (${data.hits} из ${CALIB_CLICKS}). Сними наушники — калибровка идёт через динамики, сделай громче, проверь, что звук не идёт через Bluetooth, и выключи подавление шума и эха в настройках микрофона Windows/macOS.`
-    : `Калибровка готова: задержка ${data.lag_ms} мс (${data.hits} из ${CALIB_CLICKS} щелчков).`
+    ? mode.failed(data.hits)
+    : `Калибровка готова (${mode.label}): задержка ${data.lag_ms} мс (${data.hits} из ${CALIB_CLICKS} щелчков).`
+}
+
+function calibrate(mode) {
+  $('calibHint').classList.remove('fail')
+  $('calibHint').textContent = CALIB_MODES[mode].before
+  voice.calibrate(mode)
+}
+
+function showBt(data) {
+  const out = voice._state().output_latency
+  $('bt').textContent = `Похоже на Bluetooth-наушники: задержка вывода ~${Math.round((out || 0) * 1000)} мс. Откалибруй в режиме «наушники» и лучше используй микрофон ноутбука, а не наушников.`
+  $('bt').style.display = data.bt_suspect ? 'block' : 'none'
 }
 
 function integrityLabel(data) {
@@ -116,7 +142,7 @@ voice.subscribe((name, json) => {
   log(name, summary(name, data))
   if (name === 'on_unlocked') {
     st.unlocked = data
-    $('bt').style.display = data.bt_suspect ? 'block' : 'none'
+    showBt(data)
   }
   if (name === 'on_ready') {
     st.ref = data
@@ -195,11 +221,8 @@ $('start').onclick = () => {
   voice.start()
 }
 $('stop').onclick = showTake
-$('calibrate').onclick = () => {
-  $('calibHint').textContent = ''
-  $('calibHint').classList.remove('fail')
-  voice.calibrate()
-}
+$('calibSpeakers').onclick = () => calibrate('speakers')
+$('calibHeadphones').onclick = () => calibrate('headphones')
 $('lagMinus').onclick = () => nudge(-10)
 $('lagPlus').onclick = () => nudge(10)
 $('submit').onclick = () => {
@@ -288,6 +311,7 @@ function stats() {
     ['outputLatency', ms(vs.output_latency)],
     ['baseLatency', ms(vs.base_latency)],
     ['lag_ms применён / оценка', `${vs.lag_ms} / ${vs.est_lag_ms ?? '—'}`],
+    ['источник lag', vs.lag_source ?? '—'],
     ['шум / gate', `${st.unlocked?.noise_db ?? '—'} dB / ${vs.gate ?? '—'}`],
     ['кадров/с, за poll', `${st.fps}, ${st.lastFrames}`],
     ['последний тон', last ? `${last.hz} Гц, midi ${hzToMidi(last.hz).toFixed(2)}, conf ${last.conf}` : '—'],

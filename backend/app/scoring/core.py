@@ -146,12 +146,18 @@ def chart(ref: dict, grid: Grid) -> dict:
 
 
 def score_take(
-    ref: dict, track: F0Track, wav_t0: float, cfg: ScoringConfig, difficulty: str, lag_hint_ms: float | None
+    ref: dict,
+    track: F0Track,
+    wav_t0: float,
+    cfg: ScoringConfig,
+    difficulty: str,
+    lag_hint_ms: float | None,
+    lag_source: str | None = None,
 ) -> dict:
     tol = cfg.tol(difficulty)
     raw = to_grid(track, wav_t0, song_duration(ref), cfg)
     ref_mask, ref_midi = ref_arrays(ref, raw.t, cfg)
-    latency = estimate_latency(raw, ref_mask, ref_midi, cfg, tol, lag_hint_ms)
+    latency = estimate_latency(raw, ref_mask, ref_midi, cfg, tol, lag_hint_ms, lag_source)
     s = steps_for(latency.applied_ms)
     grid = Grid(raw.t, shifted(raw.voiced, s, False), shifted(raw.midi, s, np.nan))
     ordered = [(line["i"], note) for line in ref["lines"] for note in line["notes"]]

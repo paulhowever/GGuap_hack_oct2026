@@ -11,11 +11,12 @@ import { createJudge } from './lib/judge.js'
 import { clientId } from './lib/profile.js'
 import { requestSession } from './lib/session.js'
 import { attachDebug, isDebug } from './lib/debug.js'
-import { CLICK_LEAD, CLICK_LEN, clickTimes, detectOnsets, estimateLag, onsetThreshold } from './lib/calibration.js'
+import { CLICK_GAP, CLICK_LEAD, CLICK_LEN, CLICKS, LEAD_IN, clickTimes, detectOnsets, estimateLag, onsetThreshold } from './lib/calibration.js'
 import { clamp, round } from './lib/num.js'
 import { createMockVoice, attachPlanB } from './voice.mock.js'
 
 const LAG_KEY = 'voice.lag_ms'
+const LAG_SRC_KEY = 'voice.lag_src'
 const TARGET_SR = 16000
 const START_DELAY = 0.15
 const NOISE_SECONDS = 1
@@ -35,7 +36,7 @@ export function createVoice(cfg = {}, env = globalThis) {
     ctx: null, stream: null, mic: null, tap: null, music: null, src: null, unlocking: null, calibrating: false,
     sr: 0, floor: 0, gate: 0.01, level: 0,
     difficulty: cfg.difficulty || 'normal', aec: !!cfg.aec, volume: cfg.music_volume ?? 1,
-    sessionLag: null, estLag: 20, lag: 20,
+    sessionLag: null, sessionSource: null, estLag: 20, lag: 20, lagSource: 'estimated',
     ref: null, buffer: null, state: 'idle', t0: 0,
     rec: null, takeFrames: [], take: null, takeJob: null, recDone: null,
     tokenJob: null, identity: null, tokenState: 'none',
@@ -49,22 +50,36 @@ export function createVoice(cfg = {}, env = globalThis) {
   const url = p => (/^https?:\/\//.test(p) ? p : api + p)
   const tol = () => tolTable[s.difficulty] ?? tolTable.normal
 
-  function readStored() {
+  function readKey(key) {
     try {
-      return toMs(env.localStorage?.getItem(LAG_KEY))
+      return env.localStorage?.getItem(key) ?? null
     } catch {
       return null
     }
   }
 
-  function writeStored(v) {
+  function writeStored(v, source) {
     try {
       env.localStorage?.setItem(LAG_KEY, String(v))
+      env.localStorage?.setItem(LAG_SRC_KEY, source)
     } catch {}
   }
 
+  function setSessionLag(v, source) {
+    s.sessionLag = v
+    s.sessionSource = source
+    writeStored(v, source)
+    refreshLag()
+  }
+
   function refreshLag() {
-    s.lag = resolveLagMs({ session: s.sessionLag, pinned: toMs(cfg.lag_ms), stored: readStored(), estimated: s.estLag })
+    const pinned = toMs(cfg.lag_ms)
+    const stored = toMs(readKey(LAG_KEY))
+    s.lag = resolveLagMs({ session: s.sessionLag, pinned, stored, estimated: s.estLag })
+    if (Number.isFinite(s.sessionLag)) s.lagSource = s.sessionSource
+    else if (Number.isFinite(pinned)) s.lagSource = 'config'
+    else if (Number.isFinite(stored)) s.lagSource = readKey(LAG_SRC_KEY) === 'config' ? 'config' : 'calibrated'
+    else s.lagSource = 'estimated'
   }
 
   refreshLag()
@@ -203,11 +218,7 @@ export function createVoice(cfg = {}, env = globalThis) {
     const o = parseOptions(json)
     if (typeof o.difficulty === 'string' && o.difficulty in tolTable) s.difficulty = o.difficulty
     const lag = toMs(o.lag_ms)
-    if (lag !== null) {
-      s.sessionLag = lag
-      writeStored(lag)
-      refreshLag()
-    }
+    if (lag !== null) setSessionLag(lag, 'config')
     if (typeof o.music_volume === 'number') {
       s.volume = clamp(o.music_volume, 0, 1)
       if (s.music) s.music.gain.value = s.volume
@@ -335,7 +346,7 @@ export function createVoice(cfg = {}, env = globalThis) {
     const rec = s.rec
     const tokenJob = s.tokenJob
     const { songId, clientId: takeClientId, difficulty } = s.identity
-    const info = { t0: s.t0, frames: s.takeFrames, lag_ms: s.lag, difficulty, song_id: songId, client_id: takeClientId }
+    const info = { t0: s.t0, frames: s.takeFrames, lag_ms: s.lag, lag_source: s.lagSource, difficulty, song_id: songId, client_id: takeClientId }
     s.takeJob = flushed
       .then(() => buildTake(rec, info))
       .then(async take => (s.take = { ...take, session_token: await tokenJob }))
@@ -358,6 +369,7 @@ export function createVoice(cfg = {}, env = globalThis) {
       wavT0: take.wav_t0,
       wavSr: take.wav_sr,
       lagMs: take.lag_ms,
+      lagSource: take.lag_source,
       frames: take.frames,
       client: { ua: env.navigator?.userAgent ?? '', sr: s.sr, base_latency: round(ctx?.baseLatency || 0, 4), output_latency: round(ctx?.outputLatency || 0, 4), aec: s.aec }
     })
@@ -377,13 +389,16 @@ export function createVoice(cfg = {}, env = globalThis) {
     }
   }
 
-  async function calibrate() {
+  async function calibrate(mode) {
     if (s.calibrating) return false
     if (!s.tap || s.state === 'playing') return fail(ERR.LOCKED, 'calibrate needs unlock and no song playing')
     s.calibrating = true
     const ctx = s.ctx
-    const clicks = clickTimes(ctx.currentTime + CLICK_LEAD)
-    for (const c of clicks) {
+    const kind = mode === 'headphones' ? 'headphones' : 'speakers'
+    const lead = kind === 'headphones' ? LEAD_IN : 0
+    const all = clickTimes(ctx.currentTime + CLICK_LEAD, lead + CLICKS)
+    const clicks = all.slice(lead)
+    for (const c of all) {
       const osc = ctx.createOscillator()
       const g = ctx.createGain()
       osc.frequency.value = 1000
@@ -395,13 +410,10 @@ export function createVoice(cfg = {}, env = globalThis) {
     }
     const frames = await collect(clicks.at(-1) - ctx.currentTime + 0.6)
     s.calibrating = false
-    const r = estimateLag(clicks, detectOnsets(frames, { sr: s.sr, threshold: onsetThreshold(s.floor) }))
-    if (r.lag_ms !== null) {
-      s.sessionLag = r.lag_ms
-      writeStored(r.lag_ms)
-      refreshLag()
-    }
-    bus.emit('on_calibrated', { lag_ms: s.lag, hits: r.hits })
+    const onsets = detectOnsets(frames, { sr: s.sr, threshold: onsetThreshold(s.floor) }).filter(t => t >= clicks[0] - CLICK_GAP / 2)
+    const r = estimateLag(clicks, onsets)
+    if (r.lag_ms !== null) setSessionLag(r.lag_ms, 'calibrated')
+    bus.emit('on_calibrated', { lag_ms: s.lag, hits: r.hits, mode: kind })
     return r.lag_ms !== null
   }
 
@@ -428,7 +440,7 @@ export function createVoice(cfg = {}, env = globalThis) {
       return take ? { wav: take.wav, meta: metaFor(take, 'dev', null), resampler: take.resampler } : null
     },
     _state() {
-      return { sr: s.sr, floor: s.floor, gate: s.gate, lag_ms: s.lag, est_lag_ms: s.estLag, output_latency: s.ctx?.outputLatency ?? null, base_latency: s.ctx?.baseLatency ?? null, ctx_state: s.ctx?.state ?? null, session: s.tokenState }
+      return { sr: s.sr, floor: s.floor, gate: s.gate, lag_ms: s.lag, lag_source: s.lagSource, est_lag_ms: s.estLag, output_latency: s.ctx?.outputLatency ?? null, base_latency: s.ctx?.baseLatency ?? null, ctx_state: s.ctx?.state ?? null, session: s.tokenState }
     }
   }
 }

@@ -42,9 +42,35 @@ def test_estimates_delay_without_hint(demo_ref, cfg, delay):
 def test_hint_clips_estimate(demo_ref, cfg):
     g = grid_for(demo_ref, cfg, synth_take(demo_ref, delay_s=0.25))
     mask, midi = ref_arrays(demo_ref, g.t, cfg)
-    lat = estimate_latency(g, mask, midi, cfg, cfg.tol("normal"), 0.0)
+    lat = estimate_latency(g, mask, midi, cfg, cfg.tol("normal"), 0.0, "calibrated")
     assert lat.applied_ms == pytest.approx(cfg.lag_clip_ms)
     assert lat.residual_ms == pytest.approx(lat.estimated_ms - cfg.lag_clip_ms)
+
+
+@pytest.mark.parametrize("source", ["estimated", "config", None])
+def test_uncalibrated_hint_does_not_clip(demo_ref, cfg, source):
+    g = grid_for(demo_ref, cfg, synth_take(demo_ref, delay_s=0.3))
+    mask, midi = ref_arrays(demo_ref, g.t, cfg)
+    lat = estimate_latency(g, mask, midi, cfg, cfg.tol("normal"), 40.0, source)
+    assert lat.applied_ms == pytest.approx(300, abs=20)
+    assert lat.applied_ms == lat.estimated_ms
+    assert lat.residual_ms == 0.0
+
+
+def test_calibrated_hint_clips_far_estimate(demo_ref, cfg):
+    g = grid_for(demo_ref, cfg, synth_take(demo_ref, delay_s=0.3))
+    mask, midi = ref_arrays(demo_ref, g.t, cfg)
+    lat = estimate_latency(g, mask, midi, cfg, cfg.tol("normal"), 40.0, "calibrated")
+    assert lat.applied_ms == pytest.approx(40.0 + cfg.lag_clip_ms)
+
+
+@pytest.mark.parametrize("source", ["calibrated", "estimated"])
+def test_silence_keeps_hint_for_any_source(demo_ref, cfg, source):
+    g = grid_for(demo_ref, cfg, np.zeros(16000 * 12, dtype=np.float32))
+    mask, midi = ref_arrays(demo_ref, g.t, cfg)
+    lat = estimate_latency(g, mask, midi, cfg, cfg.tol("normal"), 48.0, source)
+    assert lat.applied_ms == 48.0
+    assert lat.residual_ms == 0.0
 
 
 def test_silence_falls_back_to_hint(demo_ref, cfg):

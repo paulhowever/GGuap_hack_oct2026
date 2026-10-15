@@ -104,11 +104,14 @@ test('submit returns the mock result after 500 ms with the player name', async (
   assert.equal(last('on_result').challenge, null)
 })
 
-test('calibrate reports the current lag with 8 hits', async () => {
+test('calibrate reports the current lag with 8 hits and echoes the mode', async () => {
   const { env, voice, last } = setup()
   voice.calibrate()
   await env.advance(1000)
-  assert.deepEqual(last('on_calibrated'), { lag_ms: 40, hits: 8 })
+  assert.deepEqual(last('on_calibrated'), { lag_ms: 40, hits: 8, mode: 'speakers' })
+  voice.calibrate('headphones')
+  await env.advance(1000)
+  assert.deepEqual(last('on_calibrated'), { lag_ms: 40, hits: 8, mode: 'headphones' })
 })
 
 test('unknown mode falls back to perfect', () => {

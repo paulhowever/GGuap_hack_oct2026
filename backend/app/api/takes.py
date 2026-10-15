@@ -50,6 +50,7 @@ class TakeMeta(BaseModel):
     wav_t0: float
     wav_sr: int
     lag_ms: float | None = None
+    lag_source: Literal["calibrated", "config", "estimated"] | None = None
     frames: list[Frame] = Field(default_factory=list)
     client: dict[str, Any] = Field(default_factory=dict)
 
@@ -63,13 +64,15 @@ def evaluate(state, ref: dict, audio: np.ndarray, sr: int, m: TakeMeta) -> tuple
     t0 = time.perf_counter()
     track = state.f0.track(audio, sr)
     t1 = time.perf_counter()
-    result = score_take(ref, track, m.wav_t0, state.scoring, m.difficulty, m.lag_ms)
+    result = score_take(ref, track, m.wav_t0, state.scoring, m.difficulty, m.lag_ms, m.lag_source)
     t2 = time.perf_counter()
     live_total = None
     if m.frames:
         frames = [f.model_dump() for f in m.frames]
         live = FramesEngine(frames, m.wav_t0, (m.lag_ms or 0.0) / 1000.0).track(audio, sr)
-        live_total = score_take(ref, live, m.wav_t0, state.scoring, m.difficulty, m.lag_ms)["score"]["total"]
+        live_total = score_take(ref, live, m.wav_t0, state.scoring, m.difficulty, m.lag_ms, m.lag_source)[
+            "score"
+        ]["total"]
     t3 = time.perf_counter()
     lag_ms = result["latency"]["applied_ms"]
     try:
@@ -197,6 +200,7 @@ async def post_take(
         difficulty=m.difficulty,
         dur_s=round(samples.size / sr, 2),
         lag_hint_ms=m.lag_ms,
+        lag_source=m.lag_source,
         lag_est_ms=result["latency"]["estimated_ms"],
         lag_applied_ms=result["latency"]["applied_ms"],
         rho=result["latency"]["confidence"],

@@ -1,6 +1,7 @@
 import { median } from './num.js'
 
 export const CLICKS = 8
+export const LEAD_IN = 2
 export const CLICK_GAP = 0.5
 export const CLICK_LEAD = 0.6
 export const CLICK_LEN = 0.02

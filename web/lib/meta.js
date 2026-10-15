@@ -1,6 +1,6 @@
 import { round } from './num.js'
 
-export function buildMeta({ songId, clientId, sessionToken, player, difficulty, challengeId, wavT0, wavSr, lagMs, frames, client }) {
+export function buildMeta({ songId, clientId, sessionToken, player, difficulty, challengeId, wavT0, wavSr, lagMs, lagSource, frames, client }) {
   return {
     song_id: songId,
     client_id: clientId || null,
@@ -11,6 +11,7 @@ export function buildMeta({ songId, clientId, sessionToken, player, difficulty, 
     wav_t0: round(wavT0, 3),
     wav_sr: wavSr,
     lag_ms: Math.round(lagMs),
+    lag_source: lagSource || null,
     frames,
     client
   }
