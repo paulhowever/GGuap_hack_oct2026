@@ -31,9 +31,22 @@ def media_path(url: str | None, songs_dir: Path) -> Path | None:
 def source_track(path: str, mtime_ns: int, engine: F0Engine) -> F0Track | None:
     try:
         data, sr = sf.read(path, dtype="float32", always_2d=True)
-    except (sf.LibsndfileError, RuntimeError, ValueError):
+        if data.shape[0] == 0:
+            return None
+        return engine.track(data.mean(axis=1), int(sr))
+    except (sf.SoundFileError, RuntimeError, ValueError, OSError):
         return None
-    return engine.track(data.mean(axis=1), int(sr))
+
+
+def source_of(url: str | None, songs_dir: Path, engine: F0Engine) -> F0Track | None:
+    try:
+        path = media_path(url, songs_dir)
+        if path is None:
+            return None
+        mtime_ns = path.stat().st_mtime_ns
+    except (ValueError, OSError):
+        return None
+    return source_track(str(path), mtime_ns, engine)
 
 
 def voiced_midi(track: F0Track, conf_min: float) -> np.ndarray:
@@ -80,7 +93,6 @@ def replay_cents(
 ) -> dict[str, float | None]:
     out: dict[str, float | None] = {}
     for name in SOURCES:
-        path = media_path(ref.get("audio", {}).get(name), songs_dir)
-        source = source_track(str(path), path.stat().st_mtime_ns, engine) if path else None
+        source = source_of(ref.get("audio", {}).get(name), songs_dir, engine)
         out[name] = pitch_match(take, wav_t0, source, conf_min) if source else None
     return out

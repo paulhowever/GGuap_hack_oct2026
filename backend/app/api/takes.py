@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.anticheat.integrity import integrity_of
 from app.anticheat.session import session_flags
-from app.anticheat.signal import SignalCheck, check_signal
+from app.anticheat.signal import SignalCheck, check_signal, skipped_check
 from app.api.players import CLIENT_ID
 from app.board import placement
 from app.core.logging import log_event
@@ -72,9 +72,21 @@ def evaluate(state, ref: dict, audio: np.ndarray, sr: int, m: TakeMeta) -> tuple
         live_total = score_take(ref, live, m.wav_t0, state.scoring, m.difficulty, m.lag_ms)["score"]["total"]
     t3 = time.perf_counter()
     lag_ms = result["latency"]["applied_ms"]
-    signal = check_signal(
-        audio, sr, track, ref, m.wav_t0, lag_ms, state.settings.songs_dir, state.f0, state.scoring.conf_min
-    )
+    try:
+        signal = check_signal(
+            audio,
+            sr,
+            track,
+            ref,
+            m.wav_t0,
+            lag_ms,
+            state.settings.songs_dir,
+            state.f0,
+            state.scoring.conf_min,
+        )
+    except Exception as e:
+        log_event(log, "anticheat_failed", error=repr(e))
+        signal = skipped_check()
     timings = {
         "f0_ms": round((t1 - t0) * 1000, 1),
         "score_ms": round((t2 - t1) * 1000, 1),

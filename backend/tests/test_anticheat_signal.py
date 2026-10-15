@@ -3,7 +3,7 @@ import pytest
 import soundfile as sf
 from scipy.signal import butter, sosfiltfilt
 
-from app.anticheat.replay import REPLAY_MAX_CENTS, media_path
+from app.anticheat.replay import REPLAY_MAX_CENTS, media_path, replay_cents
 from app.anticheat.signal import check_signal
 from app.anticheat.voice import FLAT_MAX_CENTS, HARM_MIN, voice_stats
 from app.core.config import ROOT
@@ -112,3 +112,13 @@ def test_media_path_stays_inside_songs_dir(media):
     assert media_path("/media/../../etc/passwd", songs) is None
     assert media_path("https://cdn.example/guide.mp3", songs) is None
     assert media_path(None, songs) is None
+
+
+def test_media_url_with_nul_is_skipped(media, cfg):
+    songs, ref = media
+    engine = get_engine("swiftf0")
+    bad = {**ref, "audio": {**ref["audio"], "guide": "/media/demo/guide\x00.wav"}}
+    take = engine.track(synth_take(ref, jitter_cents=20), SR)
+    out = replay_cents(take, 0.0, bad, songs, engine, cfg.conf_min)
+    assert out["guide"] is None
+    assert out["minus"] > REPLAY_MAX_CENTS

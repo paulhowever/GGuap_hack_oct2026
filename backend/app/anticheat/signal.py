@@ -7,11 +7,17 @@ from app.anticheat.replay import REPLAY_MAX_CENTS, replay_cents
 from app.anticheat.voice import voice_stats
 from app.f0.base import F0Engine, F0Track
 
+METRIC_KEYS = ("replay_guide_c", "replay_minus_c", "jitter_c", "harm", "long_notes")
+
 
 @dataclass(frozen=True)
 class SignalCheck:
     flags: list[str]
     metrics: dict
+
+
+def skipped_check() -> SignalCheck:
+    return SignalCheck(flags=[], metrics=dict.fromkeys(METRIC_KEYS))
 
 
 def check_signal(
