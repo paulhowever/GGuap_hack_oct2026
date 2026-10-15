@@ -68,8 +68,7 @@ func _on_volume(v: float) -> void:
 
 
 func _nudge(d: int) -> void:
-	Session.lag_ms += d
-	Session.save_settings()
+	Session.nudge_lag(d)
 	_refresh()
 
 

@@ -40,19 +40,75 @@ theme_type_variation = &"HeadingLabel"
 text = "Выбор песни"
 horizontal_alignment = 1
 
-[node name="Text" type="Label" parent="Center/Card/VBox" unique_id=823016624]
+[node name="Status" type="Label" parent="Center/Card/VBox" unique_id=823016624]
+unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"HintLabel"
 theme_override_font_sizes/font_size = 26
-text = "Скоро здесь будет список песен."
+text = "Загружаем песни…"
 horizontal_alignment = 1
+autowrap_mode = 3
 
-[node name="BackButton" type="Button" parent="Center/Card/VBox" unique_id=1125648411]
+[node name="Scroll" type="ScrollContainer" parent="Center/Card/VBox" unique_id=1610000001]
+custom_minimum_size = Vector2(0, 320)
+layout_mode = 2
+horizontal_scroll_mode = 0
+
+[node name="SongList" type="VBoxContainer" parent="Center/Card/VBox/Scroll" unique_id=1610000002]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 12
+
+[node name="DiffRow" type="HBoxContainer" parent="Center/Card/VBox" unique_id=1610000003]
+layout_mode = 2
+theme_override_constants/separation = 16
+alignment = 1
+
+[node name="DiffCaption" type="Label" parent="Center/Card/VBox/DiffRow" unique_id=1610000004]
+layout_mode = 2
+theme_type_variation = &"HintLabel"
+text = "Сложность"
+
+[node name="EasyButton" type="Button" parent="Center/Card/VBox/DiffRow" unique_id=1610000005]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"GhostButton"
+toggle_mode = true
+text = "Легко"
+
+[node name="NormalButton" type="Button" parent="Center/Card/VBox/DiffRow" unique_id=1610000006]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"GhostButton"
+toggle_mode = true
+text = "Нормально"
+
+[node name="HardButton" type="Button" parent="Center/Card/VBox/DiffRow" unique_id=1610000007]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"GhostButton"
+toggle_mode = true
+text = "Сложно"
+
+[node name="Buttons" type="HBoxContainer" parent="Center/Card/VBox" unique_id=1610000008]
+layout_mode = 2
+theme_override_constants/separation = 24
+alignment = 1
+
+[node name="BackButton" type="Button" parent="Center/Card/VBox/Buttons" unique_id=1125648411]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 4
 theme_type_variation = &"GhostButton"
 text = "← Назад"
+
+[node name="RetryButton" type="Button" parent="Center/Card/VBox/Buttons" unique_id=1610000009]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_type_variation = &"GhostButton"
+text = "Обновить"
 
 [node name="Fade" type="ColorRect" parent="." unique_id=93252359]
 unique_name_in_owner = true

@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="KARAOKE_", env_file=".env", extra="ignore")
 
     songs_dir: Path = ROOT / "songs"
-    web_dir: Path | None = ROOT / "web"
+    web_dir: Path | None = ROOT / "dist" / "web"
     data_dir: Path = ROOT / "data"
     scoring_path: Path = ROOT / "contracts" / "scoring.json"
     f0_engine: str = "swiftf0"

@@ -1,16 +1,20 @@
 extends Node
-## Глобальное состояние игрока: ник, задержка, первый запуск, настройки.
+## Глобальное состояние игрока: ник, задержка, сложность, первый запуск, настройки.
 ## Всё хранится в user://settings.cfg (в вебе — IndexedDB браузера).
+## Изменения сложности/громкости/задержки VoiceBridge пересылает в JS (voice.configure).
 
 signal nickname_changed(nickname: String)
 signal lag_changed(lag_ms: int)
 signal headphones_changed(confirmed: bool)
 signal music_volume_changed(value: float)
+signal difficulty_changed(difficulty: String)
 
 const SAVE_PATH := "user://settings.cfg"
 const DEFAULT_NICKNAME := "Гость"
-const LAG_MIN_MS := 0
+const LAG_MIN_MS := -100
 const LAG_MAX_MS := 500
+const DIFFICULTIES: Array[String] = ["easy", "normal", "hard"]
+const DEFAULT_DIFFICULTY := "normal"
 
 var nickname: String = DEFAULT_NICKNAME:
 	set(value):
@@ -32,6 +36,8 @@ var lag_ms: int = 120:
 		lag_changed.emit(lag_ms)
 
 var is_calibrated: bool = false
+## Игрок подстраивал задержку вручную (±10 мс) — значение надо передать в JS.
+var lag_manual: bool = false
 var first_run_done: bool = false
 
 ## Игрок подтвердил, что поёт в проводных наушниках (автоопределение невозможно).
@@ -42,12 +48,33 @@ var headphones_confirmed: bool = false:
 		headphones_confirmed = value
 		headphones_changed.emit(headphones_confirmed)
 
-## Громкость музыки 0..1 (линейная), применяется к шине Music.
+## Громкость музыки 0..1 (линейная), применяется к шине Music и к минусу в JS.
 var music_volume: float = 0.8:
 	set(value):
 		music_volume = clampf(value, 0.0, 1.0)
 		_apply_music_volume()
 		music_volume_changed.emit(music_volume)
+
+## Сложность: допуск по высоте (easy 200 / normal 120 / hard 60 центов).
+var difficulty: String = DEFAULT_DIFFICULTY:
+	set(value):
+		if not value in DIFFICULTIES:
+			value = DEFAULT_DIFFICULTY
+		if value == difficulty:
+			return
+		difficulty = value
+		difficulty_changed.emit(difficulty)
+
+# --- Состояние текущей попытки (не сохраняется) -----------------------------
+
+## Выбранная песня (id из GET /api/v1/songs).
+var song_id: String = ""
+## Краткая информация о выбранной песне (элемент списка /songs).
+var song_info: Dictionary = {}
+## Челлендж (на бэкенде пока не реализован) — пустая строка = нет.
+var challenge_id: String = ""
+## Последний результат on_result (контракт TakeResult).
+var last_result: Dictionary = {}
 
 
 func _ready() -> void:
@@ -66,6 +93,14 @@ func mark_first_run_done() -> void:
 func set_calibrated_lag(value_ms: int) -> void:
 	lag_ms = value_ms
 	is_calibrated = true
+	lag_manual = false
+	save_settings()
+
+
+## Ручная подстройка задержки (кнопки ±10 мс).
+func nudge_lag(delta_ms: int) -> void:
+	lag_manual = true
+	lag_ms += delta_ms
 	save_settings()
 
 
@@ -75,8 +110,10 @@ func load_settings() -> void:
 		nickname = cfg.get_value("player", "nickname", DEFAULT_NICKNAME)
 		lag_ms = cfg.get_value("audio", "lag_ms", lag_ms)
 		is_calibrated = cfg.get_value("audio", "is_calibrated", false)
+		lag_manual = cfg.get_value("audio", "lag_manual", false)
 		headphones_confirmed = cfg.get_value("audio", "headphones_confirmed", false)
 		music_volume = cfg.get_value("audio", "music_volume", music_volume)
+		difficulty = cfg.get_value("game", "difficulty", DEFAULT_DIFFICULTY)
 		first_run_done = cfg.get_value("app", "first_run_done", false)
 	_apply_music_volume()
 
@@ -86,8 +123,10 @@ func save_settings() -> void:
 	cfg.set_value("player", "nickname", nickname)
 	cfg.set_value("audio", "lag_ms", lag_ms)
 	cfg.set_value("audio", "is_calibrated", is_calibrated)
+	cfg.set_value("audio", "lag_manual", lag_manual)
 	cfg.set_value("audio", "headphones_confirmed", headphones_confirmed)
 	cfg.set_value("audio", "music_volume", music_volume)
+	cfg.set_value("game", "difficulty", difficulty)
 	cfg.set_value("app", "first_run_done", first_run_done)
 	var err := cfg.save(SAVE_PATH)
 	if err != OK:
@@ -99,6 +138,7 @@ func reset_settings() -> void:
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(SAVE_PATH))
 	first_run_done = false
 	is_calibrated = false
+	lag_manual = false
 
 
 func _apply_music_volume() -> void:

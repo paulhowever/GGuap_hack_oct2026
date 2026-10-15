@@ -1,9 +1,18 @@
 class_name MicStatusChip
 extends PanelContainer
 ## «Чип» статуса микрофона: иконка + текст + полоска уровня.
-## Клик — включить/выключить микрофон (жест пользователя нужен браузеру).
+## Микрофон открывает оверлей страницы (voice.unlock); чип только показывает статус.
+## При ошибке клик — повторная попытка разблокировки (это жест пользователя).
 
 const MicState = preload("res://autoload/audio_service.gd").MicState
+
+const ERROR_TEXT := {
+	"insecure_context": "Нужен https или localhost",
+	"mic_denied": "Нет доступа к микрофону",
+	"mic_not_found": "Микрофон не найден",
+	"audio_locked": "Звук заблокирован браузером",
+	"worklet_failed": "Аудио-движок не запустился",
+}
 
 
 @export var color_ok: Color = Color("#5FD3BC")
@@ -18,8 +27,6 @@ const MicState = preload("res://autoload/audio_service.gd").MicState
 
 func _ready() -> void:
 	theme_type_variation = &"Chip"
-	mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	tooltip_text = "Нажмите, чтобы включить микрофон"
 	gui_input.connect(_on_gui_input)
 	AudioService.mic_state_changed.connect(_refresh)
 	AudioService.level_changed.connect(_on_level)
@@ -28,13 +35,9 @@ func _ready() -> void:
 
 func _on_gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-		if AudioService.is_mic_on():
-			# во время калибровки микрофон нужен — не выключаем
-			if not AudioService.is_calibrating:
-				AudioService.disable_mic()
-		else:
+		if AudioService.mic_state in [MicState.ERROR, MicState.OFF]:
 			AudioService.enable_mic()
-		accept_event()
+			accept_event()
 
 
 func _on_level(rms: float, _peak: float) -> void:
@@ -51,15 +54,20 @@ func _refresh(state: int) -> void:
 		MicState.ACTIVE:
 			c = color_ok
 			t = "Микрофон"
+			if AudioService.is_bt_suspect():
+				c = color_warn
+				t = "Похоже на Bluetooth"
 		MicState.SILENT:
 			c = color_warn
 			t = "Тишина в микрофоне"
 		MicState.ERROR:
 			c = color_error
-			t = "Нет доступа к микрофону"
+			t = ERROR_TEXT.get(AudioService.mic_error, "Нет доступа к микрофону")
 	_icon.modulate = c
 	_label.text = t
 	_label.add_theme_color_override(&"font_color", c)
-	tooltip_text = "Нажмите, чтобы выключить микрофон" if AudioService.is_mic_on() \
-		else "Нажмите, чтобы включить микрофон"
+	var retry := state in [MicState.ERROR, MicState.OFF]
+	mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND if retry else Control.CURSOR_ARROW
+	tooltip_text = "Нажмите, чтобы попробовать снова" if retry \
+		else ("Подключите наушники проводом: задержка > 100 мс" if AudioService.is_bt_suspect() else "")
 	_level.visible = state in [MicState.ACTIVE, MicState.SILENT, MicState.STARTING]

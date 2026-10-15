@@ -25,4 +25,6 @@ make dev
 
 Открыть http://localhost:8000. Мок без микрофона: http://localhost:8000/?mock=perfect
 
+Windows без `make`: [docs/65 QA/Запуск сборки под Windows.md](docs/65%20QA/Запуск%20сборки%20под%20Windows.md)
+
 Документация: [docs/00 Главная.md](docs/00%20Главная.md)

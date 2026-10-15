@@ -25,6 +25,8 @@ var _leaving: bool = false
 
 func _ready() -> void:
 	WebShell.sync_nickname_to_session()
+	_register_player()
+	Session.nickname_changed.connect(func(_n: String) -> void: _register_player())
 	_sing.pressed.connect(_on_sing)
 	_settings_btn.pressed.connect(_settings.open)
 	_gear.pressed.connect(_settings.open)
@@ -51,6 +53,14 @@ func _ready() -> void:
 		_first_run.open()
 	else:
 		_focus_menu()
+
+
+## POST /players: ник привязывается к client_id движка (для таблицы результатов).
+## Ошибка сети не мешает играть — только предупреждение.
+func _register_player() -> void:
+	var r: Dictionary = await Api.register_player(Session.nickname)
+	if not r.ok and r.error != "no_client_id":
+		push_warning("Boot: не удалось зарегистрировать игрока (%s)" % r.error)
 
 
 func _play_intro() -> void:
