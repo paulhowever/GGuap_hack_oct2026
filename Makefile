@@ -1,6 +1,6 @@
 GODOT ?= /Applications/Godot.app/Contents/MacOS/Godot
 
-.PHONY: setup vendor export-web assemble backend dev test fixtures
+.PHONY: setup vendor export-web assemble backend dev test test-web fixtures
 
 setup:
 	cd backend && uv sync
@@ -16,7 +16,7 @@ export-web:
 
 assemble:
 	mkdir -p dist/web
-	rsync -a --exclude node_modules --exclude package.json --exclude package-lock.json web/ dist/web/
+	rsync -a --exclude node_modules --exclude test --exclude package.json --exclude package-lock.json web/ dist/web/
 
 backend:
 	cd backend && uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
@@ -25,6 +25,9 @@ dev: export-web assemble backend
 
 test:
 	cd backend && uv run pytest
+
+test-web:
+	cd web && npm test
 
 fixtures:
 	rsync -a contracts/fixtures/ godot/mock/

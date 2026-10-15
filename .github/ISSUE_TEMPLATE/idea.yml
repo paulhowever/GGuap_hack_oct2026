@@ -1,0 +1,31 @@
+name: Идея или UX-фидбек
+description: Неудобно, непонятно или можно сделать лучше
+title: "[UX] "
+labels: ["ux", "qa"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: Что заметил
+    validations:
+      required: true
+  - type: textarea
+    id: better
+    attributes:
+      label: Как было бы лучше
+  - type: dropdown
+    id: area
+    attributes:
+      label: Где
+      options:
+        - Вход и профиль
+        - Песня и дорожка нот
+        - Продюсер и аватары
+        - Результат и оценка
+        - Лидерборд и дуэль
+        - Презентация и питч
+        - Другое
+  - type: input
+    id: version
+    attributes:
+      label: Версия (если знаешь)

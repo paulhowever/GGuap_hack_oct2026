@@ -1,0 +1,90 @@
+name: Баг
+description: Что-то работает не так
+title: "[Баг] "
+labels: ["bug", "qa"]
+body:
+  - type: markdown
+    attributes:
+      value: "Один баг — одна форма. Видео экрана лучше абзаца текста. Как тестировать: docs/65 QA."
+  - type: input
+    id: version
+    attributes:
+      label: Версия
+      description: Из оверлея ?debug=1 или /api/v1/version (app и git_sha)
+      placeholder: "0.1.0 · a634d2e"
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Где
+      options:
+        - Вход и профиль
+        - Микрофон и звук
+        - Песня и дорожка нот
+        - Продюсер и аватары
+        - Результат и оценка
+        - Лидерборд и повторы
+        - Дуэль
+        - Античит
+        - Другое
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Шаги
+      placeholder: "1. Открыл ...\n2. Нажал ...\n3. Спел ..."
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Ожидал
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Получил
+    validations:
+      required: true
+  - type: dropdown
+    id: browser
+    attributes:
+      label: Браузер
+      options:
+        - Chrome
+        - Safari
+        - Firefox
+        - Яндекс Браузер
+        - Другой
+    validations:
+      required: true
+  - type: dropdown
+    id: audio
+    attributes:
+      label: Наушники и микрофон
+      options:
+        - Проводные наушники + микрофон ноутбука
+        - Проводная гарнитура
+        - USB-микрофон
+        - Bluetooth-наушники
+        - Без наушников (колонки)
+    validations:
+      required: true
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Насколько мешает
+      options:
+        - Блокер — дальше не пройти
+        - Сильно мешает
+        - Мелочь
+    validations:
+      required: true
+  - type: textarea
+    id: media
+    attributes:
+      label: Видео, скриншоты, ошибки из консоли
+      description: "Перетащи файлы сюда. Ошибки: F12 → Console → красные строки."
