@@ -48,3 +48,16 @@ def test_noise_is_deterministic(demo_ref):
     b = synth_take(demo_ref, noise_db=-40)
     assert np.array_equal(a, b)
     assert np.abs(a[:1000]).max() > 0
+
+
+def test_jitter_is_off_by_default(demo_ref):
+    assert np.array_equal(synth_take(demo_ref), synth_take(demo_ref, jitter_cents=0.0))
+
+
+def test_jitter_wobbles_around_the_note(demo_ref):
+    a = synth_take(demo_ref, jitter_cents=20)
+    assert np.array_equal(a, synth_take(demo_ref, jitter_cents=20))
+    assert not np.array_equal(a, synth_take(demo_ref))
+    _, note = next(iter_notes(demo_ref))
+    hz = dominant_hz(segment(a, 16000, note["t"] + 0.1, note["t"] + note["d"] - 0.1), 16000)
+    assert hz == pytest.approx(261.63, abs=6)

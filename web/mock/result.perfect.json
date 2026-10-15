@@ -1,5 +1,6 @@
-{"take_id":"tk_demo","song_id":"demo","player":"Мок","difficulty":"normal","version":"score-v1",
+{"take_id":"tk_demo","song_id":"demo","client_id":null,"player":"Мок","difficulty":"normal",
  "engine":{"final":"mock","live":"pitchy-mpm"},
+ "version":"score-v1",
  "latency":{"hint_ms":40,"estimated_ms":52,"applied_ms":52,"residual_ms":0,"confidence":0.9},
  "score":{"total":9420,"max":10000,"grade":"S","pitch_pct":95.0,"rhythm_pct":91.0,"extras_pct":83.0,"live_total":9310,"source":"final"},
  "lines":[
@@ -14,5 +15,8 @@
   {"i":5,"line":1,"hit":0.92,"cents":9,"onset_ms":95,"stab_c":18,"perfect":false,"pts":1320}],
  "chart":{"hop_ms":20,"t0":2.0,"sung":[null,null,59.9,60.0,60.1]},
  "tips":[{"code":"late","sev":"info","line":1,"text":"«фа соль ля» чуть позже на ~110 мс"}],
+ "octave_shift":0,
+ "integrity":{"status":"ok","flags":[]},
+ "completion":{"ratio":1.0},
  "challenge":null,
  "leaderboard":{"rank":1,"of":1,"personal_best":true}}

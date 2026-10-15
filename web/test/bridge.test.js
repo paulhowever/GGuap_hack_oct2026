@@ -60,10 +60,10 @@ test('error codes match the contract', () => {
 
 test('buildMeta produces the contract 3.3 shape', () => {
   const meta = buildMeta({
-    songId: 'demo', clientId: '7b1e2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d', player: '  Паша ', difficulty: 'normal', challengeId: '', wavT0: -0.15349, wavSr: 16000, lagMs: 47.6,
+    songId: 'demo', clientId: '7b1e2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d', sessionToken: 'tok-1', player: '  Паша ', difficulty: 'normal', challengeId: '', wavT0: -0.15349, wavSr: 16000, lagMs: 47.6,
     frames: [{ t: 1, hz: 0, conf: 0, rms: 0.001 }], client: { ua: 'x', sr: 48000, base_latency: 0.005, output_latency: 0.012, aec: false }
   })
-  assert.deepEqual(Object.keys(meta), ['song_id', 'client_id', 'player', 'difficulty', 'challenge_id', 'wav_t0', 'wav_sr', 'lag_ms', 'frames', 'client'])
+  assert.deepEqual(Object.keys(meta), ['song_id', 'client_id', 'session_token', 'player', 'difficulty', 'challenge_id', 'wav_t0', 'wav_sr', 'lag_ms', 'frames', 'client'])
   assert.equal(meta.player, 'Паша')
   assert.equal(meta.challenge_id, null)
   assert.equal(meta.wav_t0, -0.153)
@@ -72,6 +72,8 @@ test('buildMeta produces the contract 3.3 shape', () => {
   assert.equal(buildMeta({ player: '', wavT0: 0, lagMs: 0 }).player, 'Игрок')
   assert.equal(meta.client_id, '7b1e2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d')
   assert.equal(buildMeta({ player: '', wavT0: 0, lagMs: 0 }).client_id, null)
+  assert.equal(meta.session_token, 'tok-1')
+  assert.equal(buildMeta({ player: '', wavT0: 0, lagMs: 0 }).session_token, null)
 })
 
 test('buildMeta cuts the nickname by code points', () => {

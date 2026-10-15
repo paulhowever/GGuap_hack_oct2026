@@ -11,6 +11,9 @@
   main { padding: 12px; display: grid; gap: 10px; max-width: 980px }
   .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center }
   #bt { display: none; background: #a30; padding: 8px }
+  #calibHint { padding: 8px; background: #135 }
+  #calibHint:empty { display: none }
+  #calibHint.fail { background: #a30 }
   canvas { background: #1b1b1b; width: 960px; height: 320px; max-width: 100% }
   #meter { display: inline-block; width: 240px; height: 12px; background: #333 }
   #meter div { height: 100%; width: 0; background: #3c3 }
@@ -34,6 +37,7 @@
     <button id="lagMinus">lag −10</button>
     <button id="lagPlus">lag +10</button>
   </div>
+  <div id="calibHint"></div>
   <div class="row">
     <input id="player" value="Паша" maxlength="32">
     <button id="submit">Отправить</button>
@@ -54,12 +58,23 @@ import { parseWavHeader } from './lib/wav.js'
 
 const voice = window.voice
 const $ = id => document.getElementById(id)
+const CALIB_MIN_HITS = 5
+const CALIB_CLICKS = 8
 const UNLOCK_ERRORS = ['insecure_context', 'mic_denied', 'mic_not_found', 'audio_locked', 'worklet_failed']
 const st = { ref: null, tol: 120, frames: [], tNow: 0, state: 'idle', level: 0, unlocked: null, lastFrames: 0, count: 0, fps: 0, wav: null }
 
 function log(name, data) {
   const line = `${new Date().toISOString().slice(11, 23)} ${name} ${JSON.stringify(data)}`
   $('log').textContent = `${line}\n${$('log').textContent}`.slice(0, 20000)
+}
+
+function showCalibration(data) {
+  const hint = $('calibHint')
+  const failed = data.hits < CALIB_MIN_HITS
+  hint.classList.toggle('fail', failed)
+  hint.textContent = failed
+    ? `Калибровка не удалась: микрофон не услышал щелчки (${data.hits} из ${CALIB_CLICKS}). Сними наушники — калибровка идёт через динамики, сделай громче, проверь, что звук не идёт через Bluetooth, и выключи подавление шума и эха в настройках микрофона Windows/macOS.`
+    : `Калибровка готова: задержка ${data.lag_ms} мс (${data.hits} из ${CALIB_CLICKS} щелчков).`
 }
 
 function summary(name, data) {
@@ -80,6 +95,7 @@ voice.subscribe((name, json) => {
     st.tol = data.scoring.tol_cents
     st.frames = []
   }
+  if (name === 'on_calibrated') showCalibration(data)
   if (name === 'on_song_end') showTake()
   if (name === 'on_result') $('result').textContent = JSON.stringify(data, null, 2)
   if (name === 'on_error') {
@@ -141,7 +157,11 @@ $('start').onclick = () => {
   voice.start()
 }
 $('stop').onclick = showTake
-$('calibrate').onclick = () => voice.calibrate()
+$('calibrate').onclick = () => {
+  $('calibHint').textContent = ''
+  $('calibHint').classList.remove('fail')
+  voice.calibrate()
+}
 $('lagMinus').onclick = () => nudge(-10)
 $('lagPlus').onclick = () => nudge(10)
 $('submit').onclick = () => {
