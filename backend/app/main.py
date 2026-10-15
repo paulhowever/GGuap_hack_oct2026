@@ -6,6 +6,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.ext.asyncio import async_sessionmaker
+from starlette.responses import Response
+from starlette.types import Scope
 
 from app.api import board, challenges, health, players, sessions, songs, takes
 from app.core.config import Settings, get_settings
@@ -18,6 +20,13 @@ from app.songs import SongRepo
 from app.store.db import init_db, make_engine
 
 log = logging.getLogger("karaoke")
+
+
+class NoCacheStaticFiles(StaticFiles):
+    async def get_response(self, path: str, scope: Scope) -> Response:
+        response = await super().get_response(path, scope)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
 
 
 @asynccontextmanager
@@ -66,7 +75,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     if settings.songs_dir.is_dir():
         app.mount("/media", StaticFiles(directory=settings.songs_dir), name="media")
     if settings.web_dir is not None and settings.web_dir.is_dir():
-        app.mount("/", StaticFiles(directory=settings.web_dir, html=True), name="web")
+        app.mount("/", NoCacheStaticFiles(directory=settings.web_dir, html=True), name="web")
     return app
 
 
