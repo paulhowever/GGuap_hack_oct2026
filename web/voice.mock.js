@@ -129,7 +129,7 @@ export function createMockVoice(mode, cfg = {}, env = globalThis) {
       return null
     },
     _state() {
-      return { sr: 48000, lag_ms: s.lag, mode: m, session: 'none' }
+      return { sr: 48000, lag_ms: s.lag, lag_source: 'config', mode: m, session: 'none' }
     }
   }
 }

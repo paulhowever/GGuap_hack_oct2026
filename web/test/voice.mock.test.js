@@ -114,6 +114,10 @@ test('calibrate reports the current lag with 8 hits and echoes the mode', async 
   assert.deepEqual(last('on_calibrated'), { lag_ms: 40, hits: 8, mode: 'headphones' })
 })
 
+test('mock reports its lag as config', () => {
+  assert.equal(setup().voice._state().lag_source, 'config')
+})
+
 test('unknown mode falls back to perfect', () => {
   assert.equal(createMockVoice('bogus', CFG, fakeEnv({}))._mode, 'perfect')
 })

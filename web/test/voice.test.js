@@ -335,7 +335,7 @@ async function calibrated(mode, claps) {
   env.setTimeout = () => 0
   const run = mode === undefined ? v.calibrate() : v.calibrate(mode)
   const starts = env.oscillators.map(o => o.starts[0])
-  env.taps[0].port.onmessage({ data: { frames: clapFrames(16000, claps(starts), starts.at(-1) + 0.8) } })
+  env.taps[0].port.onmessage({ data: { frames: clapFrames(16000, claps(starts), starts.at(-1) + 1.2) } })
   return { ok: await run, v, store, starts, result: events.filter(e => e[0] === 'on_calibrated').at(-1)[1] }
 }
 
@@ -359,6 +359,30 @@ test('headphones calibration adds two lead-in clicks and ignores their claps', a
   assert.equal(result.hits, 8)
   assert.ok(Math.abs(result.lag_ms - 200) <= 33, `lag ${result.lag_ms}`)
   assert.equal(v._state().lag_source, 'calibrated')
+})
+
+test('headphones calibration spaces clicks by 0.8 s and measures long Bluetooth chains', async () => {
+  for (const lag of [0.55, 0.25]) {
+    const { ok, starts, result } = await calibrated('headphones', s => s.map(c => c + lag))
+    assert.equal(ok, true)
+    assert.ok(Math.abs(starts[1] - starts[0] - 0.8) < 1e-9)
+    assert.equal(result.hits, 8)
+    assert.ok(Math.abs(result.lag_ms - lag * 1000) <= 33, `lag ${lag}: ${result.lag_ms}`)
+  }
+})
+
+test('speakers calibration keeps the 0.5 s gap', async () => {
+  const { ok, starts, result } = await calibrated(undefined, s => s.map(c => c + 0.3))
+  assert.ok(Math.abs(starts[1] - starts[0] - 0.5) < 1e-9)
+  assert.equal(ok, true)
+  assert.ok(Math.abs(result.lag_ms - 300) <= 33, `lag ${result.lag_ms}`)
+})
+
+test('a stray clap just before the first measured click does not shift the headphones result', async () => {
+  const { ok, result } = await calibrated('headphones', s => [s[0] + 0.25, s[1] + 0.25, s[2] - 0.05, ...s.slice(2).map(c => c + 0.25)])
+  assert.equal(ok, true)
+  assert.ok(result.hits >= 7)
+  assert.ok(Math.abs(result.lag_ms - 250) <= 33, `lag ${result.lag_ms}`)
 })
 
 test('a failed calibration keeps the previous lag source', async () => {

@@ -41,7 +41,7 @@
 
 ## Задержка
 
-`lag_ms` берётся по приоритету: `configure`/`calibrate` в текущей сессии, затем `lag_ms` в `config.js` (на демо зашивается после калибровки на целевой цепочке), затем `localStorage['voice.lag_ms']`, затем оценка `outputLatency + baseLatency + latency трека` (0,02 с, если браузер её не отдаёт). Калибровка не удалась, если в `on_calibrated` `hits < 5`: `lag_ms` тогда прежний. Источник задержки (`calibrated`, `config`, `estimated`) хранится в `localStorage['voice.lag_src']`, виден в `_state().lag_source` и уходит в meta как `lag_source`: бэкенд обрезает свою оценку до `lag_ms ± 120 мс` только для `calibrated`.
+`lag_ms` берётся по приоритету: `configure`/`calibrate` в текущей сессии, затем `lag_ms` в `config.js` (на демо зашивается после калибровки на целевой цепочке), затем `localStorage['voice.lag_ms']`, затем оценка `outputLatency + baseLatency + latency трека` (0,02 с, если браузер её не отдаёт). Калибровка не удалась, если в `on_calibrated` `hits < 5`: `lag_ms` тогда прежний. Источник задержки (`calibrated`, `config`, `estimated`) хранится в `localStorage['voice.lag_src']`, виден в `_state().lag_source` и уходит в meta как `lag_source`: бэкенд обрезает свою оценку до `lag_ms ± 120 мс` только для `calibrated`. `lag_ms` из `config.js` (и из `configure`) приходит как `config`, поэтому вокруг него бэкенд не обрезает. В режиме наушников щелчки идут через 0,8 с и задержка принимается до 700 мс.
 
 ## План Б
 

@@ -87,7 +87,7 @@ const UNLOCK_REASONS = {
   audio_locked: 'Браузер не дал включить звук. Нажми ещё раз.',
   worklet_failed: 'Не загрузился модуль звука. Обнови страницу.'
 }
-const st = { ref: null, tol: 120, frames: [], tNow: 0, state: 'idle', level: 0, unlocked: null, lastFrames: 0, count: 0, fps: 0, wav: null }
+const st = { ref: null, tol: 120, frames: [], tNow: 0, state: 'idle', level: 0, unlocked: null, lastFrames: 0, count: 0, fps: 0, wav: null, submitting: false, calibrating: false }
 
 function log(name, data) {
   const line = `${new Date().toISOString().slice(11, 23)} ${name} ${JSON.stringify(data)}`
@@ -105,6 +105,7 @@ function showCalibration(data) {
 }
 
 function calibrate(mode) {
+  st.calibrating = true
   $('calibHint').classList.remove('fail')
   $('calibHint').textContent = CALIB_MODES[mode].before
   voice.calibrate(mode)
@@ -127,7 +128,7 @@ function integrityLabel(data) {
 
 function showResult(data) {
   $('result').textContent = JSON.stringify(data, null, 2)
-  $('submitStatus').textContent = `${data.score?.total} · ${data.score?.grade} · ${integrityLabel(data)}`
+  $('submitStatus').textContent = `${data.score?.total ?? '—'} · ${data.score?.grade ?? '—'} · ${integrityLabel(data)}`
   $('result').scrollIntoView({ behavior: 'smooth', block: 'nearest' })
 }
 
@@ -149,16 +150,28 @@ voice.subscribe((name, json) => {
     st.tol = data.scoring.tol_cents
     st.frames = []
   }
-  if (name === 'on_calibrated') showCalibration(data)
+  if (name === 'on_calibrated') {
+    st.calibrating = false
+    showCalibration(data)
+  }
   if (name === 'on_song_end') showTake()
-  if (name === 'on_result') showResult(data)
+  if (name === 'on_result') {
+    st.submitting = false
+    showResult(data)
+  }
   if (name === 'on_error') {
     $('result').textContent = `Ошибка ${data.code}: ${data.msg}`
     if (UNLOCK_ERRORS.includes(data.code)) {
       $('unlockReason').textContent = UNLOCK_REASONS[data.code] || ''
       $('overlay').style.display = 'flex'
     }
-    if (data.code === 'upload_failed' || data.code === 'net') $('submitStatus').textContent = `Не отправилось: ${data.msg}`
+    if (st.submitting) $('submitStatus').textContent = `Не отправилось: ${data.msg}`
+    st.submitting = false
+    if (st.calibrating) {
+      $('calibHint').classList.add('fail')
+      $('calibHint').textContent = `Калибровка не запустилась: ${data.msg}`
+    }
+    st.calibrating = false
   }
 })
 
@@ -228,6 +241,7 @@ $('lagPlus').onclick = () => nudge(10)
 $('submit').onclick = () => {
   $('result').textContent = 'Судья слушает…'
   $('submitStatus').textContent = 'Судья слушает…'
+  st.submitting = true
   voice.submit($('player').value, new URLSearchParams(location.search).get('challenge') || '')
 }
 $('download').onclick = downloadTake

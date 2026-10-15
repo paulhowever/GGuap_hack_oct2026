@@ -11,7 +11,7 @@ import { createJudge } from './lib/judge.js'
 import { clientId } from './lib/profile.js'
 import { requestSession } from './lib/session.js'
 import { attachDebug, isDebug } from './lib/debug.js'
-import { CLICK_GAP, CLICK_LEAD, CLICK_LEN, CLICKS, LEAD_IN, clickTimes, detectOnsets, estimateLag, onsetThreshold } from './lib/calibration.js'
+import { CLICK_LEAD, CLICK_LEN, CLICKS, HEADPHONES, LEAD_IN, SPEAKERS, clickTimes, detectOnsets, estimateLag, onsetThreshold } from './lib/calibration.js'
 import { clamp, round } from './lib/num.js'
 import { createMockVoice, attachPlanB } from './voice.mock.js'
 
@@ -395,8 +395,9 @@ export function createVoice(cfg = {}, env = globalThis) {
     s.calibrating = true
     const ctx = s.ctx
     const kind = mode === 'headphones' ? 'headphones' : 'speakers'
+    const plan = kind === 'headphones' ? HEADPHONES : SPEAKERS
     const lead = kind === 'headphones' ? LEAD_IN : 0
-    const all = clickTimes(ctx.currentTime + CLICK_LEAD, lead + CLICKS)
+    const all = clickTimes(ctx.currentTime + CLICK_LEAD, lead + CLICKS, plan.gap)
     const clicks = all.slice(lead)
     for (const c of all) {
       const osc = ctx.createOscillator()
@@ -408,10 +409,9 @@ export function createVoice(cfg = {}, env = globalThis) {
       osc.start(c)
       osc.stop(c + CLICK_LEN)
     }
-    const frames = await collect(clicks.at(-1) - ctx.currentTime + 0.6)
+    const frames = await collect(clicks.at(-1) - ctx.currentTime + plan.late + 0.2)
     s.calibrating = false
-    const onsets = detectOnsets(frames, { sr: s.sr, threshold: onsetThreshold(s.floor) }).filter(t => t >= clicks[0] - CLICK_GAP / 2)
-    const r = estimateLag(clicks, onsets)
+    const r = estimateLag(clicks, detectOnsets(frames, { sr: s.sr, threshold: onsetThreshold(s.floor) }), { late: plan.late, range: plan.range })
     if (r.lag_ms !== null) setSessionLag(r.lag_ms, 'calibrated')
     bus.emit('on_calibrated', { lag_ms: s.lag, hits: r.hits, mode: kind })
     return r.lag_ms !== null
