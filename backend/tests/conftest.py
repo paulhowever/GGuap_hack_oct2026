@@ -90,7 +90,7 @@ def submit(client, demo_ref, clock):
             body = {"song_id": m["song_id"], "client_id": m.get("client_id"), "difficulty": m["difficulty"]}
             m["session_token"] = client.post("/api/v1/sessions", json=body).json()["token"]
             clock.advance(demo_ref["audio"]["duration"])
-        x = synth_take(demo_ref, **(synth or {})) if audio is None else audio
+        x = synth_take(demo_ref, **{"jitter_cents": 20.0, **(synth or {})}) if audio is None else audio
         files = {"audio": ("take.wav", wav_bytes(x), "audio/wav")}
         return client.post("/api/v1/takes", files=files, data={"meta": json.dumps(m, ensure_ascii=False)})
 

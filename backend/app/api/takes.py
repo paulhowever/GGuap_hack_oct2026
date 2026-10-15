@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.anticheat.integrity import integrity_of
 from app.anticheat.session import session_flags
+from app.anticheat.signal import SignalCheck, check_signal
 from app.api.players import CLIENT_ID
 from app.board import placement
 from app.core.logging import log_event
@@ -58,7 +59,7 @@ def decode_wav(raw: bytes) -> tuple[np.ndarray, int]:
     return data.mean(axis=1), int(sr)
 
 
-def evaluate(state, ref: dict, audio: np.ndarray, sr: int, m: TakeMeta) -> tuple[dict, dict]:
+def evaluate(state, ref: dict, audio: np.ndarray, sr: int, m: TakeMeta) -> tuple[dict, dict, SignalCheck]:
     t0 = time.perf_counter()
     track = state.f0.track(audio, sr)
     t1 = time.perf_counter()
@@ -69,10 +70,19 @@ def evaluate(state, ref: dict, audio: np.ndarray, sr: int, m: TakeMeta) -> tuple
         frames = [f.model_dump() for f in m.frames]
         live = FramesEngine(frames, m.wav_t0, (m.lag_ms or 0.0) / 1000.0).track(audio, sr)
         live_total = score_take(ref, live, m.wav_t0, state.scoring, m.difficulty, m.lag_ms)["score"]["total"]
-    timings = {"f0_ms": round((t1 - t0) * 1000, 1), "score_ms": round((t2 - t1) * 1000, 1)}
+    t3 = time.perf_counter()
+    lag_ms = result["latency"]["applied_ms"]
+    signal = check_signal(
+        audio, sr, track, ref, m.wav_t0, lag_ms, state.settings.songs_dir, state.f0, state.scoring.conf_min
+    )
+    timings = {
+        "f0_ms": round((t1 - t0) * 1000, 1),
+        "score_ms": round((t2 - t1) * 1000, 1),
+        "anticheat_ms": round((time.perf_counter() - t3) * 1000, 1),
+    }
     result["score"]["live_total"] = live_total
     result["score"]["source"] = "final"
-    return result, timings
+    return result, timings, signal
 
 
 async def challenge_owner(sessions: async_sessionmaker, m: TakeMeta) -> tuple[str, dict] | None:
@@ -120,10 +130,10 @@ async def post_take(
         flags.append("duplicate")
     async with state.score_sem:
         try:
-            result, timings = await asyncio.to_thread(evaluate, state, ref, samples, sr, m)
+            result, timings, signal = await asyncio.to_thread(evaluate, state, ref, samples, sr, m)
         except ValueError:
             raise HTTPException(status_code=422, detail="bad_audio") from None
-    integrity = integrity_of(flags)
+    integrity = integrity_of(flags + signal.flags)
     take_id = f"tk_{secrets.token_hex(4)}"
     takes_dir = state.settings.data_dir / "takes"
     takes_dir.mkdir(parents=True, exist_ok=True)
@@ -178,6 +188,7 @@ async def post_take(
         flags=integrity["flags"],
         f0_engine=state.f0.name,
         **timings,
+        **signal.metrics,
     )
     return body
 
