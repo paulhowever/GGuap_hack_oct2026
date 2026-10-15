@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 
-from sqlalchemy import DateTime, Index, Integer, String, Text
+from sqlalchemy import DateTime, Float, Index, Integer, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -16,6 +16,7 @@ class Take(Base):
     song_id: Mapped[str] = mapped_column(String(64), index=True)
     client_id: Mapped[str | None] = mapped_column(String(36), index=True, nullable=True)
     integrity_status: Mapped[str] = mapped_column(String(10), default="ok")
+    audio_sha256: Mapped[str | None] = mapped_column(String(64), index=True, nullable=True)
     player: Mapped[str] = mapped_column(String(24))
     difficulty: Mapped[str] = mapped_column(String(8))
     total: Mapped[int] = mapped_column(Integer)
@@ -53,3 +54,14 @@ class Rival(Base):
     challenge_id: Mapped[str] = mapped_column(String(6), index=True)
     take_id: Mapped[str] = mapped_column(String(32))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+
+
+class GameSession(Base):
+    __tablename__ = "sessions"
+
+    token_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    song_id: Mapped[str] = mapped_column(String(64))
+    client_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    difficulty: Mapped[str] = mapped_column(String(8))
+    issued_at: Mapped[float] = mapped_column(Float)
+    used_at: Mapped[float | None] = mapped_column(Float, nullable=True)

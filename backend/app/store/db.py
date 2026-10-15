@@ -5,7 +5,7 @@ from sqlalchemy import select, text, update
 from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 
-from app.store.models import Base, Challenge, Player, Rival, Take
+from app.store.models import Base, Challenge, GameSession, Player, Rival, Take
 
 
 def make_engine(data_dir: Path) -> AsyncEngine:
@@ -88,3 +88,19 @@ async def rival_takes(sessions: async_sessionmaker, challenge_id: str) -> list[T
     )
     async with sessions() as session:
         return list((await session.execute(query)).scalars())
+
+
+async def consume_session(sessions: async_sessionmaker, token_hash: str, used_at: float) -> bool:
+    query = (
+        update(GameSession)
+        .where(GameSession.token_hash == token_hash, GameSession.used_at.is_(None))
+        .values(used_at=used_at)
+    )
+    async with sessions() as session, session.begin():
+        return (await session.execute(query)).rowcount == 1
+
+
+async def sha_seen(sessions: async_sessionmaker, sha: str) -> bool:
+    async with sessions() as session:
+        rows = await session.execute(select(Take.id).where(Take.audio_sha256 == sha).limit(1))
+        return rows.first() is not None

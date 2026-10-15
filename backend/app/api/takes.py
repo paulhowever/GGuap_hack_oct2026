@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import io
 import json
 import logging
@@ -12,13 +13,15 @@ from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
+from app.anticheat.integrity import integrity_of
+from app.anticheat.session import session_flags
 from app.api.players import CLIENT_ID
 from app.board import placement
 from app.core.logging import log_event
 from app.duel import compare
 from app.f0.frames import FramesEngine
 from app.scoring.core import score_take
-from app.store.db import add_row, get_challenge, get_take, save_take, set_result_json
+from app.store.db import add_row, get_challenge, get_take, save_take, set_result_json, sha_seen
 from app.store.models import Rival, Take
 
 router = APIRouter(prefix="/api/v1")
@@ -42,6 +45,7 @@ class TakeMeta(BaseModel):
     player: str = Field(min_length=1, max_length=24)
     difficulty: Literal["easy", "normal", "hard"] = "normal"
     challenge_id: str | None = None
+    session_token: str | None = Field(default=None, max_length=256)
     wav_t0: float
     wav_sr: int
     lag_ms: float | None = None
@@ -107,11 +111,19 @@ async def post_take(
         raise HTTPException(status_code=422, detail="bad_audio")
     if samples.size / sr > state.settings.max_take_s:
         raise HTTPException(status_code=413, detail="take_too_long")
+    sha = hashlib.sha256(raw).hexdigest()
+    duration = float(ref["audio"]["duration"])
+    flags = await session_flags(
+        state.sessions, state.secret, m.session_token, m.song_id, m.client_id, m.difficulty, duration
+    )
+    if await sha_seen(state.sessions, sha):
+        flags.append("duplicate")
     async with state.score_sem:
         try:
             result, timings = await asyncio.to_thread(evaluate, state, ref, samples, sr, m)
         except ValueError:
             raise HTTPException(status_code=422, detail="bad_audio") from None
+    integrity = integrity_of(flags)
     take_id = f"tk_{secrets.token_hex(4)}"
     takes_dir = state.settings.data_dir / "takes"
     takes_dir.mkdir(parents=True, exist_ok=True)
@@ -124,6 +136,7 @@ async def post_take(
         "difficulty": m.difficulty,
         "engine": {"final": f"{state.f0.name}-{state.f0.version}", "live": "pitchy-mpm"},
         **result,
+        "integrity": integrity,
         "challenge": compare(duel[0], duel[1], result) if duel else None,
         "leaderboard": None,
     }
@@ -135,7 +148,8 @@ async def post_take(
         difficulty=m.difficulty,
         total=result["score"]["total"],
         grade=result["score"]["grade"],
-        integrity_status="ok",
+        integrity_status=integrity["status"],
+        audio_sha256=sha,
         result_json=json.dumps(body, ensure_ascii=False),
     )
     await save_take(state.sessions, take)
@@ -160,6 +174,8 @@ async def post_take(
         pitch_pct=result["score"]["pitch_pct"],
         rhythm_pct=result["score"]["rhythm_pct"],
         live_total=result["score"]["live_total"],
+        integrity=integrity["status"],
+        flags=integrity["flags"],
         f0_engine=state.f0.name,
         **timings,
     )

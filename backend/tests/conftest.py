@@ -52,9 +52,27 @@ def wav_bytes(x, sr=16000) -> bytes:
     return buf.getvalue()
 
 
+class Clock:
+    def __init__(self, t: float) -> None:
+        self.t = t
+
+    def __call__(self) -> float:
+        return self.t
+
+    def advance(self, seconds: float) -> None:
+        self.t += seconds
+
+
 @pytest.fixture
-def submit(client, demo_ref):
-    def go(synth=None, audio=None, **meta):
+def clock(monkeypatch):
+    c = Clock(1_900_000_000.0)
+    monkeypatch.setattr("app.anticheat.session.now", c)
+    return c
+
+
+@pytest.fixture
+def submit(client, demo_ref, clock):
+    def go(synth=None, audio=None, session=True, **meta):
         m = {
             "song_id": "demo",
             "player": "Паша",
@@ -67,6 +85,10 @@ def submit(client, demo_ref):
             "client": {},
             **meta,
         }
+        if session:
+            body = {"song_id": m["song_id"], "client_id": m.get("client_id"), "difficulty": m["difficulty"]}
+            m["session_token"] = client.post("/api/v1/sessions", json=body).json()["token"]
+            clock.advance(demo_ref["audio"]["duration"])
         x = synth_take(demo_ref, **(synth or {})) if audio is None else audio
         files = {"audio": ("take.wav", wav_bytes(x), "audio/wav")}
         return client.post("/api/v1/takes", files=files, data={"meta": json.dumps(m, ensure_ascii=False)})
