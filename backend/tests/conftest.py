@@ -37,6 +37,7 @@ def settings(tmp_path, demo_ref) -> Settings:
         data_dir=tmp_path / "data",
         scoring_path=ROOT / "contracts" / "scoring.json",
         git_sha="abc1234def",
+        secret="",
     )
 
 

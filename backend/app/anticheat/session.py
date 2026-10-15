@@ -1,5 +1,6 @@
 import hashlib
 import hmac
+import re
 import secrets
 import time
 
@@ -10,6 +11,7 @@ from app.store.models import GameSession
 
 SESSION_TTL_S = 900
 TOO_FAST_SLACK_S = 2.0
+TOKEN_PATTERN = re.compile(r"([1-9][0-9]{0,15})\.([0-9a-f]{16})\.([0-9a-f]{64})")
 
 
 def now() -> float:
@@ -34,15 +36,12 @@ def make_token(
 
 
 def verify(secret: str, token: str, song_id: str, client_id: str | None, difficulty: str) -> float | None:
-    parts = token.split(".")
-    if len(parts) != 3:
+    match = TOKEN_PATTERN.fullmatch(token)
+    if match is None:
         return None
-    try:
-        issued_ms = int(parts[0])
-    except ValueError:
-        return None
-    expected = sign(secret, song_id, client_id, difficulty, issued_ms, parts[1])
-    if not hmac.compare_digest(parts[2], expected):
+    issued_ms = int(match[1])
+    expected = sign(secret, song_id, client_id, difficulty, issued_ms, match[2])
+    if not hmac.compare_digest(match[3], expected):
         return None
     return issued_ms / 1000.0
 

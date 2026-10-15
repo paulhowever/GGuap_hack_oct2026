@@ -2,6 +2,7 @@ import json
 import sqlite3
 import uuid
 
+import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 
@@ -87,7 +88,7 @@ def test_tampered_or_unknown_token(client, submit, clock):
     forged = token[:-1] + ("0" if token[-1] != "0" else "1")
     assert submit(session=False, session_token=forged).json()["integrity"]["flags"] == ["bad_session"]
     unknown = make_token(
-        client.app.state.secret, "demo", None, "normal", round(clock.t * 1000) - 12000, "feed"
+        client.app.state.secret, "demo", None, "normal", round(clock.t * 1000) - 12000, "feedfeedfeedfeed"
     )
     body = submit(session=False, session_token=unknown, synth={"cents": 20}).json()
     assert body["integrity"]["flags"] == ["bad_session"]
@@ -110,3 +111,29 @@ def test_secret_generated_when_missing(settings, caplog):
     with TestClient(create_app(settings)) as c:
         assert len(c.app.state.secret) == 64
     assert any(r.getMessage() == "secret_generated" for r in caplog.records)
+
+
+def test_malformed_token_is_bad_session(submit):
+    r = submit(session=False, session_token="1.a.é")
+    assert r.status_code == 200
+    assert "bad_session" in r.json()["integrity"]["flags"]
+
+
+@pytest.mark.parametrize("raw", [b"not a wav at all", None])
+def test_undecodable_audio_does_not_burn_token(client, submit, clock, raw):
+    token = issue(client).json()["token"]
+    clock.advance(12)
+    if raw is None:
+        r = submit(session=False, session_token=token, audio=np.zeros(100, dtype=np.float32))
+    else:
+        meta = {"song_id": "demo", "player": "Паша", "wav_t0": 0.0, "wav_sr": 16000, "session_token": token}
+        r = client.post(
+            "/api/v1/takes",
+            files={"audio": ("take.wav", raw, "audio/wav")},
+            data={"meta": json.dumps(meta, ensure_ascii=False)},
+        )
+    assert r.status_code == 422
+    assert r.json()["detail"] == "bad_audio"
+    good = submit(session=False, session_token=token)
+    assert good.status_code == 200
+    assert good.json()["integrity"] == {"status": "ok", "flags": []}
