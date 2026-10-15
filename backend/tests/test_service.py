@@ -1,6 +1,7 @@
 import json
 import logging
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.core.logging import JsonFormatter
@@ -97,3 +98,36 @@ def test_unhandled_error_is_logged_with_request_id(client, caplog):
     assert requests[0]["status"] == 500
     assert requests[0]["level"] == "ERROR"
     assert "route exploded" in requests[0]["exc"]
+
+
+@pytest.fixture
+def web_client(settings, tmp_path):
+    web = settings.web_dir = tmp_path / "web"
+    web.mkdir()
+    (web / "index.html").write_text("<html></html>")
+    (web / "app.js").write_text("export const A = 1;")
+    with TestClient(create_app(settings)) as c:
+        yield c
+
+
+@pytest.mark.parametrize("path", ["/", "/index.html", "/app.js"])
+def test_web_files_are_served_with_no_cache(web_client, path):
+    r = web_client.get(path)
+    assert r.status_code == 200
+    assert r.headers["cache-control"] == "no-cache"
+
+
+def test_web_conditional_request_stays_no_cache(web_client):
+    etag = web_client.get("/app.js").headers["etag"]
+    r = web_client.get("/app.js", headers={"if-none-match": etag})
+    assert r.status_code == 304
+    assert r.headers["cache-control"] == "no-cache"
+
+
+def test_web_missing_file_is_404(web_client):
+    assert web_client.get("/missing.js").status_code == 404
+
+
+def test_api_and_media_are_not_forced_to_no_cache(web_client):
+    assert "cache-control" not in web_client.get("/api/v1/version").headers
+    assert "cache-control" not in web_client.get("/media/demo/reference.json").headers
