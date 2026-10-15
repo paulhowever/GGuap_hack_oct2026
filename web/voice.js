@@ -10,6 +10,7 @@ import { postTake } from './lib/upload.js'
 import { createJudge } from './lib/judge.js'
 import { clientId } from './lib/profile.js'
 import { requestSession } from './lib/session.js'
+import { attachDebug, isDebug } from './lib/debug.js'
 import { CLICK_LEAD, CLICK_LEN, clickTimes, detectOnsets, estimateLag, onsetThreshold } from './lib/calibration.js'
 import { clamp, round } from './lib/num.js'
 import { createMockVoice, attachPlanB } from './voice.mock.js'
@@ -440,6 +441,9 @@ export function installVoice(win) {
     attachPlanB(win.voice, win)
   } else {
     win.voice = createVoice(cfg, win)
+  }
+  if (isDebug(win.location?.search) && win.document) {
+    attachDebug(win, win.voice, { apiUrl: `${cfg.api || ''}/api/v1/version`, versionUrl: new URL('./version.json', import.meta.url).href })
   }
   return win.voice
 }
