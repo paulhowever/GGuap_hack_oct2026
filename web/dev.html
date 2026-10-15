@@ -7,7 +7,12 @@
 <style>
   body { font: 14px/1.4 system-ui, sans-serif; margin: 0; background: #111; color: #eee }
   #overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, .85); z-index: 10 }
+  #overlayBox { display: flex; flex-direction: column; align-items: center; gap: 16px; max-width: 520px; text-align: center }
   #overlay button { font-size: 24px; padding: 24px 48px }
+  #unlockReason { color: #f96; font-size: 16px }
+  #unlockReason:empty { display: none }
+  #submitStatus { padding: 4px 8px }
+  #submitStatus:empty { display: none }
   main { padding: 12px; display: grid; gap: 10px; max-width: 980px }
   .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center }
   #bt { display: none; background: #a30; padding: 8px }
@@ -24,7 +29,7 @@
 </style>
 </head>
 <body>
-<div id="overlay"><button id="unlock">Нажми, чтобы начать</button></div>
+<div id="overlay"><div id="overlayBox"><button id="unlock">Нажми, чтобы начать</button><div id="unlockReason"></div></div></div>
 <main>
   <div id="bt">Похоже на Bluetooth: outputLatency больше 100 мс. Подключи наушники проводом.</div>
   <div class="row">
@@ -42,6 +47,7 @@
     <input id="player" value="Паша" maxlength="32">
     <button id="submit">Отправить</button>
     <button id="download">Скачать дубль</button>
+    <span id="submitStatus"></span>
     <span id="meter"><div></div></span>
     <span id="db"></span>
   </div>
@@ -61,6 +67,13 @@ const $ = id => document.getElementById(id)
 const CALIB_MIN_HITS = 5
 const CALIB_CLICKS = 8
 const UNLOCK_ERRORS = ['insecure_context', 'mic_denied', 'mic_not_found', 'audio_locked', 'worklet_failed']
+const UNLOCK_REASONS = {
+  mic_denied: 'Нет доступа к микрофону. Разреши его в настройках сайта (значок слева от адреса) и нажми ещё раз.',
+  mic_not_found: 'Микрофон не найден. Подключи его и нажми ещё раз.',
+  insecure_context: 'Микрофон работает только на localhost или https. Открой http://localhost:8000/dev.html.',
+  audio_locked: 'Браузер не дал включить звук. Нажми ещё раз.',
+  worklet_failed: 'Не загрузился модуль звука. Обнови страницу.'
+}
 const st = { ref: null, tol: 120, frames: [], tNow: 0, state: 'idle', level: 0, unlocked: null, lastFrames: 0, count: 0, fps: 0, wav: null }
 
 function log(name, data) {
@@ -75,6 +88,21 @@ function showCalibration(data) {
   hint.textContent = failed
     ? `Калибровка не удалась: микрофон не услышал щелчки (${data.hits} из ${CALIB_CLICKS}). Сними наушники — калибровка идёт через динамики, сделай громче, проверь, что звук не идёт через Bluetooth, и выключи подавление шума и эха в настройках микрофона Windows/macOS.`
     : `Калибровка готова: задержка ${data.lag_ms} мс (${data.hits} из ${CALIB_CLICKS} щелчков).`
+}
+
+function integrityLabel(data) {
+  const status = data.integrity?.status
+  if (status === 'ok') return 'в зачёте'
+  if (status === 'incomplete') return `недопето ${Math.round((data.completion?.ratio ?? 0) * 100)}% — не в рейтинге`
+  if (status === 'unverified') return 'без токена — не в рейтинге'
+  if (status === 'suspect') return `подозрительно (${(data.integrity.flags || []).join(', ')}) — не в рейтинге`
+  return status || '—'
+}
+
+function showResult(data) {
+  $('result').textContent = JSON.stringify(data, null, 2)
+  $('submitStatus').textContent = `${data.score?.total} · ${data.score?.grade} · ${integrityLabel(data)}`
+  $('result').scrollIntoView({ behavior: 'smooth', block: 'nearest' })
 }
 
 function summary(name, data) {
@@ -97,14 +125,19 @@ voice.subscribe((name, json) => {
   }
   if (name === 'on_calibrated') showCalibration(data)
   if (name === 'on_song_end') showTake()
-  if (name === 'on_result') $('result').textContent = JSON.stringify(data, null, 2)
+  if (name === 'on_result') showResult(data)
   if (name === 'on_error') {
     $('result').textContent = `Ошибка ${data.code}: ${data.msg}`
-    if (UNLOCK_ERRORS.includes(data.code)) $('overlay').style.display = 'flex'
+    if (UNLOCK_ERRORS.includes(data.code)) {
+      $('unlockReason').textContent = UNLOCK_REASONS[data.code] || ''
+      $('overlay').style.display = 'flex'
+    }
+    if (data.code === 'upload_failed' || data.code === 'net') $('submitStatus').textContent = `Не отправилось: ${data.msg}`
   }
 })
 
 $('unlock').onclick = () => {
+  $('unlockReason').textContent = ''
   $('overlay').style.display = 'none'
   voice.unlock()
 }
@@ -131,13 +164,18 @@ function save(name, blob) {
   const a = document.createElement('a')
   a.href = URL.createObjectURL(blob)
   a.download = name
+  document.body.appendChild(a)
   a.click()
+  a.remove()
   setTimeout(() => URL.revokeObjectURL(a.href), 1000)
 }
 
 function downloadTake() {
   const take = voice._take()
-  if (!take) return log('dev', 'нет дубля')
+  if (!take) {
+    $('submitStatus').textContent = 'Дубля нет — сначала спой песню до конца или нажми Стоп'
+    return log('dev', 'нет дубля')
+  }
   save('take.wav', new Blob([take.wav], { type: 'audio/wav' }))
   save('take.meta.json', new Blob([JSON.stringify(take.meta)], { type: 'application/json' }))
 }
@@ -166,6 +204,7 @@ $('lagMinus').onclick = () => nudge(-10)
 $('lagPlus').onclick = () => nudge(10)
 $('submit').onclick = () => {
   $('result').textContent = 'Судья слушает…'
+  $('submitStatus').textContent = 'Судья слушает…'
   voice.submit($('player').value, new URLSearchParams(location.search).get('challenge') || '')
 }
 $('download').onclick = downloadTake
