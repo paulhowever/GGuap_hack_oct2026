@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
+from app.board import display_names
 from app.duel import CHALLENGE_ID, new_challenge_id, verdict
 from app.store.db import add_row, challenge_for_take, get_challenge, get_take, rival_takes
 from app.store.models import Challenge, Take
@@ -53,6 +54,8 @@ async def post_challenge(body: ChallengeIn, request: Request) -> dict:
         raise HTTPException(status_code=404, detail="take_not_found")
     challenge = await challenge_for_take(sessions, take.id)
     if challenge is None:
+        if take.integrity_status != "ok":
+            raise HTTPException(status_code=422, detail="challenge_take_not_ok")
         challenge = await create_challenge(sessions, take)
     return {"id": challenge.id, "url": f"{request.base_url}c/{challenge.id}"}
 
@@ -65,13 +68,19 @@ async def read_challenge(challenge_id: str, request: Request) -> dict:
         raise HTTPException(status_code=404, detail="challenge_not_found")
     owner = await get_take(sessions, challenge.take_id)
     rivals = await rival_takes(sessions, challenge.id)
+    names = await display_names(sessions, [owner, *rivals])
     return {
         "id": challenge.id,
         "song_id": challenge.song_id,
         "difficulty": challenge.difficulty,
-        "owner": {"player": owner.player, "total": owner.total, "take_id": owner.id},
+        "owner": {"player": names[owner.id], "total": owner.total, "take_id": owner.id},
         "rivals": [
-            {"player": t.player, "total": t.total, "take_id": t.id, "verdict": verdict(t.total - owner.total)}
+            {
+                "player": names[t.id],
+                "total": t.total,
+                "take_id": t.id,
+                "verdict": verdict(t.total - owner.total),
+            }
             for t in rivals
         ],
     }

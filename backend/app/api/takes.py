@@ -17,7 +17,7 @@ from app.anticheat.integrity import completion_of, integrity_of
 from app.anticheat.session import session_flags
 from app.anticheat.signal import SignalCheck, check_signal, skipped_check
 from app.api.players import CLIENT_ID
-from app.board import placement
+from app.board import display_names, placement
 from app.core.logging import log_event
 from app.duel import compare
 from app.f0.frames import FramesEngine
@@ -106,7 +106,8 @@ async def challenge_owner(sessions: async_sessionmaker, m: TakeMeta) -> tuple[st
     if challenge.difficulty != m.difficulty:
         raise HTTPException(status_code=422, detail="challenge_difficulty")
     owner = await get_take(sessions, challenge.take_id)
-    return challenge.id, json.loads(owner.result_json)
+    name = (await display_names(sessions, [owner]))[owner.id]
+    return challenge.id, {**json.loads(owner.result_json), "player": name}
 
 
 @router.post("/takes")
@@ -218,4 +219,4 @@ async def read_take(take_id: str, request: Request) -> dict:
     take = await get_take(request.app.state.sessions, take_id)
     if take is None:
         raise HTTPException(status_code=404, detail="take_not_found")
-    return json.loads(take.result_json)
+    return {**json.loads(take.result_json), "client_id": None}

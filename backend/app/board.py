@@ -59,20 +59,29 @@ async def board_entries(sessions: async_sessionmaker, song_id: str, difficulty: 
     return [Entry(*row) for row in rows]
 
 
-async def leaderboard(sessions: async_sessionmaker, song_id: str, difficulty: str, limit: int) -> list[dict]:
+async def leaderboard(
+    sessions: async_sessionmaker, song_id: str, difficulty: str, limit: int, client_id: str | None = None
+) -> list[dict]:
     rows = rank_entries(await board_entries(sessions, song_id, difficulty))[:limit]
     profiles = await players_by_id(sessions, [r["client_id"] for r in rows if r["client_id"]])
     items = []
     for row in rows:
         profile = profiles.get(row["client_id"] or "")
+        public = {key: value for key, value in row.items() if key != "client_id"}
         items.append(
             {
-                **row,
+                **public,
                 "player": profile.nickname if profile else row["player"],
                 "avatar": json.loads(profile.avatar) if profile else None,
+                "me": client_id is not None and row["client_id"] == client_id,
             }
         )
     return items
+
+
+async def display_names(sessions: async_sessionmaker, takes: list[Take]) -> dict[str, str]:
+    profiles = await players_by_id(sessions, [t.client_id for t in takes if t.client_id])
+    return {t.id: profiles[t.client_id].nickname if t.client_id in profiles else t.player for t in takes}
 
 
 async def placement(sessions: async_sessionmaker, take: Take) -> dict | None:

@@ -20,7 +20,7 @@ def test_leaderboard_best_per_player(client, seed):
     second = {k: v for k, v in items[1].items() if k != "at"}
     assert second == {
         "rank": 2,
-        "client_id": c1,
+        "me": False,
         "player": "Макс",
         "avatar": {"hat": 2},
         "total": 9000,
@@ -28,12 +28,33 @@ def test_leaderboard_best_per_player(client, seed):
         "take_id": "tk_a2",
         "attempts": 2,
     }
+    assert all("client_id" not in i and i["me"] is False for i in items)
     assert all(i["at"].endswith("+00:00") for i in items)
     assert items[2]["player"] == "Гость"
     assert items[2]["avatar"] is None
     assert items[2]["attempts"] == 2
     easy = client.get("/api/v1/leaderboard/demo", params={"difficulty": "easy"}).json()["items"]
     assert [i["take_id"] for i in easy] == ["tk_e1"]
+
+
+def test_leaderboard_marks_my_row(client, seed):
+    c1, c2 = cid(), cid()
+    seed("tk_a", 9000, "Max", c1)
+    seed("tk_b", 9500, "Саня", c2)
+    seed("tk_g", 7000, "Гость")
+    mine = client.get("/api/v1/leaderboard/demo", params={"client_id": c1}).json()["items"]
+    assert [(i["take_id"], i["me"]) for i in mine] == [("tk_b", False), ("tk_a", True), ("tk_g", False)]
+    assert all("client_id" not in i for i in mine)
+    stranger = client.get("/api/v1/leaderboard/demo", params={"client_id": cid()}).json()["items"]
+    assert [i["me"] for i in stranger] == [False, False, False]
+    anonymous = client.get("/api/v1/leaderboard/demo").json()["items"]
+    assert [i["me"] for i in anonymous] == [False, False, False]
+    assert [i["rank"] for i in mine] == [i["rank"] for i in anonymous] == [1, 2, 3]
+
+
+def test_leaderboard_rejects_bad_client_id(client):
+    r = client.get("/api/v1/leaderboard/demo", params={"client_id": "nope"})
+    assert r.status_code == 422
 
 
 def test_leaderboard_limit_and_errors(client, seed):
@@ -47,9 +68,15 @@ def test_leaderboard_limit_and_errors(client, seed):
     assert r.json()["detail"] == "song_not_found"
 
 
-def test_get_take_returns_stored_result(client, submit):
-    body = submit().json()
-    assert client.get(f"/api/v1/takes/{body['take_id']}").json() == body
+def test_get_take_returns_stored_result_without_client_id(client, submit):
+    c = cid()
+    body = submit(client_id=c).json()
+    assert body["client_id"] == c
+    stored = client.get(f"/api/v1/takes/{body['take_id']}").json()
+    assert stored["client_id"] is None
+    assert list(stored) == list(body)
+    assert stored == {**body, "client_id": None}
+    assert c not in client.get(f"/api/v1/takes/{body['take_id']}").text
     r = client.get("/api/v1/takes/tk_missing")
     assert r.status_code == 404
     assert r.json()["detail"] == "take_not_found"
