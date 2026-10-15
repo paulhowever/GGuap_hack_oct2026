@@ -116,6 +116,7 @@ export function createMockVoice(mode, cfg = {}, env = globalThis) {
       const meta = await firstJson([`${base}mock/take.meta.json`])
       if (!wav || !meta) return fail(ERR.UPLOAD, 'mock/take.wav or mock/take.meta.json missing')
       if (s.player) meta.player = s.player
+      meta.session_token = null
       try {
         bus.emit('on_result', await postTake({ env, url: `${api}/api/v1/takes`, wav, meta }))
         return true
@@ -127,7 +128,7 @@ export function createMockVoice(mode, cfg = {}, env = globalThis) {
       return null
     },
     _state() {
-      return { sr: 48000, lag_ms: s.lag, mode: m }
+      return { sr: 48000, lag_ms: s.lag, mode: m, session: 'none' }
     }
   }
 }

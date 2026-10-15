@@ -9,6 +9,7 @@ import { buildMeta } from './lib/meta.js'
 import { postTake } from './lib/upload.js'
 import { createJudge } from './lib/judge.js'
 import { clientId } from './lib/profile.js'
+import { requestSession } from './lib/session.js'
 import { CLICK_LEAD, CLICK_LEN, clickTimes, detectOnsets, estimateLag, onsetThreshold } from './lib/calibration.js'
 import { clamp, round } from './lib/num.js'
 import { createMockVoice, attachPlanB } from './voice.mock.js'
@@ -22,6 +23,7 @@ const MAX_TAKE_FRAMES = 8000
 const UPLOAD_TIMEOUT_MS = 10000
 const REC_FLUSH_TIMEOUT_MS = 500
 const RESUME_TIMEOUT_MS = 1000
+const SESSION_TIMEOUT_MS = 5000
 
 export function createVoice(cfg = {}, env = globalThis) {
   const bus = createBus({ sticky: ['on_unlocked'] })
@@ -35,6 +37,7 @@ export function createVoice(cfg = {}, env = globalThis) {
     sessionLag: null, estLag: 20, lag: 20,
     ref: null, buffer: null, state: 'idle', t0: 0,
     rec: null, takeFrames: [], take: null, takeJob: null, recDone: null,
+    tokenJob: null, tokenState: 'none',
     listeners: new Set()
   }
 
@@ -268,7 +271,17 @@ export function createVoice(cfg = {}, env = globalThis) {
     src.start(s.t0)
     s.src = src
     s.state = 'playing'
+    openSession()
     return true
+  }
+
+  function openSession() {
+    const job = requestSession({ env, url: url('/api/v1/sessions'), songId: s.ref.id, clientId: clientId(env), difficulty: s.difficulty, timeoutMs: SESSION_TIMEOUT_MS })
+    s.tokenJob = job
+    s.tokenState = 'pending'
+    job.then(token => {
+      if (s.tokenJob === job) s.tokenState = token ? 'ok' : 'none'
+    })
   }
 
   async function resample16k(pcm, sr) {
@@ -317,10 +330,11 @@ export function createVoice(cfg = {}, env = globalThis) {
     })
     s.tap.port.postMessage({ rec: false })
     const rec = s.rec
+    const tokenJob = s.tokenJob
     const info = { t0: s.t0, frames: s.takeFrames, lag_ms: s.lag, difficulty: s.difficulty, song_id: s.ref.id }
     s.takeJob = flushed
       .then(() => buildTake(rec, info))
-      .then(take => (s.take = take))
+      .then(async take => (s.take = { ...take, session_token: await tokenJob }))
       .catch(e => {
         fail(ERR.UPLOAD, e)
         return null
@@ -333,6 +347,7 @@ export function createVoice(cfg = {}, env = globalThis) {
     return buildMeta({
       songId: take.song_id,
       clientId: clientId(env),
+      sessionToken: take.session_token,
       player,
       difficulty: take.difficulty,
       challengeId,
@@ -407,7 +422,7 @@ export function createVoice(cfg = {}, env = globalThis) {
       return take ? { wav: take.wav, meta: metaFor(take, 'dev', null), resampler: take.resampler } : null
     },
     _state() {
-      return { sr: s.sr, floor: s.floor, gate: s.gate, lag_ms: s.lag, est_lag_ms: s.estLag, output_latency: s.ctx?.outputLatency ?? null, base_latency: s.ctx?.baseLatency ?? null, ctx_state: s.ctx?.state ?? null }
+      return { sr: s.sr, floor: s.floor, gate: s.gate, lag_ms: s.lag, est_lag_ms: s.estLag, output_latency: s.ctx?.outputLatency ?? null, base_latency: s.ctx?.baseLatency ?? null, ctx_state: s.ctx?.state ?? null, session: s.tokenState }
     }
   }
 }
