@@ -87,7 +87,7 @@ const UNLOCK_REASONS = {
   audio_locked: 'Браузер не дал включить звук. Нажми ещё раз.',
   worklet_failed: 'Не загрузился модуль звука. Обнови страницу.'
 }
-const st = { ref: null, tol: 120, frames: [], tNow: 0, state: 'idle', level: 0, unlocked: null, lastFrames: 0, count: 0, fps: 0, wav: null, submitting: false, calibrating: false }
+const st = { ref: null, tol: 120, frames: [], tNow: 0, state: 'idle', level: 0, unlocked: null, lastFrames: 0, count: 0, fps: 0, wav: null, submitting: false, calibrating: false, unlocking: false, starting: false }
 
 function log(name, data) {
   const line = `${new Date().toISOString().slice(11, 23)} ${name} ${JSON.stringify(data)}`
@@ -161,11 +161,12 @@ voice.subscribe((name, json) => {
   }
   if (name === 'on_error') {
     $('result').textContent = `Ошибка ${data.code}: ${data.msg}`
-    if (UNLOCK_ERRORS.includes(data.code)) {
+    if (st.unlocking && UNLOCK_ERRORS.includes(data.code)) {
       $('unlockReason').textContent = UNLOCK_REASONS[data.code] || ''
       $('overlay').style.display = 'flex'
     }
     if (st.submitting) $('submitStatus').textContent = `Не отправилось: ${data.msg}`
+    if (st.starting) $('submitStatus').textContent = 'Сначала нажми «Загрузить»'
     st.submitting = false
     if (st.calibrating) {
       $('calibHint').classList.add('fail')
@@ -178,7 +179,8 @@ voice.subscribe((name, json) => {
 $('unlock').onclick = () => {
   $('unlockReason').textContent = ''
   $('overlay').style.display = 'none'
-  voice.unlock()
+  st.unlocking = true
+  Promise.resolve(voice.unlock()).finally(() => { st.unlocking = false })
 }
 
 async function loadSongs() {
@@ -231,7 +233,9 @@ $('start').onclick = () => {
   st.frames = []
   st.wav = null
   $('result').textContent = ''
+  st.starting = true
   voice.start()
+  st.starting = false
 }
 $('stop').onclick = showTake
 $('calibSpeakers').onclick = () => calibrate('speakers')
