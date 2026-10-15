@@ -15,6 +15,6 @@ export async function requestSession({ env, url, songId, clientId, difficulty, t
   } catch {
     return null
   } finally {
-    if (timer !== null) env.clearTimeout(timer)
+    if (timer !== null) env.clearTimeout?.(timer)
   }
 }

@@ -37,7 +37,7 @@ export function createVoice(cfg = {}, env = globalThis) {
     sessionLag: null, estLag: 20, lag: 20,
     ref: null, buffer: null, state: 'idle', t0: 0,
     rec: null, takeFrames: [], take: null, takeJob: null, recDone: null,
-    tokenJob: null, tokenState: 'none',
+    tokenJob: null, identity: null, tokenState: 'none',
     listeners: new Set()
   }
 
@@ -276,8 +276,10 @@ export function createVoice(cfg = {}, env = globalThis) {
   }
 
   function openSession() {
-    const job = requestSession({ env, url: url('/api/v1/sessions'), songId: s.ref.id, clientId: clientId(env), difficulty: s.difficulty, timeoutMs: SESSION_TIMEOUT_MS })
+    const identity = { songId: s.ref.id, clientId: clientId(env), difficulty: s.difficulty }
+    const job = requestSession({ env, url: url('/api/v1/sessions'), ...identity, timeoutMs: SESSION_TIMEOUT_MS })
     s.tokenJob = job
+    s.identity = identity
     s.tokenState = 'pending'
     job.then(token => {
       if (s.tokenJob === job) s.tokenState = token ? 'ok' : 'none'
@@ -331,7 +333,8 @@ export function createVoice(cfg = {}, env = globalThis) {
     s.tap.port.postMessage({ rec: false })
     const rec = s.rec
     const tokenJob = s.tokenJob
-    const info = { t0: s.t0, frames: s.takeFrames, lag_ms: s.lag, difficulty: s.difficulty, song_id: s.ref.id }
+    const { songId, clientId: takeClientId, difficulty } = s.identity
+    const info = { t0: s.t0, frames: s.takeFrames, lag_ms: s.lag, difficulty, song_id: songId, client_id: takeClientId }
     s.takeJob = flushed
       .then(() => buildTake(rec, info))
       .then(async take => (s.take = { ...take, session_token: await tokenJob }))
@@ -346,8 +349,8 @@ export function createVoice(cfg = {}, env = globalThis) {
     const ctx = s.ctx
     return buildMeta({
       songId: take.song_id,
-      clientId: clientId(env),
-      sessionToken: take.session_token,
+      clientId: take.client_id,
+      sessionToken: take.token_spent ? null : take.session_token,
       player,
       difficulty: take.difficulty,
       challengeId,
@@ -363,7 +366,9 @@ export function createVoice(cfg = {}, env = globalThis) {
     const take = await (s.takeJob || stop())
     if (!take || !take.samples) return fail(ERR.UPLOAD, 'no recorded take')
     try {
-      const result = await postTake({ env, url: url('/api/v1/takes'), wav: take.wav, meta: metaFor(take, player, challengeId), timeoutMs: UPLOAD_TIMEOUT_MS })
+      const meta = metaFor(take, player, challengeId)
+      take.token_spent = true
+      const result = await postTake({ env, url: url('/api/v1/takes'), wav: take.wav, meta, timeoutMs: UPLOAD_TIMEOUT_MS })
       bus.emit('on_result', result)
       return true
     } catch (e) {

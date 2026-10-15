@@ -49,7 +49,7 @@ class AudioStub {
   stop() {}
 }
 
-function studio(sessionReplies) {
+function studio(sessionReplies, takeReplies = []) {
   const sessions = []
   const takes = []
   const errors = []
@@ -117,7 +117,7 @@ function studio(sessionReplies) {
       }
       if (u.endsWith('/api/v1/takes')) {
         takes.push(JSON.parse(init.body.get('meta')))
-        return reply({ take_id: `tk_${takes.length}` })
+        return takeReplies.length ? takeReplies.shift()() : reply({ take_id: `tk_${takes.length}` })
       }
       return { ok: false, status: 404, text: async () => 'not found' }
     }
@@ -130,7 +130,7 @@ function studio(sessionReplies) {
     sing()
     assert.equal(await voice.submit('Паша', ''), true)
   }
-  return { voice, sessions, takes, errors, take }
+  return { voice, sessions, takes, errors, take, sing, store }
 }
 
 const ok = token => async () => reply({ token, issued_at: 1, expires_in: 900 })
@@ -180,4 +180,81 @@ test('every start gets its own token', async () => {
   await st.take()
   assert.equal(st.sessions.length, 2)
   assert.deepEqual(st.takes.map(m => m.session_token), ['tok-1', 'tok-2'])
+})
+
+const unavailable = async () => ({ ok: false, status: 503, text: async () => 'unavailable' })
+
+test('requestSession stays non-rejecting when the environment cannot clear the timer', async () => {
+  const env = { AbortController, setTimeout, fetch: async () => reply({ token: 'tok-1' }) }
+  assert.equal(await requestSession({ env, url: '/x', songId: 'demo', clientId: null, difficulty: 'normal' }), 'tok-1')
+})
+
+test('a difficulty changed after start does not leak into the take', async () => {
+  const st = studio([ok('tok-1')])
+  await st.voice.unlock()
+  await st.voice.load_song('demo')
+  assert.equal(st.voice.start(), true)
+  st.voice.configure('{"difficulty":"hard"}')
+  st.sing()
+  assert.equal(await st.voice.submit('Паша', ''), true)
+  assert.equal(st.sessions[0].difficulty, 'normal')
+  assert.equal(st.takes[0].difficulty, st.sessions[0].difficulty)
+  assert.equal(st.takes[0].session_token, 'tok-1')
+})
+
+test('a difficulty configured before start reaches both the session and the take', async () => {
+  const st = studio([ok('tok-1')])
+  await st.voice.unlock()
+  st.voice.configure('{"difficulty":"hard"}')
+  await st.voice.load_song('demo')
+  await st.take()
+  assert.equal(st.sessions[0].difficulty, 'hard')
+  assert.equal(st.takes[0].difficulty, 'hard')
+})
+
+test('a client id that changes after start does not leak into the take', async () => {
+  const st = studio([ok('tok-1')])
+  await st.voice.unlock()
+  await st.voice.load_song('demo')
+  assert.equal(st.voice.start(), true)
+  st.store['voice.client_id'] = '00000000-0000-4000-8000-000000000000'
+  st.sing()
+  assert.equal(await st.voice.submit('Паша', ''), true)
+  assert.match(st.sessions[0].client_id, UUID)
+  assert.notEqual(st.sessions[0].client_id, '00000000-0000-4000-8000-000000000000')
+  assert.equal(st.takes[0].client_id, st.sessions[0].client_id)
+})
+
+test('a second submit of the same take sends no token', async () => {
+  const st = studio([ok('tok-1')])
+  await st.voice.unlock()
+  await st.voice.load_song('demo')
+  await st.take()
+  assert.equal(await st.voice.submit('Паша', ''), true)
+  assert.equal(st.takes.length, 2)
+  assert.equal(st.takes[0].session_token, 'tok-1')
+  assert.equal(st.takes[1].session_token, null)
+  assert.equal(st.voice._take().meta.session_token, null)
+})
+
+test('a retry after a failed upload sends no token', async () => {
+  const st = studio([ok('tok-1')], [unavailable])
+  await st.voice.unlock()
+  await st.voice.load_song('demo')
+  assert.equal(st.voice.start(), true)
+  st.sing()
+  assert.equal(await st.voice.submit('Паша', ''), false)
+  assert.equal(await st.voice.submit('Паша', ''), true)
+  assert.deepEqual(st.takes.map(m => m.session_token), ['tok-1', null])
+  assert.deepEqual(st.errors.map(e => e.code), ['upload_failed'])
+})
+
+test('concurrent submits of one take send the token only once', async () => {
+  const st = studio([ok('tok-1')])
+  await st.voice.unlock()
+  await st.voice.load_song('demo')
+  assert.equal(st.voice.start(), true)
+  st.sing()
+  assert.deepEqual(await Promise.all([st.voice.submit('Паша', ''), st.voice.submit('Паша', '')]), [true, true])
+  assert.deepEqual(st.takes.map(m => m.session_token), ['tok-1', null])
 })
