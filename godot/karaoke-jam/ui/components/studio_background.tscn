@@ -57,6 +57,7 @@ strength = 1.0
 decay = 3.0
 
 [node name="EqLeft" type="Control" parent="." unique_id=1454476603]
+visible = false
 modulate = Color(1, 1, 1, 0.55)
 layout_mode = 1
 anchors_preset = 9
@@ -73,6 +74,7 @@ segments = 12
 horizontal = true
 
 [node name="EqRight" type="Control" parent="." unique_id=1313070906]
+visible = false
 modulate = Color(1, 1, 1, 0.55)
 layout_mode = 1
 anchors_preset = 11
@@ -119,6 +121,7 @@ color_ramp = SubResource("Gradient_notes")
 
 [node name="NotesAccent" type="CPUParticles2D" parent="." unique_id=1336519880]
 unique_name_in_owner = true
+visible = false
 material = SubResource("Mat_add")
 position = Vector2(960, 1120)
 emitting = false

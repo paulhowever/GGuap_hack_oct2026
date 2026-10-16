@@ -1,0 +1,82 @@
+[gd_scene format=3]
+
+[sub_resource type="StandardMaterial3D" id="mat_gold"]
+albedo_color = Color(1, 0.78, 0.25, 1)
+metallic = 0.5
+roughness = 0.3
+
+[sub_resource type="StandardMaterial3D" id="mat_gold_dark"]
+albedo_color = Color(0.85, 0.58, 0.15, 1)
+metallic = 0.5
+roughness = 0.35
+
+[sub_resource type="StandardMaterial3D" id="mat_red"]
+albedo_color = Color(0.91, 0.3, 0.24, 1)
+roughness = 0.7
+
+[sub_resource type="StandardMaterial3D" id="mat_blue"]
+albedo_color = Color(0.25, 0.45, 0.9, 1)
+roughness = 0.7
+
+[sub_resource type="CylinderMesh" id="disc"]
+top_radius = 0.034
+bottom_radius = 0.034
+height = 0.008
+radial_segments = 28
+rings = 1
+
+[sub_resource type="TorusMesh" id="rim"]
+inner_radius = 0.03
+outer_radius = 0.038
+rings = 28
+ring_segments = 6
+
+[sub_resource type="CylinderMesh" id="emblem"]
+top_radius = 0.018
+bottom_radius = 0.018
+height = 0.006
+radial_segments = 5
+rings = 1
+
+[sub_resource type="BoxMesh" id="ribbon"]
+size = Vector3(0.022, 0.1, 0.004)
+
+[sub_resource type="BoxMesh" id="clasp"]
+size = Vector3(0.026, 0.012, 0.008)
+
+[node name="Medal" type="Node3D"]
+
+[node name="RibbonL" type="MeshInstance3D" parent="."]
+position = Vector3(-0.02, 0.075, 0.047)
+rotation_degrees = Vector3(0, 0, 22)
+mesh = SubResource("ribbon")
+surface_material_override/0 = SubResource("mat_red")
+
+[node name="RibbonR" type="MeshInstance3D" parent="."]
+position = Vector3(0.02, 0.075, 0.047)
+rotation_degrees = Vector3(0, 0, -22)
+mesh = SubResource("ribbon")
+surface_material_override/0 = SubResource("mat_blue")
+
+[node name="Clasp" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.036, 0.052)
+mesh = SubResource("clasp")
+surface_material_override/0 = SubResource("mat_gold_dark")
+
+[node name="Disc" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0, 0.054)
+rotation_degrees = Vector3(90, 0, 0)
+mesh = SubResource("disc")
+surface_material_override/0 = SubResource("mat_gold")
+
+[node name="Rim" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0, 0.054)
+rotation_degrees = Vector3(90, 0, 0)
+mesh = SubResource("rim")
+surface_material_override/0 = SubResource("mat_gold_dark")
+
+[node name="Emblem" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0, 0.059)
+rotation_degrees = Vector3(90, 0, 0)
+mesh = SubResource("emblem")
+surface_material_override/0 = SubResource("mat_gold_dark")

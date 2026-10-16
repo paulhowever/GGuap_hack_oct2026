@@ -2,16 +2,18 @@
 
 [ext_resource type="Script" uid="uid://bueekbg68k6cl" path="res://scenes/boot/boot.gd" id="1_boot"]
 [ext_resource type="PackedScene" uid="uid://kvfxehvfomao" path="res://ui/components/studio_background.tscn" id="2_bg"]
-[ext_resource type="PackedScene" path="res://ui/components/vinyl_logo.tscn" id="3_logo"]
+[ext_resource type="PackedScene" uid="uid://dddxh33cvuhlt" path="res://ui/components/vinyl_logo.tscn" id="3_logo"]
 [ext_resource type="Script" uid="uid://fjuk3b7rmstf" path="res://ui/components/menu_button.gd" id="4_btn"]
 [ext_resource type="Script" uid="uid://yex6ia27s6ti" path="res://ui/components/on_air_sign.gd" id="5_onair"]
 [ext_resource type="PackedScene" path="res://ui/components/mic_status_chip.tscn" id="6_mic"]
 [ext_resource type="Texture2D" uid="uid://coner633d6l0r" path="res://ui/icons/gear.svg" id="7_gear"]
 [ext_resource type="Texture2D" uid="uid://wkupnuu6558u" path="res://ui/icons/headphones.svg" id="8_hp"]
-[ext_resource type="PackedScene" path="res://ui/panels/first_run_panel.tscn" id="9_fr"]
+[ext_resource type="PackedScene" uid="uid://bajfvq6khidw2" path="res://ui/panels/first_run_panel.tscn" id="9_fr"]
 [ext_resource type="PackedScene" path="res://ui/panels/calibration_panel.tscn" id="10_cal"]
 [ext_resource type="PackedScene" uid="uid://d2s636ykjydjh" path="res://ui/panels/settings_panel.tscn" id="11_set"]
 [ext_resource type="Theme" uid="uid://jo2ye60ryjcu" path="res://ui/theme/main_theme.tres" id="12_theme"]
+[ext_resource type="PackedScene" path="res://ui/components/character_preview.tscn" id="13_char"]
+[ext_resource type="PackedScene" path="res://ui/panels/customize_panel.tscn" id="14_cust"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_3837e"]
 content_margin_left = 28.0
@@ -23,13 +25,13 @@ border_width_left = 4
 border_width_top = 4
 border_width_right = 4
 border_width_bottom = 4
-border_color = Color(0.88994646, 0.43574393, 0.23254578, 1)
+border_color = Color(0.57945275, 0.31531, 0.21372798, 1)
 corner_radius_top_left = 12
 corner_radius_top_right = 12
 corner_radius_bottom_right = 12
 corner_radius_bottom_left = 12
-shadow_color = Color(1, 0.47843137, 0.23921569, 0.37346277)
-shadow_size = 14
+shadow_color = Color(1, 0.47843137, 0.23921569, 0.15752847)
+shadow_size = 6
 
 [node name="Boot" type="Control" unique_id=1582119351]
 layout_mode = 3
@@ -61,6 +63,11 @@ theme_override_constants/separation = 120
 alignment = 1
 
 [node name="VinylLogo" parent="Center/Row" unique_id=69667275 instance=ExtResource("3_logo")]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(560, 560)
+layout_mode = 2
+
+[node name="CharacterPreview" parent="Center/Row/VinylLogo" instance=ExtResource("13_char")]
 unique_name_in_owner = true
 layout_mode = 2
 
@@ -211,10 +218,17 @@ layout_mode = 1
 
 [node name="SettingsPanel" parent="." unique_id=423924944 instance=ExtResource("11_set")]
 unique_name_in_owner = true
+visible = false
+layout_mode = 1
+
+[node name="CustomizePanel" parent="." instance=ExtResource("14_cust")]
+unique_name_in_owner = true
+visible = false
 layout_mode = 1
 
 [node name="Fade" type="ColorRect" parent="." unique_id=1654993882]
 unique_name_in_owner = true
+visible = false
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -223,3 +237,24 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 color = Color(0.118, 0.102, 0.141, 1)
+
+[node name="LoadingLabel" type="Label" parent="Fade"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -200.0
+offset_top = -30.0
+offset_right = 200.0
+offset_bottom = 30.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_type_variation = &"HintLabel"
+theme_override_font_sizes/font_size = 36
+text = "Загрузка"
+horizontal_alignment = 1
+vertical_alignment = 1

@@ -1,0 +1,85 @@
+[gd_scene format=3]
+
+[sub_resource type="StandardMaterial3D" id="mat_frame"]
+albedo_color = Color(0.12, 0.11, 0.14, 1)
+roughness = 0.25
+
+[sub_resource type="StandardMaterial3D" id="mat_lens"]
+transparency = 1
+albedo_color = Color(0.35, 0.75, 0.95, 0.3)
+roughness = 0.05
+
+[sub_resource type="TorusMesh" id="rim"]
+inner_radius = 0.062
+outer_radius = 0.074
+rings = 36
+ring_segments = 8
+
+[sub_resource type="CylinderMesh" id="lens"]
+top_radius = 0.064
+bottom_radius = 0.064
+height = 0.004
+radial_segments = 32
+rings = 1
+
+[sub_resource type="BoxMesh" id="bridge"]
+size = Vector3(0.04, 0.012, 0.012)
+
+[sub_resource type="BoxMesh" id="hinge"]
+size = Vector3(0.02, 0.02, 0.02)
+
+[sub_resource type="BoxMesh" id="temple"]
+size = Vector3(0.01, 0.014, 0.13)
+
+[node name="Glasses" type="Node3D"]
+
+[node name="RimR" type="MeshInstance3D" parent="."]
+position = Vector3(0.087, 0, 0)
+rotation_degrees = Vector3(90, 0, 0)
+mesh = SubResource("rim")
+surface_material_override/0 = SubResource("mat_frame")
+
+[node name="LensR" type="MeshInstance3D" parent="."]
+position = Vector3(0.087, 0, 0)
+rotation_degrees = Vector3(90, 0, 0)
+mesh = SubResource("lens")
+surface_material_override/0 = SubResource("mat_lens")
+
+[node name="RimL" type="MeshInstance3D" parent="."]
+position = Vector3(-0.087, 0, 0)
+rotation_degrees = Vector3(90, 0, 0)
+mesh = SubResource("rim")
+surface_material_override/0 = SubResource("mat_frame")
+
+[node name="LensL" type="MeshInstance3D" parent="."]
+position = Vector3(-0.087, 0, 0)
+rotation_degrees = Vector3(90, 0, 0)
+mesh = SubResource("lens")
+surface_material_override/0 = SubResource("mat_lens")
+
+[node name="Bridge" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.02, 0)
+mesh = SubResource("bridge")
+surface_material_override/0 = SubResource("mat_frame")
+
+[node name="HingeR" type="MeshInstance3D" parent="."]
+position = Vector3(0.158, 0.01, -0.005)
+mesh = SubResource("hinge")
+surface_material_override/0 = SubResource("mat_frame")
+
+[node name="HingeL" type="MeshInstance3D" parent="."]
+position = Vector3(-0.158, 0.01, -0.005)
+mesh = SubResource("hinge")
+surface_material_override/0 = SubResource("mat_frame")
+
+[node name="TempleR" type="MeshInstance3D" parent="."]
+position = Vector3(0.1412, 0.01, -0.0678)
+rotation_degrees = Vector3(0, 15, 0)
+mesh = SubResource("temple")
+surface_material_override/0 = SubResource("mat_frame")
+
+[node name="TempleL" type="MeshInstance3D" parent="."]
+position = Vector3(-0.1412, 0.01, -0.0678)
+rotation_degrees = Vector3(0, -15, 0)
+mesh = SubResource("temple")
+surface_material_override/0 = SubResource("mat_frame")

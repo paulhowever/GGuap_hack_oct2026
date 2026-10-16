@@ -1,0 +1,70 @@
+[gd_scene format=3]
+
+[sub_resource type="StandardMaterial3D" id="mat_pink"]
+albedo_color = Color(0.93, 0.36, 0.62, 1)
+roughness = 0.45
+
+[sub_resource type="StandardMaterial3D" id="mat_knot"]
+albedo_color = Color(0.72, 0.22, 0.45, 1)
+roughness = 0.5
+
+[sub_resource type="StandardMaterial3D" id="mat_dot"]
+albedo_color = Color(0.98, 0.95, 0.9, 1)
+roughness = 0.5
+
+[sub_resource type="CylinderMesh" id="wing"]
+top_radius = 0.004
+bottom_radius = 0.035
+height = 0.055
+radial_segments = 20
+rings = 1
+
+[sub_resource type="BoxMesh" id="knot"]
+size = Vector3(0.022, 0.03, 0.022)
+
+[sub_resource type="SphereMesh" id="dot"]
+radius = 0.006
+height = 0.012
+radial_segments = 8
+rings = 4
+
+[node name="BowTie" type="Node3D"]
+
+[node name="WingL" type="MeshInstance3D" parent="."]
+position = Vector3(-0.03, 0, 0)
+rotation_degrees = Vector3(0, 0, -90)
+scale = Vector3(1, 1, 0.45)
+mesh = SubResource("wing")
+surface_material_override/0 = SubResource("mat_pink")
+
+[node name="WingR" type="MeshInstance3D" parent="."]
+position = Vector3(0.03, 0, 0)
+rotation_degrees = Vector3(0, 0, 90)
+scale = Vector3(1, 1, 0.45)
+mesh = SubResource("wing")
+surface_material_override/0 = SubResource("mat_pink")
+
+[node name="Knot" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0, 0.003)
+mesh = SubResource("knot")
+surface_material_override/0 = SubResource("mat_knot")
+
+[node name="Dot1" type="MeshInstance3D" parent="."]
+position = Vector3(-0.035, 0.011, 0.011)
+mesh = SubResource("dot")
+surface_material_override/0 = SubResource("mat_dot")
+
+[node name="Dot2" type="MeshInstance3D" parent="."]
+position = Vector3(-0.044, -0.012, 0.01)
+mesh = SubResource("dot")
+surface_material_override/0 = SubResource("mat_dot")
+
+[node name="Dot3" type="MeshInstance3D" parent="."]
+position = Vector3(0.035, -0.011, 0.011)
+mesh = SubResource("dot")
+surface_material_override/0 = SubResource("mat_dot")
+
+[node name="Dot4" type="MeshInstance3D" parent="."]
+position = Vector3(0.044, 0.012, 0.01)
+mesh = SubResource("dot")
+surface_material_override/0 = SubResource("mat_dot")

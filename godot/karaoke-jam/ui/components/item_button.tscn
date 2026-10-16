@@ -1,0 +1,75 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://ui/components/item_button.gd" id="1_item"]
+
+[sub_resource type="Environment" id="Environment_item"]
+ambient_light_source = 2
+ambient_light_color = Color(0.953, 0.902, 0.827, 1)
+ambient_light_energy = 0.55
+
+[sub_resource type="World3D" id="World3D_item"]
+environment = SubResource("Environment_item")
+
+[node name="ItemButton" type="Button"]
+custom_minimum_size = Vector2(176, 196)
+offset_right = 176.0
+offset_bottom = 196.0
+script = ExtResource("1_item")
+hover_scale = 0.05
+beat_scale = 0.02
+hover_shift = 0.0
+
+[node name="Margin" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 10
+
+[node name="VBox" type="VBoxContainer" parent="Margin"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 2
+
+[node name="View" type="SubViewportContainer" parent="Margin/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+mouse_filter = 2
+stretch = true
+
+[node name="SubViewport" type="SubViewport" parent="Margin/VBox/View"]
+own_world_3d = true
+world_3d = SubResource("World3D_item")
+transparent_bg = true
+handle_input_locally = false
+size = Vector2i(156, 144)
+render_target_update_mode = 0
+
+[node name="Pivot" type="Node3D" parent="Margin/VBox/View/SubViewport"]
+unique_name_in_owner = true
+transform = Transform3D(0.8660254, 0, -0.5, 0, 1, 0, 0.5, 0, 0.8660254, 0, 0, 0)
+
+[node name="ItemMesh" type="MeshInstance3D" parent="Margin/VBox/View/SubViewport/Pivot"]
+unique_name_in_owner = true
+
+[node name="Camera3D" type="Camera3D" parent="Margin/VBox/View/SubViewport"]
+transform = Transform3D(1, 0, 0, 0, 0.9864, 0.1644, 0, -0.1644, 0.9864, 0, 0.5, 3)
+fov = 34.0
+
+[node name="Sun" type="DirectionalLight3D" parent="Margin/VBox/View/SubViewport"]
+transform = Transform3D(1, 0, 0, 0, 0.6428, 0.766, 0, -0.766, 0.6428, 0, 2, 2)
+light_energy = 1.1
+
+[node name="NameLabel" type="Label" parent="Margin/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"HintLabel"
+theme_override_font_sizes/font_size = 20
+horizontal_alignment = 1
+text_overrun_behavior = 3

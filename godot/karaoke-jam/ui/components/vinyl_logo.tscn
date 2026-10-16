@@ -1,11 +1,11 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene format=4 uid="uid://dddxh33cvuhlt"]
 
-[ext_resource type="Script" path="res://ui/components/vinyl_logo.gd" id="1_logo"]
+[ext_resource type="Script" uid="uid://bfkcwye4ljuqp" path="res://ui/components/vinyl_logo.gd" id="1_logo"]
 [ext_resource type="Material" path="res://ui/materials/glow_orange.tres" id="2_glow"]
 [ext_resource type="Material" path="res://ui/materials/vinyl.tres" id="3_vinyl"]
-[ext_resource type="Script" path="res://ui/behaviours/beat_reactor.gd" id="4_beat"]
+[ext_resource type="Script" uid="uid://2c2dvcjeytwd" path="res://ui/behaviours/beat_reactor.gd" id="4_beat"]
 
-[node name="VinylLogo" type="VBoxContainer"]
+[node name="VinylLogo" type="VBoxContainer" unique_id=52220618]
 custom_minimum_size = Vector2(560, 0)
 offset_right = 560.0
 offset_bottom = 560.0
@@ -14,12 +14,13 @@ theme_override_constants/separation = 4
 alignment = 1
 script = ExtResource("1_logo")
 
-[node name="DiscArea" type="Control" parent="."]
+[node name="DiscArea" type="Control" parent="." unique_id=209178271]
+visible = false
 custom_minimum_size = Vector2(0, 340)
 layout_mode = 2
 mouse_filter = 2
 
-[node name="Glow" type="ColorRect" parent="DiscArea"]
+[node name="Glow" type="ColorRect" parent="DiscArea" unique_id=1036690151]
 material = ExtResource("2_glow")
 layout_mode = 1
 anchors_preset = 8
@@ -35,7 +36,7 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 
-[node name="GlowPulse" type="Node" parent="DiscArea/Glow"]
+[node name="GlowPulse" type="Node" parent="DiscArea/Glow" unique_id=1855407519]
 script = ExtResource("4_beat")
 target = 4
 shader_param = &"intensity"
@@ -43,7 +44,7 @@ strength = 0.35
 base_value = 0.3
 decay = 5.0
 
-[node name="Disc" type="ColorRect" parent="DiscArea"]
+[node name="Disc" type="ColorRect" parent="DiscArea" unique_id=1682569884]
 unique_name_in_owner = true
 material = ExtResource("3_vinyl")
 layout_mode = 1
@@ -61,34 +62,36 @@ grow_vertical = 2
 pivot_offset = Vector2(160, 160)
 mouse_filter = 2
 
-[node name="DiscScale" type="Node" parent="DiscArea/Disc"]
+[node name="DiscScale" type="Node" parent="DiscArea/Disc" unique_id=1116757278]
 script = ExtResource("4_beat")
 strength = 0.045
 decay = 8.0
 
-[node name="DiscShader" type="Node" parent="DiscArea/Disc"]
+[node name="DiscShader" type="Node" parent="DiscArea/Disc" unique_id=1288719210]
 script = ExtResource("4_beat")
 target = 4
 shader_param = &"pulse"
 strength = 1.0
 decay = 6.0
 
-[node name="Title" type="Label" parent="."]
+[node name="Title" type="Label" parent="." unique_id=695547750]
 unique_name_in_owner = true
+visible = false
 layout_mode = 2
 theme_type_variation = &"TitleLabel"
 theme_override_constants/outline_size = 0
 text = "KaraokeJam"
 horizontal_alignment = 1
 
-[node name="TitleBeat" type="Node" parent="Title"]
+[node name="TitleBeat" type="Node" parent="Title" unique_id=1059549969]
 script = ExtResource("4_beat")
 trigger = 1
 strength = 0.03
 decay = 6.0
 
-[node name="Subtitle" type="Label" parent="."]
+[node name="Subtitle" type="Label" parent="." unique_id=1710151652]
 unique_name_in_owner = true
+visible = false
 layout_mode = 2
 theme_type_variation = &"AccentLabel"
 theme_override_font_sizes/font_size = 34

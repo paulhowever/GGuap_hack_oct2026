@@ -1,0 +1,197 @@
+[gd_scene format=3]
+
+[sub_resource type="StandardMaterial3D" id="mat_gold"]
+cull_mode = 2
+albedo_color = Color(1, 0.78, 0.25, 1)
+metallic = 0.5
+roughness = 0.3
+
+[sub_resource type="StandardMaterial3D" id="mat_velvet"]
+albedo_color = Color(0.6, 0.08, 0.16, 1)
+roughness = 0.9
+
+[sub_resource type="StandardMaterial3D" id="mat_ruby"]
+albedo_color = Color(0.95, 0.12, 0.22, 1)
+roughness = 0.15
+emission_enabled = true
+emission = Color(0.95, 0.12, 0.22, 1)
+emission_energy_multiplier = 0.25
+
+[sub_resource type="StandardMaterial3D" id="mat_sapphire"]
+albedo_color = Color(0.18, 0.4, 1, 1)
+roughness = 0.15
+emission_enabled = true
+emission = Color(0.18, 0.4, 1, 1)
+emission_energy_multiplier = 0.25
+
+[sub_resource type="StandardMaterial3D" id="mat_emerald"]
+albedo_color = Color(0.1, 0.8, 0.45, 1)
+roughness = 0.15
+emission_enabled = true
+emission = Color(0.1, 0.8, 0.45, 1)
+emission_energy_multiplier = 0.25
+
+[sub_resource type="CylinderMesh" id="band"]
+top_radius = 0.12
+bottom_radius = 0.11
+height = 0.045
+radial_segments = 36
+rings = 1
+cap_top = false
+cap_bottom = false
+
+[sub_resource type="SphereMesh" id="velvet"]
+radius = 0.106
+height = 0.06
+radial_segments = 24
+rings = 8
+is_hemisphere = true
+
+[sub_resource type="TorusMesh" id="rim_top"]
+inner_radius = 0.113
+outer_radius = 0.127
+rings = 36
+ring_segments = 8
+
+[sub_resource type="TorusMesh" id="rim_bottom"]
+inner_radius = 0.104
+outer_radius = 0.118
+rings = 36
+ring_segments = 8
+
+[sub_resource type="CylinderMesh" id="spike"]
+top_radius = 0.0
+bottom_radius = 0.032
+height = 0.075
+radial_segments = 4
+rings = 1
+
+[sub_resource type="SphereMesh" id="ball"]
+radius = 0.012
+height = 0.024
+radial_segments = 12
+rings = 6
+
+[sub_resource type="SphereMesh" id="gem"]
+radius = 0.014
+height = 0.028
+radial_segments = 12
+rings = 6
+
+[node name="Crown" type="Node3D"]
+
+[node name="Band" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.0225, 0)
+mesh = SubResource("band")
+surface_material_override/0 = SubResource("mat_gold")
+
+[node name="Velvet" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.003, 0)
+mesh = SubResource("velvet")
+surface_material_override/0 = SubResource("mat_velvet")
+
+[node name="RimTop" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.045, 0)
+scale = Vector3(1, 0.4, 1)
+mesh = SubResource("rim_top")
+surface_material_override/0 = SubResource("mat_gold")
+
+[node name="RimBottom" type="MeshInstance3D" parent="."]
+scale = Vector3(1, 0.4, 1)
+mesh = SubResource("rim_bottom")
+surface_material_override/0 = SubResource("mat_gold")
+
+[node name="Spike1" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.078, 0.11)
+mesh = SubResource("spike")
+surface_material_override/0 = SubResource("mat_gold")
+
+[node name="Spike2" type="MeshInstance3D" parent="."]
+position = Vector3(0.0953, 0.078, 0.055)
+rotation_degrees = Vector3(0, 60, 0)
+mesh = SubResource("spike")
+surface_material_override/0 = SubResource("mat_gold")
+
+[node name="Spike3" type="MeshInstance3D" parent="."]
+position = Vector3(0.0953, 0.078, -0.055)
+rotation_degrees = Vector3(0, 120, 0)
+mesh = SubResource("spike")
+surface_material_override/0 = SubResource("mat_gold")
+
+[node name="Spike4" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.078, -0.11)
+rotation_degrees = Vector3(0, 180, 0)
+mesh = SubResource("spike")
+surface_material_override/0 = SubResource("mat_gold")
+
+[node name="Spike5" type="MeshInstance3D" parent="."]
+position = Vector3(-0.0953, 0.078, -0.055)
+rotation_degrees = Vector3(0, 240, 0)
+mesh = SubResource("spike")
+surface_material_override/0 = SubResource("mat_gold")
+
+[node name="Spike6" type="MeshInstance3D" parent="."]
+position = Vector3(-0.0953, 0.078, 0.055)
+rotation_degrees = Vector3(0, 300, 0)
+mesh = SubResource("spike")
+surface_material_override/0 = SubResource("mat_gold")
+
+[node name="Ball1" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.121, 0.11)
+mesh = SubResource("ball")
+surface_material_override/0 = SubResource("mat_gold")
+
+[node name="Ball2" type="MeshInstance3D" parent="."]
+position = Vector3(0.0953, 0.121, 0.055)
+mesh = SubResource("ball")
+surface_material_override/0 = SubResource("mat_gold")
+
+[node name="Ball3" type="MeshInstance3D" parent="."]
+position = Vector3(0.0953, 0.121, -0.055)
+mesh = SubResource("ball")
+surface_material_override/0 = SubResource("mat_gold")
+
+[node name="Ball4" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.121, -0.11)
+mesh = SubResource("ball")
+surface_material_override/0 = SubResource("mat_gold")
+
+[node name="Ball5" type="MeshInstance3D" parent="."]
+position = Vector3(-0.0953, 0.121, -0.055)
+mesh = SubResource("ball")
+surface_material_override/0 = SubResource("mat_gold")
+
+[node name="Ball6" type="MeshInstance3D" parent="."]
+position = Vector3(-0.0953, 0.121, 0.055)
+mesh = SubResource("ball")
+surface_material_override/0 = SubResource("mat_gold")
+
+[node name="Gem1" type="MeshInstance3D" parent="."]
+position = Vector3(0.059, 0.022, 0.1022)
+mesh = SubResource("gem")
+surface_material_override/0 = SubResource("mat_ruby")
+
+[node name="Gem2" type="MeshInstance3D" parent="."]
+position = Vector3(0.118, 0.022, 0)
+mesh = SubResource("gem")
+surface_material_override/0 = SubResource("mat_sapphire")
+
+[node name="Gem3" type="MeshInstance3D" parent="."]
+position = Vector3(0.059, 0.022, -0.1022)
+mesh = SubResource("gem")
+surface_material_override/0 = SubResource("mat_emerald")
+
+[node name="Gem4" type="MeshInstance3D" parent="."]
+position = Vector3(-0.059, 0.022, -0.1022)
+mesh = SubResource("gem")
+surface_material_override/0 = SubResource("mat_ruby")
+
+[node name="Gem5" type="MeshInstance3D" parent="."]
+position = Vector3(-0.118, 0.022, 0)
+mesh = SubResource("gem")
+surface_material_override/0 = SubResource("mat_sapphire")
+
+[node name="Gem6" type="MeshInstance3D" parent="."]
+position = Vector3(-0.059, 0.022, 0.1022)
+mesh = SubResource("gem")
+surface_material_override/0 = SubResource("mat_emerald")

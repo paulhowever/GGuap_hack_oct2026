@@ -50,13 +50,14 @@ func get_song(id: String) -> Dictionary:
 	return await _request(HTTPClient.METHOD_GET, "/songs/%s" % id.uri_encode())
 
 
-## POST /players — регистрирует/обновляет ник для client_id.
-func register_player(nickname: String) -> Dictionary:
+## POST /players — регистрирует/обновляет ник и аватар (JSON-объект ≤ 4 КБ,
+## сейчас {outfit: {slot: item_id}}) для client_id.
+func register_player(nickname: String, avatar: Dictionary = {}) -> Dictionary:
 	var cid := VoiceBridge.client_id()
 	if cid.is_empty() or cid == VoiceBridge.STUB_CLIENT_ID:
 		return {"ok": false, "status": 0, "data": null, "error": "no_client_id"}
 	var r := await _request(HTTPClient.METHOD_POST, "/players",
-		{"client_id": cid, "nickname": nickname.strip_edges().left(24), "avatar": {}})
+		{"client_id": cid, "nickname": nickname.strip_edges().left(24), "avatar": avatar})
 	player_registered = r.ok
 	return r
 

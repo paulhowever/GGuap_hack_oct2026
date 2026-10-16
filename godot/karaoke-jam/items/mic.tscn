@@ -1,0 +1,82 @@
+[gd_scene format=3]
+
+[sub_resource type="StandardMaterial3D" id="mat_body"]
+albedo_color = Color(0.16, 0.15, 0.19, 1)
+roughness = 0.35
+
+[sub_resource type="StandardMaterial3D" id="mat_grille"]
+albedo_color = Color(0.82, 0.84, 0.9, 1)
+metallic = 0.6
+roughness = 0.35
+
+[sub_resource type="StandardMaterial3D" id="mat_accent"]
+albedo_color = Color(1, 0.478, 0.239, 1)
+roughness = 0.3
+
+[sub_resource type="CylinderMesh" id="handle"]
+top_radius = 0.017
+bottom_radius = 0.012
+height = 0.11
+radial_segments = 20
+rings = 1
+
+[sub_resource type="CylinderMesh" id="ring"]
+top_radius = 0.019
+bottom_radius = 0.019
+height = 0.012
+radial_segments = 20
+rings = 1
+
+[sub_resource type="SphereMesh" id="grille"]
+radius = 0.03
+height = 0.06
+radial_segments = 20
+rings = 10
+
+[sub_resource type="TorusMesh" id="grille_band"]
+inner_radius = 0.026
+outer_radius = 0.033
+rings = 24
+ring_segments = 6
+
+[sub_resource type="SphereMesh" id="end"]
+radius = 0.012
+height = 0.024
+radial_segments = 12
+rings = 6
+
+[sub_resource type="BoxMesh" id="switch"]
+size = Vector3(0.008, 0.018, 0.006)
+
+[node name="Mic" type="Node3D"]
+
+[node name="Handle" type="MeshInstance3D" parent="."]
+position = Vector3(0, -0.01, 0)
+mesh = SubResource("handle")
+surface_material_override/0 = SubResource("mat_body")
+
+[node name="End" type="MeshInstance3D" parent="."]
+position = Vector3(0, -0.065, 0)
+mesh = SubResource("end")
+surface_material_override/0 = SubResource("mat_body")
+
+[node name="Ring" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.048, 0)
+mesh = SubResource("ring")
+surface_material_override/0 = SubResource("mat_accent")
+
+[node name="Grille" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.075, 0)
+mesh = SubResource("grille")
+surface_material_override/0 = SubResource("mat_grille")
+
+[node name="GrilleBand" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.07, 0)
+scale = Vector3(1, 0.5, 1)
+mesh = SubResource("grille_band")
+surface_material_override/0 = SubResource("mat_body")
+
+[node name="Switch" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0, 0.016)
+mesh = SubResource("switch")
+surface_material_override/0 = SubResource("mat_accent")

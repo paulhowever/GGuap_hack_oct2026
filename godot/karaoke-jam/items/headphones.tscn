@@ -1,0 +1,146 @@
+[gd_scene format=3]
+
+[sub_resource type="StandardMaterial3D" id="mat_band"]
+albedo_color = Color(0.2, 0.19, 0.24, 1)
+roughness = 0.4
+
+[sub_resource type="StandardMaterial3D" id="mat_cup"]
+albedo_color = Color(0.373, 0.827, 0.737, 1)
+roughness = 0.35
+
+[sub_resource type="StandardMaterial3D" id="mat_soft"]
+albedo_color = Color(0.1, 0.09, 0.12, 1)
+roughness = 0.95
+
+[sub_resource type="StandardMaterial3D" id="mat_accent"]
+albedo_color = Color(1, 0.478, 0.239, 1)
+roughness = 0.3
+
+[sub_resource type="BoxMesh" id="segment"]
+size = Vector3(0.014, 0.06, 0.03)
+
+[sub_resource type="BoxMesh" id="pad"]
+size = Vector3(0.022, 0.09, 0.034)
+
+[sub_resource type="CylinderMesh" id="cup"]
+top_radius = 0.05
+bottom_radius = 0.05
+height = 0.04
+radial_segments = 28
+rings = 1
+
+[sub_resource type="CylinderMesh" id="cushion"]
+top_radius = 0.046
+bottom_radius = 0.046
+height = 0.02
+radial_segments = 28
+rings = 1
+
+[sub_resource type="CylinderMesh" id="cap"]
+top_radius = 0.032
+bottom_radius = 0.032
+height = 0.008
+radial_segments = 24
+rings = 1
+
+[node name="Headphones" type="Node3D"]
+
+[node name="Band" type="Node3D" parent="."]
+position = Vector3(0, -0.02, 0)
+scale = Vector3(1, 0.6, 1)
+
+[node name="Seg1" type="MeshInstance3D" parent="Band"]
+position = Vector3(0.1576, 0.0278, 0)
+rotation_degrees = Vector3(0, 0, 10)
+mesh = SubResource("segment")
+surface_material_override/0 = SubResource("mat_band")
+
+[node name="Seg2" type="MeshInstance3D" parent="Band"]
+position = Vector3(0.1386, 0.08, 0)
+rotation_degrees = Vector3(0, 0, 30)
+mesh = SubResource("segment")
+surface_material_override/0 = SubResource("mat_band")
+
+[node name="Seg3" type="MeshInstance3D" parent="Band"]
+position = Vector3(0.1028, 0.1226, 0)
+rotation_degrees = Vector3(0, 0, 50)
+mesh = SubResource("segment")
+surface_material_override/0 = SubResource("mat_band")
+
+[node name="Seg4" type="MeshInstance3D" parent="Band"]
+position = Vector3(0.0547, 0.1504, 0)
+rotation_degrees = Vector3(0, 0, 70)
+mesh = SubResource("segment")
+surface_material_override/0 = SubResource("mat_band")
+
+[node name="Seg5" type="MeshInstance3D" parent="Band"]
+position = Vector3(0, 0.16, 0)
+rotation_degrees = Vector3(0, 0, 90)
+mesh = SubResource("segment")
+surface_material_override/0 = SubResource("mat_band")
+
+[node name="Seg6" type="MeshInstance3D" parent="Band"]
+position = Vector3(-0.0547, 0.1504, 0)
+rotation_degrees = Vector3(0, 0, 110)
+mesh = SubResource("segment")
+surface_material_override/0 = SubResource("mat_band")
+
+[node name="Seg7" type="MeshInstance3D" parent="Band"]
+position = Vector3(-0.1028, 0.1226, 0)
+rotation_degrees = Vector3(0, 0, 130)
+mesh = SubResource("segment")
+surface_material_override/0 = SubResource("mat_band")
+
+[node name="Seg8" type="MeshInstance3D" parent="Band"]
+position = Vector3(-0.1386, 0.08, 0)
+rotation_degrees = Vector3(0, 0, 150)
+mesh = SubResource("segment")
+surface_material_override/0 = SubResource("mat_band")
+
+[node name="Seg9" type="MeshInstance3D" parent="Band"]
+position = Vector3(-0.1576, 0.0278, 0)
+rotation_degrees = Vector3(0, 0, 170)
+mesh = SubResource("segment")
+surface_material_override/0 = SubResource("mat_band")
+
+[node name="Pad" type="MeshInstance3D" parent="Band"]
+position = Vector3(0, 0.152, 0)
+rotation_degrees = Vector3(0, 0, 90)
+mesh = SubResource("pad")
+surface_material_override/0 = SubResource("mat_soft")
+
+[node name="CupR" type="MeshInstance3D" parent="."]
+position = Vector3(0.18, -0.03, 0)
+rotation_degrees = Vector3(0, 0, 90)
+mesh = SubResource("cup")
+surface_material_override/0 = SubResource("mat_cup")
+
+[node name="CushionR" type="MeshInstance3D" parent="."]
+position = Vector3(0.152, -0.03, 0)
+rotation_degrees = Vector3(0, 0, 90)
+mesh = SubResource("cushion")
+surface_material_override/0 = SubResource("mat_soft")
+
+[node name="CapR" type="MeshInstance3D" parent="."]
+position = Vector3(0.202, -0.03, 0)
+rotation_degrees = Vector3(0, 0, 90)
+mesh = SubResource("cap")
+surface_material_override/0 = SubResource("mat_accent")
+
+[node name="CupL" type="MeshInstance3D" parent="."]
+position = Vector3(-0.18, -0.03, 0)
+rotation_degrees = Vector3(0, 0, 90)
+mesh = SubResource("cup")
+surface_material_override/0 = SubResource("mat_cup")
+
+[node name="CushionL" type="MeshInstance3D" parent="."]
+position = Vector3(-0.152, -0.03, 0)
+rotation_degrees = Vector3(0, 0, 90)
+mesh = SubResource("cushion")
+surface_material_override/0 = SubResource("mat_soft")
+
+[node name="CapL" type="MeshInstance3D" parent="."]
+position = Vector3(-0.202, -0.03, 0)
+rotation_degrees = Vector3(0, 0, 90)
+mesh = SubResource("cap")
+surface_material_override/0 = SubResource("mat_accent")

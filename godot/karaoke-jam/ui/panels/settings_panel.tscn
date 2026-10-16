@@ -3,7 +3,6 @@
 [ext_resource type="Script" uid="uid://b76uxxagj625m" path="res://ui/panels/settings_panel.gd" id="1_set"]
 
 [node name="SettingsPanel" type="Control" unique_id=949476538 node_paths=PackedStringArray("initial_focus")]
-visible = false
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -69,14 +68,14 @@ custom_minimum_size = Vector2(0, 32)
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 4
-value = 80.0
+value = 30.0
 
 [node name="VolumeValue" type="Label" parent="Center/Card/VBox/Grid/VolumeRow" unique_id=445125197]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
 theme_type_variation = &"AccentLabel"
-text = "80%"
+text = "30%"
 horizontal_alignment = 2
 
 [node name="LagCaption" type="Label" parent="Center/Card/VBox/Grid" unique_id=814353301]

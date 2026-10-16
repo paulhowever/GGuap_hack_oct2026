@@ -1,0 +1,76 @@
+[gd_scene format=3]
+
+[sub_resource type="StandardMaterial3D" id="mat_red"]
+albedo_color = Color(0.91, 0.3, 0.24, 1)
+roughness = 0.65
+
+[sub_resource type="StandardMaterial3D" id="mat_dark"]
+albedo_color = Color(0.62, 0.17, 0.13, 1)
+roughness = 0.7
+
+[sub_resource type="StandardMaterial3D" id="mat_white"]
+albedo_color = Color(0.97, 0.95, 0.9, 1)
+roughness = 0.5
+
+[sub_resource type="SphereMesh" id="dome"]
+radius = 0.13
+height = 0.1
+radial_segments = 32
+rings = 12
+is_hemisphere = true
+
+[sub_resource type="CylinderMesh" id="band"]
+top_radius = 0.132
+bottom_radius = 0.134
+height = 0.018
+radial_segments = 32
+rings = 1
+
+[sub_resource type="CylinderMesh" id="visor"]
+top_radius = 0.1
+bottom_radius = 0.1
+height = 0.01
+radial_segments = 32
+rings = 1
+
+[sub_resource type="SphereMesh" id="button"]
+radius = 0.016
+height = 0.032
+radial_segments = 12
+rings = 6
+
+[sub_resource type="CylinderMesh" id="logo"]
+top_radius = 0.032
+bottom_radius = 0.032
+height = 0.006
+radial_segments = 20
+rings = 1
+
+[node name="Cap" type="Node3D"]
+
+[node name="Dome" type="MeshInstance3D" parent="."]
+mesh = SubResource("dome")
+surface_material_override/0 = SubResource("mat_red")
+
+[node name="Band" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.009, 0)
+mesh = SubResource("band")
+surface_material_override/0 = SubResource("mat_dark")
+
+[node name="Visor" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.012, 0.135)
+rotation_degrees = Vector3(6, 0, 0)
+scale = Vector3(1, 1, 0.8)
+mesh = SubResource("visor")
+surface_material_override/0 = SubResource("mat_dark")
+
+[node name="Button" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.098, 0)
+mesh = SubResource("button")
+surface_material_override/0 = SubResource("mat_dark")
+
+[node name="Logo" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.072, 0.093)
+rotation_degrees = Vector3(38, 0, 0)
+mesh = SubResource("logo")
+surface_material_override/0 = SubResource("mat_white")

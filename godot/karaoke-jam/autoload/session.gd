@@ -8,6 +8,8 @@ signal lag_changed(lag_ms: int)
 signal headphones_changed(confirmed: bool)
 signal music_volume_changed(value: float)
 signal difficulty_changed(difficulty: String)
+## Изменился наряд персонажа (slot → item_id; пустой item_id — слот снят).
+signal outfit_changed(slot: StringName, item_id: StringName)
 
 const SAVE_PATH := "user://settings.cfg"
 const DEFAULT_NICKNAME := "Гость"
@@ -65,6 +67,10 @@ var difficulty: String = DEFAULT_DIFFICULTY:
 		difficulty = value
 		difficulty_changed.emit(difficulty)
 
+## Наряд персонажа из гардероба: slot (StringName) → item_id (StringName).
+## На модель надевает CharacterOutfit (res://items/character_outfit.gd).
+var outfit: Dictionary[StringName, StringName] = {}
+
 # --- Состояние текущей попытки (не сохраняется) -----------------------------
 
 ## Выбранная песня (id из GET /api/v1/songs).
@@ -104,6 +110,30 @@ func nudge_lag(delta_ms: int) -> void:
 	save_settings()
 
 
+## Надеть предмет в слот (пустой item_id — снять). Сохраняет настройки.
+func equip_item(slot: StringName, item_id: StringName) -> void:
+	if outfit.get(slot, &"") == item_id:
+		return
+	if item_id == &"":
+		outfit.erase(slot)
+	else:
+		outfit[slot] = item_id
+	outfit_changed.emit(slot, item_id)
+	save_settings()
+
+
+func get_equipped(slot: StringName) -> StringName:
+	return outfit.get(slot, &"")
+
+
+## Аватар для профиля на бэкенде (POST /players): {outfit: {slot: item_id}}.
+func get_avatar() -> Dictionary:
+	var o := {}
+	for s: StringName in outfit:
+		o[String(s)] = String(outfit[s])
+	return {"outfit": o}
+
+
 func load_settings() -> void:
 	var cfg := ConfigFile.new()
 	if cfg.load(SAVE_PATH) == OK:
@@ -115,6 +145,11 @@ func load_settings() -> void:
 		music_volume = cfg.get_value("audio", "music_volume", music_volume)
 		difficulty = cfg.get_value("game", "difficulty", DEFAULT_DIFFICULTY)
 		first_run_done = cfg.get_value("app", "first_run_done", false)
+		outfit.clear()
+		var saved: Variant = cfg.get_value("character", "outfit", {})
+		if saved is Dictionary:
+			for k: Variant in saved:
+				outfit[StringName(str(k))] = StringName(str(saved[k]))
 	_apply_music_volume()
 
 
@@ -128,6 +163,7 @@ func save_settings() -> void:
 	cfg.set_value("audio", "music_volume", music_volume)
 	cfg.set_value("game", "difficulty", difficulty)
 	cfg.set_value("app", "first_run_done", first_run_done)
+	cfg.set_value("character", "outfit", outfit)
 	var err := cfg.save(SAVE_PATH)
 	if err != OK:
 		push_warning("Session: не удалось сохранить настройки (%s)" % error_string(err))

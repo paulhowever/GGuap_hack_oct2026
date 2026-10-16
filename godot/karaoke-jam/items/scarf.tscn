@@ -1,0 +1,94 @@
+[gd_scene format=3]
+
+[sub_resource type="StandardMaterial3D" id="mat_orange"]
+albedo_color = Color(1, 0.478, 0.239, 1)
+roughness = 0.95
+
+[sub_resource type="StandardMaterial3D" id="mat_cream"]
+albedo_color = Color(0.953, 0.902, 0.827, 1)
+roughness = 0.95
+
+[sub_resource type="TorusMesh" id="ring"]
+inner_radius = 0.05
+outer_radius = 0.088
+rings = 28
+ring_segments = 10
+
+[sub_resource type="TorusMesh" id="stripe"]
+inner_radius = 0.052
+outer_radius = 0.085
+rings = 28
+ring_segments = 10
+
+[sub_resource type="SphereMesh" id="knot"]
+radius = 0.026
+height = 0.052
+radial_segments = 14
+rings = 7
+
+[sub_resource type="BoxMesh" id="tail_long"]
+size = Vector3(0.04, 0.12, 0.014)
+
+[sub_resource type="BoxMesh" id="tail_short"]
+size = Vector3(0.04, 0.1, 0.014)
+
+[sub_resource type="BoxMesh" id="tail_stripe"]
+size = Vector3(0.042, 0.016, 0.016)
+
+[sub_resource type="BoxMesh" id="fringe"]
+size = Vector3(0.038, 0.014, 0.008)
+
+[node name="Scarf" type="Node3D"]
+
+[node name="RingTop" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.016, 0)
+scale = Vector3(1, 1.15, 1)
+mesh = SubResource("ring")
+surface_material_override/0 = SubResource("mat_orange")
+
+[node name="RingStripe" type="MeshInstance3D" parent="."]
+mesh = SubResource("stripe")
+surface_material_override/0 = SubResource("mat_cream")
+
+[node name="RingBottom" type="MeshInstance3D" parent="."]
+position = Vector3(0, -0.016, 0)
+scale = Vector3(1, 1.15, 1)
+mesh = SubResource("ring")
+surface_material_override/0 = SubResource("mat_orange")
+
+[node name="Knot" type="MeshInstance3D" parent="."]
+position = Vector3(0.025, -0.012, 0.078)
+mesh = SubResource("knot")
+surface_material_override/0 = SubResource("mat_orange")
+
+[node name="TailLong" type="MeshInstance3D" parent="."]
+position = Vector3(0.014, -0.078, 0.086)
+rotation_degrees = Vector3(-8, 0, 6)
+mesh = SubResource("tail_long")
+surface_material_override/0 = SubResource("mat_orange")
+
+[node name="Stripe" type="MeshInstance3D" parent="TailLong"]
+position = Vector3(0, -0.032, 0)
+mesh = SubResource("tail_stripe")
+surface_material_override/0 = SubResource("mat_cream")
+
+[node name="Fringe" type="MeshInstance3D" parent="TailLong"]
+position = Vector3(0, -0.066, 0)
+mesh = SubResource("fringe")
+surface_material_override/0 = SubResource("mat_cream")
+
+[node name="TailShort" type="MeshInstance3D" parent="."]
+position = Vector3(0.046, -0.068, 0.078)
+rotation_degrees = Vector3(-6, 0, -12)
+mesh = SubResource("tail_short")
+surface_material_override/0 = SubResource("mat_orange")
+
+[node name="Stripe" type="MeshInstance3D" parent="TailShort"]
+position = Vector3(0, -0.024, 0)
+mesh = SubResource("tail_stripe")
+surface_material_override/0 = SubResource("mat_cream")
+
+[node name="Fringe" type="MeshInstance3D" parent="TailShort"]
+position = Vector3(0, -0.056, 0)
+mesh = SubResource("fringe")
+surface_material_override/0 = SubResource("mat_cream")

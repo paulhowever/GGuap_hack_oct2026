@@ -1,0 +1,72 @@
+[gd_scene format=3]
+
+[sub_resource type="StandardMaterial3D" id="mat_hat"]
+albedo_color = Color(0.17, 0.14, 0.21, 1)
+roughness = 0.55
+
+[sub_resource type="StandardMaterial3D" id="mat_band"]
+albedo_color = Color(0.68, 0.17, 0.32, 1)
+roughness = 0.45
+
+[sub_resource type="StandardMaterial3D" id="mat_gold"]
+albedo_color = Color(1, 0.8, 0.3, 1)
+metallic = 0.5
+roughness = 0.3
+
+[sub_resource type="CylinderMesh" id="brim"]
+top_radius = 0.165
+bottom_radius = 0.165
+height = 0.012
+radial_segments = 40
+rings = 1
+
+[sub_resource type="TorusMesh" id="brim_edge"]
+inner_radius = 0.155
+outer_radius = 0.172
+rings = 40
+ring_segments = 8
+
+[sub_resource type="CylinderMesh" id="crown"]
+top_radius = 0.105
+bottom_radius = 0.095
+height = 0.12
+radial_segments = 32
+rings = 1
+
+[sub_resource type="CylinderMesh" id="band"]
+top_radius = 0.0985
+bottom_radius = 0.0975
+height = 0.035
+radial_segments = 32
+rings = 1
+
+[sub_resource type="BoxMesh" id="buckle"]
+size = Vector3(0.042, 0.03, 0.008)
+
+[node name="TopHat" type="Node3D"]
+
+[node name="Brim" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.006, 0)
+mesh = SubResource("brim")
+surface_material_override/0 = SubResource("mat_hat")
+
+[node name="BrimEdge" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.006, 0)
+scale = Vector3(1, 0.5, 1)
+mesh = SubResource("brim_edge")
+surface_material_override/0 = SubResource("mat_hat")
+
+[node name="Crown" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.072, 0)
+mesh = SubResource("crown")
+surface_material_override/0 = SubResource("mat_hat")
+
+[node name="Band" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.03, 0)
+mesh = SubResource("band")
+surface_material_override/0 = SubResource("mat_band")
+
+[node name="Buckle" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.03, 0.1)
+mesh = SubResource("buckle")
+surface_material_override/0 = SubResource("mat_gold")

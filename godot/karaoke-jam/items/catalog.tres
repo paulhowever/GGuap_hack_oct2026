@@ -1,0 +1,104 @@
+[gd_resource type="Resource" script_class="ItemCatalog" format=3]
+
+[ext_resource type="Script" path="res://items/item_catalog.gd" id="1_cat"]
+[ext_resource type="Script" path="res://items/item_def.gd" id="2_def"]
+[ext_resource type="PackedScene" path="res://items/cap.tscn" id="3_cap"]
+[ext_resource type="PackedScene" path="res://items/top_hat.tscn" id="4_hat"]
+[ext_resource type="PackedScene" path="res://items/crown.tscn" id="5_crown"]
+[ext_resource type="PackedScene" path="res://items/headphones.tscn" id="6_phones"]
+[ext_resource type="PackedScene" path="res://items/glasses.tscn" id="7_glasses"]
+[ext_resource type="PackedScene" path="res://items/scarf.tscn" id="8_scarf"]
+[ext_resource type="PackedScene" path="res://items/bow_tie.tscn" id="9_bow"]
+[ext_resource type="PackedScene" path="res://items/mic.tscn" id="10_mic"]
+[ext_resource type="PackedScene" path="res://items/medal.tscn" id="11_medal"]
+
+[sub_resource type="Resource" id="cap"]
+script = ExtResource("2_def")
+id = &"cap"
+display_name = "Кепка"
+slot = &"head"
+scene = ExtResource("3_cap")
+bone = &"DEF_BOODY"
+offset_position = Vector3(0, 0.592, 0)
+preview_rotation_deg = Vector3(15, 0, 0)
+
+[sub_resource type="Resource" id="top_hat"]
+script = ExtResource("2_def")
+id = &"top_hat"
+display_name = "Цилиндр"
+slot = &"head"
+scene = ExtResource("4_hat")
+bone = &"DEF_BOODY"
+offset_position = Vector3(0, 0.592, 0)
+preview_rotation_deg = Vector3(12, 0, 0)
+
+[sub_resource type="Resource" id="crown"]
+script = ExtResource("2_def")
+id = &"crown"
+display_name = "Корона"
+slot = &"head"
+scene = ExtResource("5_crown")
+bone = &"DEF_BOODY"
+offset_position = Vector3(0, 0.59, 0)
+preview_rotation_deg = Vector3(18, 0, 0)
+
+[sub_resource type="Resource" id="headphones"]
+script = ExtResource("2_def")
+id = &"headphones"
+display_name = "Наушники"
+slot = &"head"
+scene = ExtResource("6_phones")
+bone = &"DEF_BOODY"
+offset_position = Vector3(0, 0.592, 0)
+
+[sub_resource type="Resource" id="glasses"]
+script = ExtResource("2_def")
+id = &"glasses"
+display_name = "Очки"
+slot = &"eyes"
+scene = ExtResource("7_glasses")
+bone = &"DEF_BOODY"
+offset_position = Vector3(-0.01, 0.421, 0.158)
+
+[sub_resource type="Resource" id="scarf"]
+script = ExtResource("2_def")
+id = &"scarf"
+display_name = "Шарф"
+slot = &"neck"
+scene = ExtResource("8_scarf")
+bone = &"DEF_BOODY"
+offset_position = Vector3(0, 0.235, 0)
+preview_rotation_deg = Vector3(20, 0, 0)
+
+[sub_resource type="Resource" id="bow_tie"]
+script = ExtResource("2_def")
+id = &"bow_tie"
+display_name = "Бабочка"
+slot = &"neck"
+scene = ExtResource("9_bow")
+bone = &"DEF_BOODY"
+offset_position = Vector3(0, 0.235, 0.05)
+
+[sub_resource type="Resource" id="mic"]
+script = ExtResource("2_def")
+id = &"mic"
+display_name = "Микрофон"
+slot = &"hand"
+scene = ExtResource("10_mic")
+bone = &"hand_R"
+offset_position = Vector3(0, 0.045, 0)
+offset_rotation_deg = Vector3(0, 0, -90)
+preview_rotation_deg = Vector3(0, 0, -25)
+
+[sub_resource type="Resource" id="medal"]
+script = ExtResource("2_def")
+id = &"medal"
+display_name = "Медаль"
+slot = &"chest"
+scene = ExtResource("11_medal")
+bone = &"DEF_BOODY"
+offset_position = Vector3(0, 0.15, 0)
+
+[resource]
+script = ExtResource("1_cat")
+items = Array[ExtResource("2_def")]([SubResource("cap"), SubResource("top_hat"), SubResource("crown"), SubResource("headphones"), SubResource("glasses"), SubResource("scarf"), SubResource("bow_tie"), SubResource("mic"), SubResource("medal")])
