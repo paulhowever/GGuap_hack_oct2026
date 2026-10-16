@@ -4,15 +4,16 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator
 
+from app.board import avatar_of
+from app.ids import CLIENT_ID_PATTERN
 from app.store.db import get_player, upsert_player
 
 router = APIRouter(prefix="/api/v1")
-CLIENT_ID = r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
 AVATAR_MAX_BYTES = 4096
 
 
 class PlayerIn(BaseModel):
-    client_id: str = Field(pattern=CLIENT_ID)
+    client_id: str = Field(pattern=CLIENT_ID_PATTERN)
     nickname: str = Field(min_length=1, max_length=24)
     avatar: dict[str, Any] = Field(default_factory=dict)
 
@@ -26,7 +27,7 @@ class PlayerIn(BaseModel):
 
 
 def player_out(player) -> dict:
-    return {"client_id": player.client_id, "nickname": player.nickname, "avatar": json.loads(player.avatar)}
+    return {"client_id": player.client_id, "nickname": player.nickname, "avatar": avatar_of(player)}
 
 
 @router.post("/players")

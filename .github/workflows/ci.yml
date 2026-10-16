@@ -3,6 +3,8 @@ on:
   push:
     branches: [main]
   pull_request:
+permissions:
+  contents: read
 jobs:
   contracts:
     runs-on: ubuntu-latest
@@ -14,14 +16,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
-      - run: cd backend && uv sync --locked && uv run pytest -m "not gpu" || [ $? -eq 5 ]
+      - run: cd backend && uv sync --locked && uv run pytest -m "not gpu" && uv run ruff check . && uv run ruff format --check .
   pipeline:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg
-      - run: cd pipeline && uv sync --locked && uv run pytest -m "not gpu"
+      - run: cd pipeline && uv sync --locked && uv run pytest -m "not gpu" && uv run ruff check . && uv run ruff format --check .
   web:
     runs-on: ubuntu-latest
     steps:
@@ -29,4 +31,4 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: cd web && npm ci && npm test
+      - run: cd web && npm ci && npm test && git diff --exit-code vendor/

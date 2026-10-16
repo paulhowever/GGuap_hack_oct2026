@@ -34,7 +34,10 @@ async def check_f0(engine) -> str:
 
 
 async def check_songs(repo) -> str:
-    return f"{await asyncio.to_thread(repo.count)} songs"
+    n = await asyncio.to_thread(repo.count)
+    if repo.skipped:
+        raise RuntimeError(f"{n} songs, {len(repo.skipped)} broken: {', '.join(repo.skipped)}")
+    return f"{n} songs"
 
 
 async def check_pipeline(url: str) -> str:

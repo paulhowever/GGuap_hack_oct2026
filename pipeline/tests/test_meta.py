@@ -5,7 +5,7 @@ import yaml
 
 from refpipe.cli import main
 from refpipe.errors import MetaError
-from refpipe.meta import Work, dump_meta, load_meta, pd_ok, set_t0_ms
+from refpipe.meta import Work, load_meta, pd_ok, set_t0_ms
 
 REPO = Path(__file__).resolve().parents[2]
 
@@ -117,11 +117,44 @@ def test_voice_required(tmp_path, demo_data):
 def test_dump_and_set_t0(tmp_path, demo_data):
     meta = load_meta(write_meta(tmp_path, demo_data))
     out = tmp_path / "copy.yaml"
-    dump_meta(meta, out)
+    out.write_text(yaml.safe_dump(demo_data, allow_unicode=True, sort_keys=False), encoding="utf-8")
     assert load_meta(out) == meta
     set_t0_ms(out, 61200)
     assert load_meta(out).source.t0_ms == 61200
     assert "Демо-гамма" in out.read_text(encoding="utf-8")
+
+
+def test_set_t0_keeps_comments_and_long_lines(tmp_path):
+    attribution = "«Калинка», муз. и сл. И. Ларионова (PD); " + "аранжировка и запись huap team " * 3
+    assert len(attribution) >= 120
+    text = (REPO / "pipeline" / "examples" / "meta.example.yaml").read_text(encoding="utf-8")
+    text = text.replace("  t0_ms: 0\n", "  t0_ms: 0  # секунда начала фрагмента\n")
+    text = "# мета песни, правится руками\n" + text
+    text = text.replace(
+        "  attribution: «Калинка», муз. и сл. И. Ларионова (PD); аранжировка и запись huap team, CC BY 4.0\n",
+        f"  attribution: {attribution}\n",
+    )
+    path = tmp_path / "meta.yaml"
+    path.write_text(text, encoding="utf-8")
+    set_t0_ms(path, 61200)
+    after = path.read_text(encoding="utf-8")
+    assert after == text.replace("t0_ms: 0  #", "t0_ms: 61200  #")
+    assert "# мета песни, правится руками" in after
+    assert f"  attribution: {attribution}\n" in after
+    meta = load_meta(path)
+    assert meta.source.t0_ms == 61200
+    assert meta.license.attribution == attribution.strip()
+
+
+def test_set_t0_without_t0_line_keeps_long_lines(tmp_path, demo_data):
+    attribution = " ".join(["huap team"] * 15)
+    demo_data["license"]["attribution"] = attribution
+    path = write_meta(tmp_path, demo_data)
+    set_t0_ms(path, 3000)
+    meta = load_meta(path)
+    assert meta.source.t0_ms == 3000
+    assert meta.license.attribution == attribution
+    assert f"  attribution: {attribution}\n" in path.read_text(encoding="utf-8")
 
 
 def test_missing_file_is_meta_error(tmp_path):

@@ -11,7 +11,7 @@
   "version": "score-v1",
   "latency": {
     "hint_ms": 0.0,
-    "estimated_ms": -100.0,
+    "estimated_ms": 0.0,
     "applied_ms": 0.0,
     "residual_ms": 0.0,
     "confidence": 0.0

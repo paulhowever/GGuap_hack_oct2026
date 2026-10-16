@@ -1,18 +1,16 @@
-from typing import Literal
-
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from app.anticheat.session import issue
-from app.api.players import CLIENT_ID
+from app.ids import CLIENT_ID_PATTERN, SONG_ID_PATTERN, Difficulty
 
 router = APIRouter(prefix="/api/v1")
 
 
 class SessionIn(BaseModel):
-    song_id: str = Field(pattern=r"^[a-z0-9_-]{1,64}$")
-    client_id: str | None = Field(default=None, pattern=CLIENT_ID)
-    difficulty: Literal["easy", "normal", "hard"] = "normal"
+    song_id: str = Field(pattern=SONG_ID_PATTERN)
+    client_id: str | None = Field(default=None, pattern=CLIENT_ID_PATTERN)
+    difficulty: Difficulty = "normal"
 
 
 @router.post("/sessions")

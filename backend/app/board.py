@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.store.db import players_by_id
-from app.store.models import Take
+from app.store.models import Player, Take
 
 
 @dataclass(frozen=True)
@@ -18,6 +18,14 @@ class Entry:
     total: int
     grade: str
     at: datetime
+
+
+def display_name(profile: Player | None, player: str) -> str:
+    return profile.nickname if profile else player
+
+
+def avatar_of(profile: Player | None) -> dict | None:
+    return json.loads(profile.avatar) if profile else None
 
 
 def player_key(client_id: str | None, player: str) -> str:
@@ -71,8 +79,8 @@ async def leaderboard(
         items.append(
             {
                 **public,
-                "player": profile.nickname if profile else row["player"],
-                "avatar": json.loads(profile.avatar) if profile else None,
+                "player": display_name(profile, row["player"]),
+                "avatar": avatar_of(profile),
                 "me": client_id is not None and row["client_id"] == client_id,
             }
         )
@@ -81,7 +89,7 @@ async def leaderboard(
 
 async def display_names(sessions: async_sessionmaker, takes: list[Take]) -> dict[str, str]:
     profiles = await players_by_id(sessions, [t.client_id for t in takes if t.client_id])
-    return {t.id: profiles[t.client_id].nickname if t.client_id in profiles else t.player for t in takes}
+    return {t.id: display_name(profiles.get(t.client_id), t.player) for t in takes}
 
 
 async def placement(sessions: async_sessionmaker, take: Take) -> dict | None:

@@ -9,7 +9,7 @@
 | `tap.js` | AudioWorklet: pitchy (окно 2048, хоп 512) и PCM для записи дубля |
 | `config.js` | `window.VOICE_CONFIG`: `api`, `lag_ms`, `difficulty`, `music_volume`, `aec`, `clarity_min`, `tol_cents`, `tap_url` |
 | `dev.html` | Тестовая страница без Godot |
-| `lib/` | Чистая логика: WAV, даунсэмплинг, тайминг, калибровка, мок-кадры, хоппер питча |
+| `lib/` | Чистая логика: bridge, errors, queue, timing, calibration, recorder, resample, wav, meta, upload, judge, session, profile, debug, mock, hopper, pitch, num, scoring, http |
 | `vendor/pitchy.bundle.js` | ESM-бандл pitchy + fft.js, собирается `npm run vendor` и коммитится |
 
 ## Команды
@@ -23,11 +23,11 @@
 
 ## Проверка без Godot
 
-1. `make backend`: FastAPI отдаёт `web/` на `/`.
+1. `make backend`: FastAPI отдаёт `web/` на `/`. `make demo` отдаёт `dist/web` (игру Godot).
 2. http://localhost:8000/dev.html, нажать «Нажми, чтобы начать», разрешить микрофон.
 3. Без микрофона: http://localhost:8000/dev.html?mock=perfect (ещё `offkey`, `octave`, `late200`, `silent`).
    `?mock=silent` отдаёт `integrity.status = incomplete` и `completion.ratio = 0` для проверки экрана «не в рейтинге».
-4. Без бэкенда: `cd web && python3 -m http.server 8000`. Мок (`?mock=…`) и живой питч работают и на статическом сервере; бэкенд из ветки pasha/backend нужен только настоящему движку для `load_song` и `submit`.
+4. Без бэкенда: `cd web && python3 -m http.server 8000`. Мок (`?mock=…`) и живой питч работают и на статическом сервере; бэкенд (`make backend`) нужен только настоящему движку для `load_song` и `submit`.
 5. Отладка: добавить `?debug=1` (можно вместе с `?mock=…`). В правом нижнем углу появится оверлей: версии api и web, режим, sr, задержки, текущий тон, кадры/с, client_id, статус токена сессии, последний вердикт ноты и integrity: последняя строка оверлея имеет вид `integrity <status> · <ratio>% · <take_id>`. Alt+Shift+D копирует его текст в буфер обмена для баг-репорта. Строка `web —` значит, что статика отдаётся из `web/` без `make assemble`.
 
 ## Для Godot (шелл и VoiceBridge)
@@ -40,13 +40,18 @@
 - При `on_unlocked.bt_suspect` показать баннер: «Похоже на Bluetooth-наушники: задержка вывода ~X мс. В первой песне точки могут чуть смещаться, дальше задержка подстроится сама. Лучше пой в микрофон ноутбука, а не наушников.»
 - Реакции продюсера — по `on_note_judged.hit`; `onset_ms` только для подсказок.
 - Не вызывать `configure({lag_ms})` при каждом запуске: источник станет `config`, и автоподстройка выключится.
+- `stop()` вручную не шлёт `on_song_end` и вердикты оставшихся нот; после «Выйти» сразу вызывать `submit()`.
 
 ## Задержка
 
-`lag_ms` берётся по приоритету: `configure`/`calibrate` в текущей сессии, затем `lag_ms` в `config.js` (на демо зашивается после калибровки на целевой цепочке), затем `localStorage['voice.lag_ms']`, затем оценка `outputLatency + baseLatency + latency трека` (0,02 с, если браузер её не отдаёт; при `bt_suspect` вместо трека +200 мс). Калибровка не удалась, если в `on_calibrated` `hits < 5`: `lag_ms` тогда прежний. Источник задержки (`calibrated`, `config`, `estimated`, `auto`) хранится в `localStorage['voice.lag_src']`, виден в `_state().lag_source` и уходит в meta как `lag_source`: бэкенд обрезает свою оценку до `lag_ms ± 120 мс` только для `calibrated`. `lag_ms` из `config.js` (и из `configure`) приходит как `config`, поэтому вокруг него бэкенд не обрезает. В режиме наушников щелчки идут через 0,8 с и задержка принимается до 700 мс.
+`lag_ms` берётся по приоритету: `configure`/`calibrate` в текущей сессии, затем `lag_ms` в `config.js` (на демо зашивается после калибровки на целевой цепочке), затем `localStorage['voice.lag_ms']`, затем оценка `outputLatency + baseLatency + latency трека` (0,02 с, если браузер её не отдаёт; при `bt_suspect` вместо трека +200 мс). Калибровка не удалась, если в `on_calibrated` `hits < 5`: `lag_ms` тогда прежний. Источник задержки (`calibrated`, `config`, `estimated`, `auto`) хранится в `localStorage['voice.lag_src']`, виден в `_state().lag_source` и уходит в meta как `lag_source`: бэкенд обрезает свою оценку до `lag_ms ± 120 мс` только для `calibrated`. `lag_ms` из `config.js` (и из `configure`) приходит как `config`, поэтому вокруг него бэкенд не обрезает. В режиме наушников щелчки идут через 0,8 с и задержка принимается до 700 мс. `configure({lag_ms})` во время песни действует со следующего дубля.
 
 Автоподстройка (ADR-021): перед `on_result`, если `latency.confidence ≥ 0,2`, движок сохраняет `latency.estimated_ms` с источником `auto` — первое значение как есть, дальше среднее с прежним; выброс дальше 150 мс применяется только со второго подряд. Новая задержка действует со следующей песни. Подстройка работает, только пока источник `estimated` или `auto`: калибровку и `config` она не трогает. Пока источник `estimated`, живой судья засчитывает ноте кадры в 150 мс до и после неё. В dev.html калибровка и lag ±10 спрятаны в «Точная подстройка», там же «Сбросить задержку» (чистит `voice.lag_ms` и `voice.lag_src` и перезагружает страницу).
 
 ## План Б
 
-Кнопки «Скачать WAV» и «Скачать meta» в dev.html сохраняют `take.wav` и `take.meta.json`, по файлу на клик: Safari теряет одно из двух скачиваний с одного клика. Положить их в `web/mock/`, открыть игру с `?mock=perfect` и нажать Alt+Shift+R: дубль уйдёт в настоящий `POST /api/v1/takes`.
+Кнопки «Скачать WAV» и «Скачать meta» в dev.html сохраняют `take.wav` и `take.meta.json`, по файлу на клик: Safari теряет одно из двух скачиваний с одного клика. Положить их в `web/mock/` (`make demo` копирует их в `dist/web/mock`), открыть игру с `?mock=perfect` и нажать Alt+Shift+R: дубль уйдёт в настоящий `POST /api/v1/takes`.
+
+- Результат всегда `unverified` (токена нет): в рейтинг не идёт, вызов на дуэль из него не создать (422 `challenge_take_not_ok`).
+- Повторная отправка того же WAV в ту же базу даёт `suspect` с флагом `duplicate`. Поэтому дубль плана Б только скачать, «Отправить» для него не нажимать.
+- Репетировать с `KARAOKE_DATA_DIR=/tmp/rehearsal` (или стереть `data/` перед выходом на сцену); на сцене нажать один раз.

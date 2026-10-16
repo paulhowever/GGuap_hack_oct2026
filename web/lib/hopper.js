@@ -1,5 +1,7 @@
+import { HOP, WIN } from './timing.js'
+
 export class PitchHopper {
-  constructor({ win = 2048, hop = 512, detect, minRms = 1e-4 }) {
+  constructor({ win = WIN, hop = HOP, detect, minRms = 1e-4 }) {
     this.W = win
     this.H = hop
     this.detect = detect

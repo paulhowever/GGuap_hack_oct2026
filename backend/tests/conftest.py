@@ -9,7 +9,7 @@ from app.core.config import ROOT, Settings
 from app.main import create_app
 from app.scoring.config import load_scoring_config
 from app.scoring.synth import synth_take
-from app.store.db import save_take
+from app.store.db import add_row
 from app.store.models import Take
 
 
@@ -120,7 +120,7 @@ def seed(client):
             integrity_status=status,
             result_json=json.dumps({"take_id": take_id}),
         )
-        client.portal.call(save_take, client.app.state.sessions, take)
+        client.portal.call(add_row, client.app.state.sessions, take)
         return take
 
     return go

@@ -91,3 +91,24 @@ def test_cli_preview_rejects_malformed_reference(tmp_path, capsys, content, mess
     assert err.startswith("refpipe: ")
     assert message in err
     assert not (tmp_path / "p.wav").exists()
+
+
+def test_cli_apply_marks_check_stale(demo_dir, tmp_path):
+    assert main(["compile", str(demo_dir), "--duration", "12"]) == 0
+    (demo_dir / "check.json").write_text('{"pass": true}\n', encoding="utf-8")
+    assert (
+        main(["preview", str(demo_dir), "--shift-ms", "20", "--apply", "--out", str(tmp_path / "p.wav")]) == 0
+    )
+    assert json.loads((demo_dir / "check.json").read_text(encoding="utf-8")) == {
+        "schema": 1,
+        "song_id": "demo",
+        "pass": False,
+        "stale": "rerun refpipe compile and check",
+    }
+
+
+def test_cli_preview_without_apply_keeps_check(demo_dir, tmp_path):
+    assert main(["compile", str(demo_dir), "--duration", "12"]) == 0
+    (demo_dir / "check.json").write_text('{"pass": true}\n', encoding="utf-8")
+    assert main(["preview", str(demo_dir), "--shift-ms", "20", "--out", str(tmp_path / "p.wav")]) == 0
+    assert json.loads((demo_dir / "check.json").read_text(encoding="utf-8")) == {"pass": True}

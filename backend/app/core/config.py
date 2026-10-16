@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     git_sha: str = "dev"
     secret: str = ""
+    public_url: str | None = None
 
 
 @lru_cache

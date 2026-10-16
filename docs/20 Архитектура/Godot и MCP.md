@@ -48,8 +48,8 @@ func stop() -> void:
 	if _mock: _mock.stop() else: _js.stop()
 func submit(player: String, challenge_id := "") -> void:
 	if _mock: _mock.submit(player, challenge_id) else: _js.submit(player, challenge_id)
-func calibrate() -> void:
-	if _mock: _mock.calibrate() else: _js.calibrate()
+func calibrate(mode := "speakers") -> void:
+	if _mock: _mock.calibrate(mode) else: _js.calibrate(mode)
 func client_id() -> String:
 	if _mock:
 		return "00000000-0000-4000-8000-000000000000"
@@ -58,7 +58,7 @@ func client_id() -> String:
 func poll() -> Dictionary:
 	var s: String = _mock.poll() if _mock else str(_js.poll())
 	var p = JSON.parse_string(s)
-	return p if p is Dictionary else {"t_now": 0.0, "state": "idle", "frames": []}
+	return p if p is Dictionary else {"t_now": 0.0, "state": "idle", "level": 0.0, "frames": []}
 func url_param(k: String) -> String:
 	return str(JavaScriptBridge.eval("new URLSearchParams(location.search).get('%s')||''" % k)) if _js else ""
 func _on_js(args: Array) -> void:

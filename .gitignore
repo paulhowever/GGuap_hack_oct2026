@@ -19,3 +19,5 @@ docs/.obsidian/appearance.json
 docs/.obsidian/hotkeys.json
 .coverage
 songs-src/
+web/mock/take.wav
+web/mock/take.meta.json

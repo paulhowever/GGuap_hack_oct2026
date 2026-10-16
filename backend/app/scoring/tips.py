@@ -15,6 +15,14 @@ PRIORITY = {
     "praise": 7,
 }
 SEVERITY = {"octave_info": "info", "praise": "good"}
+SILENCE_COVERAGE = 0.2
+GOLDEN_MISS_HIT = 0.5
+FLAT_SHARE = 0.6
+FLAT_TOL_FRAC = 0.6
+TIMING_MS = 120
+UNSTABLE_D_S = 0.4
+UNSTABLE_C = 60
+PRAISE_AT = 90
 
 
 def short(text: str, n: int = 22) -> str:
@@ -25,46 +33,56 @@ def r10(x: float) -> int:
     return int(round(abs(x) / 10.0) * 10)
 
 
-def line_tip(line: LineMetrics, notes: list[NoteMetrics], tol: float) -> tuple[str, str] | None:
+def line_tip(
+    line: LineMetrics, notes: list[NoteMetrics], tol: float, praise_at: float = PRAISE_AT
+) -> tuple[str, str] | None:
     s = short(line.text)
-    if line.coverage < 0.2:
+    if line.coverage < SILENCE_COVERAGE:
         return "silence", f"«{s}» почти не слышно — пой громче или ближе к микрофону"
-    golden = [n for n in notes if n.type == "golden" and n.hit < 0.5]
+    golden = [n for n in notes if n.type == "golden" and n.hit < GOLDEN_MISS_HIT]
     if golden:
-        return "golden_miss", f"золотая нота «{golden[0].syl.strip()}» в «{s}» мимо — за неё двойные очки"
+        syl = golden[0].syl.replace("~", "").strip()
+        if syl:
+            return "golden_miss", f"золотая нота «{syl}» в «{s}» мимо — за неё двойные очки"
+        return "golden_miss", f"золотая нота в «{s}» мимо — за неё двойные очки"
     cents = [n.cents for n in notes if n.cents is not None]
     if cents:
         med = float(np.median(cents))
         same = sum(1 for c in cents if np.sign(c) == np.sign(med)) / len(cents)
-        if abs(med) > 0.6 * tol and same >= 0.6:
+        if abs(med) > FLAT_TOL_FRAC * tol and same >= FLAT_SHARE:
             word, code = ("ниже", "flat") if med < 0 else ("выше", "sharp")
             return code, f"«{s}» {word} на ~{r10(med)} центов"
     onsets = [n.onset_ms for n in notes if n.onset_ms is not None]
     if onsets:
         mean = float(np.mean(onsets))
-        if mean > 120:
+        if mean > TIMING_MS:
             return "late", f"«{s}» опаздываешь на ~{r10(mean)} мс"
-        if mean < -120:
+        if mean < -TIMING_MS:
             return "early", f"«{s}» спешишь на ~{r10(mean)} мс"
-    if any(n.d > 0.4 and n.stab_c is not None and n.stab_c > 60 for n in notes):
+    if any(n.d > UNSTABLE_D_S and n.stab_c is not None and n.stab_c > UNSTABLE_C for n in notes):
         return "unstable", f"«{s}» длинные ноты гуляют — держи ровнее"
-    if line.score >= 90:
+    if line.score >= praise_at:
         return "praise", f"«{s}» — отлично!"
     return None
 
 
 def build_tips(
-    notes: list[NoteMetrics], lines: list[LineMetrics], latency: Latency, octave: int, tol: float
+    notes: list[NoteMetrics],
+    lines: list[LineMetrics],
+    latency: Latency,
+    octave: int,
+    tol: float,
+    praise_at: float = PRAISE_AT,
 ) -> tuple[list[dict], dict[int, str]]:
     candidates: list[dict] = []
     per_line: dict[int, str] = {}
     for line in lines:
-        found = line_tip(line, [n for n in notes if n.line == line.i], tol)
+        found = line_tip(line, [n for n in notes if n.line == line.i], tol, praise_at)
         if found:
             code, text = found
             per_line[line.i] = text
             candidates.append({"code": code, "sev": SEVERITY.get(code, "warn"), "line": line.i, "text": text})
-    if abs(latency.residual_ms) > 120:
+    if abs(latency.residual_ms) > TIMING_MS:
         code = "late" if latency.residual_ms > 0 else "early"
         word = "позже" if code == "late" else "раньше"
         ms = r10(latency.residual_ms)

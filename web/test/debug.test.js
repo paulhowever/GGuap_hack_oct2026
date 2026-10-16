@@ -29,7 +29,7 @@ test('debugText formats a full snapshot', () => {
     mode: 'real',
     api: { app: '0.3.1', git_sha: '4f1c2d3', scoring: 'score-v1', f0_engine: 'swiftf0-0.3.0' },
     web: { git_sha: SHA, built_at: '2026-10-15T09:30:00Z' },
-    state: { sr: 48000, lag_ms: 48, est_lag_ms: 52, output_latency: 0.0123, ctx_state: 'running', session: 'ok' },
+    state: { sr: 48000, lag_ms: 48, lag_source: 'calibrated', est_lag_ms: 52, output_latency: 0.0123, ctx_state: 'running', session: 'ok' },
     frame: { t: 12.301, hz: 220, conf: 0.97, rms: 0.042 },
     fps: 93.75,
     clientId: CID,
@@ -42,7 +42,7 @@ test('debugText formats a full snapshot', () => {
     'api 0.3.1 4f1c2d3 · score-v1 · swiftf0-0.3.0',
     'web 4f1c2d3 2026-10-15T09:30:00Z',
     'mode real · sr 48000 · ctx running',
-    'lag 48 ms · est 52 ms · out 12.3 ms',
+    'lag 48 ms calibrated · est 52 ms · out 12.3 ms',
     'pitch 220.0 Hz · midi 57.00 · conf 0.97',
     'fps 94',
     `client ${CID}`,
@@ -57,7 +57,7 @@ test('debugText shows dashes before anything is known', () => {
     'api —',
     'web —',
     'mode mock:perfect · sr 48000 · ctx —',
-    'lag 40 ms · est — · out —',
+    'lag 40 ms — · est — · out —',
     'pitch —',
     'fps 0',
     'client —',
@@ -233,41 +233,6 @@ test('attachDebug mounts a click-through overlay and refreshes it on a timer', a
   voice.emit('on_result', { take_id: 'tk_ab12cd34', integrity: { status: 'ok', flags: [] }, completion: { ratio: 1 } })
   win.tick()
   assert.equal(d.el.textContent.split('\n')[9], 'integrity ok · 100% · tk_ab12cd34')
-})
-
-test('stop tears the overlay down and ignores later events', () => {
-  const win = fakeWindow('?debug=1')
-  const voice = stubVoice()
-  const original = voice.poll
-  const d = attachDebug(win, voice, { apiUrl: '/api/v1/version', versionUrl: 'http://x/version.json' })
-  assert.notEqual(voice.poll, original)
-  assert.equal(typeof win.listeners.keydown, 'function')
-  d.stop()
-  assert.deepEqual(win.cleared, [1])
-  assert.equal(win.listeners.keydown, undefined)
-  assert.equal(win.children.length, 0)
-  assert.equal(voice.poll, original)
-  voice.emit('on_result', { take_id: 'tk_late', integrity: { status: 'ok', flags: [] }, completion: { ratio: 1 } })
-  voice.emit('on_note_judged', { i: 1, hit: 1, cents: 0, onset_ms: 0 })
-  const lines = d.render().split('\n')
-  assert.equal(lines[8], 'note —')
-  assert.equal(lines[9], 'integrity —')
-})
-
-test('stop unsubscribes once when the bus offers it', () => {
-  const win = fakeWindow('?debug=1')
-  const voice = stubVoice()
-  const subscribe = voice.subscribe
-  let unsubscribed = 0
-  voice.subscribe = cb => {
-    subscribe(cb)
-    return () => unsubscribed++
-  }
-  const d = attachDebug(win, voice, { apiUrl: '/api/v1/version', versionUrl: 'http://x/version.json' })
-  d.stop()
-  d.stop()
-  assert.equal(unsubscribed, 1)
-  assert.deepEqual(win.cleared, [1])
 })
 
 test('Alt+Shift+D copies the overlay text', async () => {

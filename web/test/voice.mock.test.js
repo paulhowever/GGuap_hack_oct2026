@@ -182,3 +182,124 @@ test('plan b uploads the saved take without a session token', async () => {
   assert.deepEqual(Object.keys(sent).slice(0, 3), ['song_id', 'client_id', 'session_token'])
   assert.equal(voice._state().session, 'none')
 })
+
+const webMock = name => JSON.parse(readFileSync(new URL(`../mock/${name}`, import.meta.url)))
+const CHALLENGE_KEYS = ['id', 'opponent', 'opponent_total', 'delta', 'verdict', 'lines_won', 'lines_lost']
+
+test('submit with a challenge id compares against a synthetic owner like the backend', async () => {
+  for (const [mode, file, verdict] of [['perfect', 'result.perfect.json', 'win'], ['offkey', 'result.offkey.json', 'lose']]) {
+    const r = webMock(file)
+    const { env, voice, last } = setup(mode, { 'mock/demo.reference.json': ref, [`mock/${file}`]: r })
+    await voice.load_song('demo')
+    voice.submit('Паша', 'ab12cd')
+    await env.advance(500)
+    const c = last('on_result').challenge
+    assert.deepEqual(Object.keys(c), CHALLENGE_KEYS)
+    assert.equal(c.id, 'ab12cd')
+    assert.equal(c.opponent, 'Соперник')
+    assert.equal(c.opponent_total, 7320)
+    assert.equal(c.delta, r.score.total - 7320)
+    assert.equal(c.verdict, verdict)
+    assert.equal(Math.sign(c.delta), verdict === 'win' ? 1 : -1)
+    assert.equal(c.lines_won, r.lines.filter(l => l.score > 75).length)
+    assert.equal(c.lines_lost, r.lines.filter(l => l.score < 75).length)
+  }
+})
+
+test('mock results carry a leaderboard except the incomplete silent take', () => {
+  for (const m of ['offkey', 'octave', 'late200']) assert.deepEqual(webMock(`result.${m}.json`).leaderboard, { rank: 2, of: 5, personal_best: false }, m)
+  const silent = webMock('result.silent.json')
+  assert.equal(silent.integrity.status, 'incomplete')
+  assert.equal(silent.completion.ratio, 0)
+  assert.equal(silent.leaderboard, null)
+  assert.equal(silent.latency.estimated_ms, 0)
+})
+
+test('submit and calibrate return promises that settle when the event fires', async () => {
+  const { env, voice, last } = setup()
+  await voice.load_song('demo')
+  const sent = voice.submit('Паша', '')
+  assert.equal(typeof sent?.then, 'function')
+  await env.advance(500)
+  assert.equal(await sent, true)
+  assert.ok(last('on_result'))
+  const cal = voice.calibrate('speakers')
+  assert.equal(typeof cal?.then, 'function')
+  await env.advance(1000)
+  assert.equal(await cal, true)
+  const missing = setup('perfect', { 'mock/demo.reference.json': ref })
+  await missing.voice.load_song('demo')
+  const failed = missing.voice.submit('Паша', '')
+  await missing.env.advance(500)
+  assert.equal(await failed, false)
+  assert.equal(missing.last('on_error').code, 'net')
+})
+
+test('a superseded load_song returns false and emits nothing', async () => {
+  const { voice, events } = setup('perfect', { 'mock/a.reference.json': { ...ref, id: 'a' }, 'mock/b.reference.json': { ...ref, id: 'b' } })
+  const [a, b] = await Promise.all([voice.load_song('a'), voice.load_song('b')])
+  assert.equal(a, false)
+  assert.equal(b, true)
+  assert.deepEqual(events.map(([n, p]) => [n, p.id]), [['on_ready', 'b']])
+  const gone = setup('perfect', { 'mock/b.reference.json': { ...ref, id: 'b' } })
+  const [x, y] = await Promise.all([gone.voice.load_song('nope'), gone.voice.load_song('b')])
+  assert.equal(x, false)
+  assert.equal(y, true)
+  assert.deepEqual(gone.events.map(([n]) => n), ['on_ready'])
+})
+
+test('on_result reports the loaded song, the difficulty and the cleaned name', async () => {
+  const { env, voice, last } = setup('perfect', { 'mock/other.reference.json': { ...ref, id: 'other' }, 'mock/result.perfect.json': result })
+  voice.configure('{"difficulty":"hard"}')
+  await voice.load_song('other')
+  voice.submit('', '')
+  await env.advance(500)
+  assert.equal(last('on_result').difficulty, 'hard')
+  assert.equal(last('on_result').song_id, 'other')
+  assert.equal(last('on_result').player, 'Игрок')
+  voice.submit('я'.repeat(30), '')
+  await env.advance(500)
+  assert.equal(Array.from(last('on_result').player).length, 24)
+  assert.deepEqual(Object.keys(last('on_result')), Object.keys(result))
+})
+
+test('configure ignores an unknown difficulty', async () => {
+  const { env, voice, last } = setup()
+  voice.configure('{"difficulty":"hard"}')
+  voice.configure('{"difficulty":"bogus"}')
+  voice.configure('{"difficulty":"constructor"}')
+  await voice.load_song('demo')
+  assert.deepEqual(last('on_ready').scoring, { tol_cents: 60 })
+  voice.submit('Паша', '')
+  await env.advance(500)
+  assert.equal(last('on_result').difficulty, 'hard')
+})
+
+test('plan b posts the current client id and the cleaned name', async () => {
+  for (const stored of ['11111111-2222-4333-8444-555555555555', null]) {
+    let sent
+    const env = {
+      ...fakeEnv({}),
+      crypto,
+      FormData,
+      Blob,
+      AbortController,
+      async fetch(url, init) {
+        const u = String(url)
+        if (u.endsWith('mock/take.wav')) return { ok: true, arrayBuffer: async () => new ArrayBuffer(44) }
+        if (u.endsWith('mock/take.meta.json')) return { ok: true, json: async () => ({ song_id: 'demo', client_id: stored, session_token: 'used-token', player: '  ' }) }
+        if (u.endsWith('/api/v1/takes')) {
+          sent = JSON.parse(init.body.get('meta'))
+          return { ok: true, json: async () => ({ take_id: 'tk_b' }) }
+        }
+        return { ok: false, status: 404 }
+      }
+    }
+    const voice = createMockVoice('perfect', CFG, env)
+    assert.equal(await voice._planB(), true)
+    assert.match(voice.client_id(), /^[0-9a-f-]{36}$/)
+    assert.equal(sent.client_id, voice.client_id())
+    assert.equal(sent.session_token, null)
+    assert.equal(sent.player, 'Игрок')
+  }
+})

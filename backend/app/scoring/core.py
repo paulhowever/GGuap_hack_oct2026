@@ -15,6 +15,12 @@ ONSET_PRE_S = 0.15
 STAB_SKIP_S = 0.08
 STAB_WIN = 15
 CHART_STEP = 2
+LINE_PITCH_W = 0.7
+LINE_RHYTHM_W = 0.3
+PERFECT_HIT = 0.9
+ONSET_WIN_MAX_S = 0.4
+ONSET_WIN_FRAC = 0.6
+ONSET_TOL_EXTRA_C = 50
 
 
 def note_dc(midi: np.ndarray, voiced: np.ndarray, target: float) -> np.ndarray:
@@ -23,7 +29,7 @@ def note_dc(midi: np.ndarray, voiced: np.ndarray, target: float) -> np.ndarray:
 
 def find_onset(t, ok, t0: float, d: float, prev_end: float | None) -> float | None:
     start = t0 - ONSET_PRE_S if prev_end is None else max(t0 - ONSET_PRE_S, prev_end)
-    window = np.flatnonzero((t >= start) & (t <= t0 + min(0.4, 0.6 * d)))
+    window = np.flatnonzero((t >= start) & (t <= t0 + min(ONSET_WIN_MAX_S, ONSET_WIN_FRAC * d)))
     for k in window:
         if k + 2 < ok.size and ok[k] and ok[k + 1] and ok[k + 2]:
             return round(float((t[k] - t0) * 1000.0), 1)
@@ -53,10 +59,10 @@ def measure_note(
     coverage = float(sung.sum() / n) if n else 0.0
     hit = float((sung & (np.abs(dc) <= tol)).sum() / n) if pitched and n else coverage
     cents = round(float(np.median(dc[sung])), 1) if pitched and sung.any() else None
-    onset_ok = grid.voiced & (np.abs(dc) <= tol + 50) if pitched else grid.voiced
+    onset_ok = grid.voiced & (np.abs(dc) <= tol + ONSET_TOL_EXTRA_C) if pitched else grid.voiced
     onset = find_onset(grid.t, onset_ok, t0, note["d"], prev_end)
     stab = stability(grid.t, grid.voiced, dc, t0, t1) if pitched else None
-    perfect = hit >= 0.9 and onset is not None and abs(onset) <= cfg.onset_ok_ms
+    perfect = hit >= PERFECT_HIT and onset is not None and abs(onset) <= cfg.onset_ok_ms
     return NoteMetrics(
         i=i,
         line=line,
@@ -118,11 +124,13 @@ def note_points(pairs: list[tuple[dict, NoteMetrics]], cfg: ScoringConfig) -> li
     return out
 
 
-def octave_shift(grid: Grid, ref_midi: np.ndarray) -> int:
+def octave_shift(grid: Grid, ref_midi: np.ndarray, tol: float) -> int:
     both = grid.voiced & ~np.isnan(ref_midi)
-    if both.sum() < 10:
+    diff = grid.midi[both] - ref_midi[both]
+    ok = np.abs(fold_cents(100.0 * diff)) <= tol
+    if ok.sum() < 10:
         return 0
-    return int(round(float(np.median(grid.midi[both] - ref_midi[both])) / 12.0))
+    return int(np.clip(round(float(np.median(diff[ok])) / 12.0), -1, 1))
 
 
 def chart(ref: dict, grid: Grid) -> dict:
@@ -176,7 +184,7 @@ def score_take(
         lp = [(n, m) for n, m in pairs if m.line == line["i"]]
         p, r, _ = aggregate(lp, cfg)
         cov = float(np.mean([m.coverage for _, m in lp])) if lp else 0.0
-        score = round(100 * (0.7 * p + 0.3 * r))
+        score = round(100 * (LINE_PITCH_W * p + LINE_RHYTHM_W * r))
         lines.append(LineMetrics(line["i"], line["text"], score, cfg.line_grade(score), p, r, cov))
     bounds = {x["i"]: (x["t0"], x["t1"]) for x in ref["lines"]}
     result = {
@@ -219,9 +227,16 @@ def score_take(
         ],
         "chart": chart(ref, grid),
         "tips": [],
-        "octave_shift": octave_shift(grid, ref_midi),
+        "octave_shift": octave_shift(grid, ref_midi, tol),
     }
-    tips, per_line = build_tips([m for _, m in pairs], lines, latency, result["octave_shift"], tol)
+    tips, per_line = build_tips(
+        [m for _, m in pairs],
+        lines,
+        latency,
+        result["octave_shift"],
+        tol,
+        praise_at=cfg.line_grades.get("Perfect", 90),
+    )
     result["tips"] = tips
     for item in result["lines"]:
         item["tip"] = per_line.get(item["i"])

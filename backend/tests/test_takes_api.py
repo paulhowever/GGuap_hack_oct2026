@@ -203,3 +203,43 @@ def test_lag_source_decides_the_clip(submit, caplog, source, applied):
 def test_unknown_lag_source_is_bad_meta(client, demo_ref):
     r = post(client, wav_bytes(synth_take(demo_ref)), meta(lag_source="guess"))
     assert r.status_code == 422
+
+
+def encode(x, sr=16000, fmt="WAV", subtype="PCM_16"):
+    buf = io.BytesIO()
+    sf.write(buf, x, sr, format=fmt, subtype=subtype)
+    return buf.getvalue()
+
+
+def test_flac_upload_is_bad_audio(client, demo_ref):
+    r = post(client, encode(synth_take(demo_ref), fmt="FLAC"), meta())
+    assert r.status_code == 422
+    assert r.json()["detail"] == "bad_audio"
+
+
+def test_three_channel_wav_is_bad_audio(client):
+    r = post(client, encode(np.zeros((16000, 3), dtype=np.float32)), meta())
+    assert r.status_code == 422
+    assert r.json()["detail"] == "bad_audio"
+
+
+def test_too_long_is_rejected_before_decode(client, monkeypatch):
+    from app.api import takes
+
+    def no_decode(raw):
+        raise AssertionError("decoded")
+
+    monkeypatch.setattr(takes, "decode_wav", no_decode)
+    r = post(client, encode(np.zeros(61 * 8000, dtype=np.float32), sr=8000), meta(wav_sr=8000))
+    assert r.status_code == 413
+    assert r.json()["detail"] == "take_too_long"
+
+
+def test_rewrapped_audio_is_duplicate(client, demo_ref):
+    pcm = encode(synth_take(demo_ref, jitter_cents=20.0))
+    same, sr = sf.read(io.BytesIO(pcm), dtype="float32")
+    first = post(client, pcm, meta())
+    assert "duplicate" not in first.json()["integrity"]["flags"]
+    second = post(client, encode(same, sr=sr, subtype="FLOAT"), meta())
+    assert second.status_code == 200
+    assert "duplicate" in second.json()["integrity"]["flags"]

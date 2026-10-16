@@ -24,29 +24,17 @@ updated: 2026-10-16
 - Фолбэк, если import в worklet не заведётся: тот же код в Worker через MessagePort.
 - Реализация за интерфейсом `PitchStrategy`.
 
-```js
-import { PitchDetector } from './vendor/pitchy.bundle.js'
-class Tap extends AudioWorkletProcessor{
-constructor(){super();this.W=2048;this.H=512;this.ring=new Float32Array(this.W);this.win=new Float32Array(this.W);this.pos=0;this.cnt=0;this.det=PitchDetector.forFloat32Array(this.W);this.rec=false;this.out=[];this.port.onmessage=e=>{this.rec=!!e.data.rec}}
-process(inputs){const x=inputs[0][0];if(!x)return true
-if(this.rec)this.port.postMessage({pcm:x.slice(),F:currentFrame})
-for(let k=0;k<x.length;k++){this.ring[this.pos]=x[k];this.pos=(this.pos+1)%this.W;if(++this.cnt===this.H){this.cnt=0;this.emit(currentFrame+k+1)}}
-if(this.out.length>=3){this.port.postMessage({frames:this.out});this.out=[]}
-return true}
-emit(E){let s=0;for(let j=0;j<this.W;j++){const v=this.ring[(this.pos+j)%this.W];this.win[j]=v;s+=v*v}
-const [hz,clarity]=this.det.findPitch(this.win,sampleRate)
-this.out.push({E,hz,clarity,rms:Math.sqrt(s/this.W)})}}
-registerProcessor('tap',Tap)
-```
+Worklet `tap` через `PitchHopper` (`web/lib/hopper.js`) держит окно 2048 и на каждом хопе 512 зовёт `findPitch`, кадры уходят пачками; в режиме записи он же шлёт PCM блоками по 4096 сэмплов.
+Код — `web/tap.js`.
 
 **Запись дубля.**
-- Worker копит Float32 от `start` до `stop` (60 с при 48 кГц ≈ 11,5 МБ) и запоминает `wav_t0 = F0/sr − t0`.
-- На `stop`: `OfflineAudioContext(1, ceil(n·16000/sr), 16000)` → Int16 → WAV (~32 КБ/с). Фолбэк — родная частота.
+- tap шлёт PCM блоками по 4096, главный поток копит их в `PcmRecorder` (`web/lib/recorder.js`, до 60 с); `wav_t0 = firstFrame/sr − t0`.
+- На `stop`: `OfflineAudioContext(1, ceil(n·16000/sr), 16000)` → Int16 → WAV (~32 КБ/с). При исключении — JS-ресемплер (`lib/resample.js`), частота `min(sr, 16000)`.
 - MediaRecorder не используем.
 
 **Калибровка** `calibrate()`:
-- 8 щелчков через 500 мс (OscillatorNode, 20 мс), пользователь хлопает или говорит «та».
-- Онсет — момент, когда `rms > 4·floor`.
+- Режим динамиков: 8 щелчков через 500 мс (OscillatorNode, 20 мс), игрок сидит тихо: микрофон слышит щелчки из динамиков.
+- Онсет — момент, когда `rms > max(0.01, 4·floor)`.
 - `lag = median(onset − click)` после отбрасывания выбросов дальше 60 мс от медианы. Нужно ≥5 попаданий.
 - Результат сохраняется в `localStorage['voice.lag_ms']` в try/catch. Ручная подстройка шагом ±10 мс.
 - На демо `lag_ms` зашит в `web/config.js` после калибровки на целевой цепочке вывода (см. §8).
@@ -59,7 +47,7 @@ registerProcessor('tap',Tap)
 - `?mock=perfect|offkey|octave|late200|silent`.
 - Часы от `performance.now()`. Кадры по нотам: ±30 центов шума, в режиме octave ±12, в late200 +0,2 с.
 - `submit` через 500 мс отдаёт `web/mock/result.<mode>.json`.
-- Горячая клавиша `R` (план Б) прогоняет записанный дубль `web/mock/take.wav` через реальный POST /takes.
+- Горячая клавиша Alt+Shift+R (план Б, нужны `take.wav` и `take.meta.json`; результат `unverified`, не в рейтинге) прогоняет записанный дубль `web/mock/take.wav` через реальный POST /takes.
 
 **Автоплей и HTTPS.**
 - getUserMedia и AudioContext запускаются только из обработчика клика по HTML-оверлею. Дополнительно стоит `document.onpointerdown → ctx.resume()`.
@@ -77,7 +65,7 @@ registerProcessor('tap',Tap)
 - PCM из worklet идёт блоками по 4096 сэмплов; после `{rec:false}` worklet досылает хвост и `{recDone:true}`.
 - Мок: offkey = +250 центов, octave = −12 на чётных строках и +12 на нечётных. План Б — Alt+Shift+R.
 - Отладочные поля моста `_mode`, `_state()`, `_take()`, `_planB()` Godot не использует.
-- Калибровка принимается только при задержке от −20 до 400 мс; отклонённая по диапазону даёт `on_calibrated{lag_ms: прежний, hits: 0}`.
+- Калибровка принимается только при задержке в режиме динамиков −20…400 мс, в наушниках −20…700; отклонённая по диапазону даёт `on_calibrated{lag_ms: прежний, hits: 0}`.
 - `submit`: сетевой сбой и таймаут 10 с → `on_error{net}`, ответ не 2xx → `on_error{upload_failed}`.
 - Повторный `submit()` отправляет тот же дубль без токена сессии (он одноразовый): `unverified` (недопетый — `incomplete`), а если первая отправка сохранилась — `suspect` с флагом `duplicate`.
 - WAV в JS-фолбэке пишется с частотой `min(sr, 16000)`, а не с родной.

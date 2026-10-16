@@ -512,5 +512,9 @@
     "ratio": 1.0
   },
   "challenge": null,
-  "leaderboard": null
+  "leaderboard": {
+    "rank": 2,
+    "of": 5,
+    "personal_best": false
+  }
 }

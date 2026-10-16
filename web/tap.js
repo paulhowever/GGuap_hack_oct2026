@@ -1,13 +1,14 @@
 import { PitchDetector } from './vendor/pitchy.bundle.js'
 import { PitchHopper } from './lib/hopper.js'
+import { HOP, WIN } from './lib/timing.js'
 
 const CHUNK = 4096
 
 class Tap extends AudioWorkletProcessor {
   constructor() {
     super()
-    const det = PitchDetector.forFloat32Array(2048)
-    this.hopper = new PitchHopper({ win: 2048, hop: 512, detect: (w, sr) => det.findPitch(w, sr) })
+    const det = PitchDetector.forFloat32Array(WIN)
+    this.hopper = new PitchHopper({ win: WIN, hop: HOP, detect: (w, sr) => det.findPitch(w, sr) })
     this.out = []
     this.rec = false
     this.buf = new Float32Array(CHUNK)
@@ -34,7 +35,10 @@ class Tap extends AudioWorkletProcessor {
 
   process(inputs) {
     const x = inputs[0] && inputs[0][0]
-    if (!x) return true
+    if (!x) {
+      if (this.rec) this.flush()
+      return true
+    }
     if (this.rec) {
       for (let k = 0; k < x.length; k++) {
         if (this.n === 0) this.F = currentFrame + k

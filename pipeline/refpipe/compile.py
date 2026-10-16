@@ -1,16 +1,23 @@
 import argparse
 import json
 import statistics
+import sys
 from pathlib import Path
+
+from app.songs import SONG_ID
 
 from refpipe import audio, usdx
 from refpipe.errors import RefpipeError
+from refpipe.limits import TAIL_S
 from refpipe.meta import VOICE_RANGES, Meta, load_meta
 from refpipe.usdx import Line, UsdxSong
 
 PITCHED = {"normal", "golden"}
 GOLDEN = {"golden", "rap_golden"}
-TAIL_S = 1.5
+
+
+def all_notes(ref: dict) -> list[dict]:
+    return [note for line in ref["lines"] for note in line["notes"]]
 
 
 def octave_shift(midis: list[int], voice: str) -> int:
@@ -71,7 +78,7 @@ def compile_reference(song: UsdxSong, meta: Meta, song_id: str, duration: float)
                 "notes": notes,
             }
         )
-    flat = [n for line in lines for n in line["notes"]]
+    flat = all_notes({"lines": lines})
     midis = [n["midi"] for n in flat if n["type"] in PITCHED] or [n["midi"] for n in flat]
     first = flat[0]["t"]
     last = max(line["t1"] for line in lines)
@@ -121,6 +128,10 @@ def compile_reference(song: UsdxSong, meta: Meta, song_id: str, duration: float)
 
 def compile_dir(song_dir: Path, duration: float | None = None) -> dict:
     song_dir = Path(song_dir).resolve()
+    if not SONG_ID.fullmatch(song_dir.name):
+        raise RefpipeError(
+            f"song id {song_dir.name!r} must match {SONG_ID.pattern}: lowercase latin, digits, _ and -"
+        )
     song = usdx.read(song_dir / "song.txt")
     meta = load_meta(song_dir / "meta.yaml")
     if duration is None:
@@ -132,8 +143,22 @@ def compile_dir(song_dir: Path, duration: float | None = None) -> dict:
     return compile_reference(song, meta, song_dir.name, duration)
 
 
-def write_reference(ref: dict, path: Path) -> None:
-    Path(path).write_text(json.dumps(ref, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+def write_json(obj: dict, path: Path) -> None:
+    Path(path).write_text(json.dumps(obj, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+
+
+def mark_check_stale(song_dir: Path) -> None:
+    song_dir = Path(song_dir)
+    if (song_dir / "reference.json").exists():
+        write_json(
+            {
+                "schema": 1,
+                "song_id": song_dir.resolve().name,
+                "pass": False,
+                "stale": "rerun refpipe compile and check",
+            },
+            song_dir / "check.json",
+        )
 
 
 def read_reference(path: Path) -> dict:
@@ -145,7 +170,7 @@ def read_reference(path: Path) -> dict:
     except (OSError, ValueError) as exc:
         raise RefpipeError(f"{path}: {exc}") from exc
     try:
-        notes = [note for line in ref["lines"] for note in line["notes"]]
+        notes = all_notes(ref)
     except (KeyError, TypeError) as exc:
         raise RefpipeError(f"{path}: malformed reference, bad {exc}") from exc
     if not notes:
@@ -154,8 +179,11 @@ def read_reference(path: Path) -> dict:
 
 
 def cmd(args: argparse.Namespace) -> int:
+    guessed = args.duration is None and not (Path(args.song_dir) / "minus.mp3").exists()
     ref = compile_dir(args.song_dir, args.duration)
-    write_reference(ref, args.song_dir / "reference.json")
+    if guessed:
+        print("warning: minus.mp3 not found, duration guessed from the last note", file=sys.stderr)
+    write_json(ref, args.song_dir / "reference.json")
     stats = ref["stats"]
     lo, hi = stats["range_midi"]
     print(

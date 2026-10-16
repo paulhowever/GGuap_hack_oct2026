@@ -7,7 +7,7 @@ import pytest
 
 from refpipe import usdx
 from refpipe.cli import main
-from refpipe.compile import compile_dir, compile_reference, difficulty, line_text, octave_shift
+from refpipe.compile import PITCHED, compile_dir, compile_reference, difficulty, line_text, octave_shift
 from refpipe.errors import RefpipeError
 from refpipe.meta import load_meta
 
@@ -168,3 +168,37 @@ def test_cli_reports_unreadable_song_txt(demo_dir, capsys, payload):
     err = capsys.readouterr().err
     assert err.startswith("refpipe: ")
     assert "song.txt" in err
+
+
+def test_duration_fallback_warns_on_stderr(demo_dir, capsys):
+    assert main(["compile", str(demo_dir)]) == 0
+    assert "warning: minus.mp3 not found, duration guessed from the last note" in capsys.readouterr().err
+    assert json.loads((demo_dir / "reference.json").read_text(encoding="utf-8"))["audio"]["duration"] == 10.4
+
+
+def test_explicit_duration_does_not_warn(demo_dir, capsys):
+    assert main(["compile", str(demo_dir), "--duration", "12"]) == 0
+    assert "warning" not in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("name", ["Kalinka", "kalinka v2", "калинка"])
+def test_bad_song_id_rejected(tmp_path, demo_txt, demo_meta_text, name):
+    song_dir = tmp_path / name
+    song_dir.mkdir()
+    (song_dir / "song.txt").write_text(demo_txt, encoding="utf-8")
+    (song_dir / "meta.yaml").write_text(demo_meta_text, encoding="utf-8")
+    with pytest.raises(RefpipeError, match="song id"):
+        compile_dir(song_dir, duration=12.0)
+
+
+def test_good_song_id_compiles(tmp_path, demo_txt, demo_meta_text):
+    song_dir = tmp_path / "kalinka"
+    song_dir.mkdir()
+    (song_dir / "song.txt").write_text(demo_txt, encoding="utf-8")
+    (song_dir / "meta.yaml").write_text(demo_meta_text, encoding="utf-8")
+    assert compile_dir(song_dir, duration=12.0)["id"] == "kalinka"
+
+
+def test_pitched_matches_scorer():
+    grid = pytest.importorskip("app.scoring.grid")
+    assert PITCHED == grid.PITCHED
