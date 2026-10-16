@@ -11,6 +11,7 @@ import { getJson } from './lib/http.js'
 import { playerName } from './lib/meta.js'
 import { DEFAULT_TOL } from './lib/scoring.js'
 import { CLICKS } from './lib/calibration.js'
+import { parseWavHeader } from './lib/wav.js'
 
 const BASE = new URL('./', import.meta.url).href
 const START_DELAY_MS = 150
@@ -19,6 +20,7 @@ const CALIBRATE_DELAY_MS = 1000
 const OPPONENT = 'Соперник'
 const OPPONENT_TOTAL = 7320
 const OPPONENT_LINE = 75
+const MOCK_LISTEN_S = 5
 
 function mockChallenge(id, r) {
   const delta = r.score.total - OPPONENT_TOTAL
@@ -40,7 +42,7 @@ export function createMockVoice(mode, cfg = {}, env = globalThis) {
   const rand = rng(7)
   const api = cfg.api || ''
   const base = cfg.mock_base || BASE
-  const s = { ref: null, state: 'idle', startAt: 0, lastT: 0, timer: null, level: 0, difficulty: cfg.difficulty || 'normal', lag: toMs(cfg.lag_ms) ?? 40, player: null, loadSeq: 0 }
+  const s = { ref: null, state: 'idle', startAt: 0, lastT: 0, timer: null, level: 0, difficulty: cfg.difficulty || 'normal', lag: toMs(cfg.lag_ms) ?? 40, player: null, loadSeq: 0, listenSeq: 0, listening: null }
 
   const tNow = () => (s.state === 'idle' ? 0 : (env.performance.now() - s.startAt) / 1000)
   const tolTable = cfg.tol_cents || DEFAULT_TOL
@@ -56,6 +58,44 @@ export function createMockVoice(mode, cfg = {}, env = globalThis) {
       if (j !== null) return j
     }
     return null
+  }
+
+  function endListen(p, reason, code = null) {
+    if (!p || s.listening !== p) return false
+    s.listening = null
+    s.listenSeq++
+    env.clearTimeout(p.timer)
+    bus.emit('on_listen_end', { take_id: p.take_id, reason, code })
+    return false
+  }
+
+  function stopListen(reason) {
+    if (!s.listening) {
+      s.listenSeq++
+      return false
+    }
+    endListen(s.listening, reason)
+    return true
+  }
+
+  async function wavSeconds(take_id) {
+    const item = await getJson(env, `${api}/api/v1/published/${encodeURIComponent(take_id)}`)
+    const audio = typeof item?.audio === 'string' ? (/^https?:\/\//.test(item.audio) ? item.audio : api + item.audio) : `${base}mock/take.wav`
+    try {
+      const r = await env.fetch(audio)
+      return r.ok ? parseWavHeader(await r.arrayBuffer())?.duration ?? null : null
+    } catch {
+      return null
+    }
+  }
+
+  function settle(name, payload, value) {
+    return new Promise(resolve => {
+      env.setTimeout(() => {
+        bus.emit(name, payload)
+        resolve(value)
+      }, 0)
+    })
   }
 
   function finish() {
@@ -81,6 +121,7 @@ export function createMockVoice(mode, cfg = {}, env = globalThis) {
       if (lag !== null) s.lag = lag
     },
     async load_song(id) {
+      stopListen('stopped')
       const seq = ++s.loadSeq
       const ref = await firstJson([`${api}/api/v1/songs/${encodeURIComponent(id)}`, `${base}mock/${id}.reference.json`])
       if (seq !== s.loadSeq) return false
@@ -92,6 +133,7 @@ export function createMockVoice(mode, cfg = {}, env = globalThis) {
       return true
     },
     start() {
+      stopListen('stopped')
       if (!s.ref) return fail(ERR.LOCKED, 'start before load_song')
       if (s.state === 'playing') return true
       s.state = 'playing'
@@ -133,6 +175,7 @@ export function createMockVoice(mode, cfg = {}, env = globalThis) {
       return clientId(env)
     },
     calibrate(mode) {
+      stopListen('stopped')
       const kind = mode === 'headphones' ? 'headphones' : 'speakers'
       return new Promise(resolve => {
         env.setTimeout(() => {
@@ -140,6 +183,33 @@ export function createMockVoice(mode, cfg = {}, env = globalThis) {
           resolve(true)
         }, CALIBRATE_DELAY_MS)
       })
+    },
+    publish(id) {
+      const take_id = String(id ?? '')
+      return settle('on_published', { take_id, published: true, ok: true, code: null }, true)
+    },
+    unpublish(id) {
+      const take_id = String(id ?? '')
+      return settle('on_published', { take_id, published: false, ok: true, code: null }, true)
+    },
+    async listen(id) {
+      const take_id = String(id ?? '')
+      stopListen('stopped')
+      if (s.state === 'playing') {
+        bus.emit('on_listen_end', { take_id, reason: 'error', code: ERR.LOCKED })
+        return false
+      }
+      const p = { take_id, seq: ++s.listenSeq, timer: null }
+      s.listening = p
+      const seconds = await wavSeconds(take_id)
+      if (s.listening !== p || p.seq !== s.listenSeq) return false
+      const duration = round((Number.isFinite(seconds) && seconds > 0 ? seconds : s.ref?.audio?.duration) || MOCK_LISTEN_S, 3)
+      p.timer = env.setTimeout(() => endListen(p, 'ended'), duration * 1000)
+      bus.emit('on_listen', { take_id, duration })
+      return true
+    },
+    listen_stop() {
+      return stopListen('stopped')
     },
     async _planB() {
       const wav = await env.fetch(`${base}mock/take.wav`).then(r => (r.ok ? r.arrayBuffer() : null)).catch(() => null)

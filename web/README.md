@@ -41,6 +41,7 @@
 - Реакции продюсера — по `on_note_judged.hit`; `onset_ms` только для подсказок.
 - Не вызывать `configure({lag_ms})` при каждом запуске: источник станет `config`, и автоподстройка выключится.
 - `stop()` вручную не шлёт `on_song_end` и вердикты оставшихся нот; после «Выйти» сразу вызывать `submit()`.
+- Каверы (ADR-023). `publish(take_id)` и `unpublish(take_id)` возвращают `Promise<boolean>` и шлют `on_published{take_id, published, ok, code}`; `code` — `detail` бэкенда (`not_owner`, `take_not_ok`, `take_not_found`, `audio_not_found`, `not_published`) или `net`. Публиковать только после `on_result` и только при `integrity.status == "ok"`; для дубля из последнего `on_result` движок сам отправляет `wav_t0`, для остальных — `null`. `listen(take_id)` играет вокал поверх минуса той же песни (громкость как у `music_volume`, без минуса — голый вокал) и шлёт `on_listen{take_id, duration}`, затем ровно один `on_listen_end{take_id, reason: "ended"|"stopped"|"error", code}`. Ошибки прослушивания приходят только в `on_listen_end`, не в `on_error`. Во время песни, калибровки и до `unlock` `listen` отказывает с `code: "audio_locked"`. `listen_stop()` возвращает `true`, если что-то остановил. `start()`, `calibrate()` и `load_song()` сами останавливают прослушивание. Перед вызовом проверять `typeof window.voice.publish === "function"`. В моке (`?mock=…`) это заглушки: `on_published` всегда `ok`, `listen` только выдерживает длительность и ничего не играет.
 
 ## Задержка
 

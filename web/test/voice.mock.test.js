@@ -2,6 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { createMockVoice } from '../voice.mock.js'
+import { encodeWav } from '../lib/wav.js'
 
 const fixture = name => JSON.parse(readFileSync(new URL(`../../contracts/fixtures/${name}`, import.meta.url)))
 const ref = fixture('demo.reference.json')
@@ -302,4 +303,68 @@ test('plan b posts the current client id and the cleaned name', async () => {
     assert.equal(sent.session_token, null)
     assert.equal(sent.player, 'Игрок')
   }
+})
+
+test('publish and unpublish settle true and emit on_published after a tick', async () => {
+  const { env, voice, events } = setup()
+  const pub = voice.publish('tk_1')
+  assert.equal(typeof pub?.then, 'function')
+  assert.equal(events.some(e => e[0] === 'on_published'), false)
+  await env.advance(0)
+  assert.equal(await pub, true)
+  const un = voice.unpublish('tk_1')
+  await env.advance(0)
+  assert.equal(await un, true)
+  assert.deepEqual(events.filter(e => e[0] === 'on_published').map(e => e[1]), [
+    { take_id: 'tk_1', published: true, ok: true, code: null },
+    { take_id: 'tk_1', published: false, ok: true, code: null }
+  ])
+})
+
+test('listen takes the duration from the downloaded wav and ends on a timer', async () => {
+  const wav = encodeWav(new Float32Array(32000), 16000)
+  const env = {
+    ...fakeEnv({}),
+    async fetch(url) {
+      const u = String(url)
+      if (u.endsWith('/api/v1/published/tk_1')) return { ok: true, json: async () => ({ take_id: 'tk_1', audio: '/api/v1/published/tk_1/audio' }) }
+      if (u.endsWith('/api/v1/published/tk_1/audio')) return { ok: true, arrayBuffer: async () => wav }
+      return { ok: false, status: 404 }
+    }
+  }
+  const voice = createMockVoice('perfect', CFG, env)
+  const events = []
+  voice.subscribe((name, json) => events.push([name, JSON.parse(json)]))
+  assert.equal(await voice.listen('tk_1'), true)
+  assert.deepEqual(events, [['on_listen', { take_id: 'tk_1', duration: 2 }]])
+  await env.advance(1999)
+  assert.equal(events.length, 1)
+  await env.advance(1)
+  assert.deepEqual(events.at(-1), ['on_listen_end', { take_id: 'tk_1', reason: 'ended', code: null }])
+  assert.equal(voice.listen_stop(), false)
+  assert.equal(events.length, 2)
+})
+
+test('listen falls back to the song duration and listen_stop cancels the timer', async () => {
+  const { env, voice, events } = setup()
+  await voice.load_song('demo')
+  assert.equal(await voice.listen('tk_1'), true)
+  assert.deepEqual(events.filter(e => e[0] === 'on_listen').map(e => e[1]), [{ take_id: 'tk_1', duration: ref.audio.duration }])
+  assert.equal(voice.listen_stop(), true)
+  await env.advance(ref.audio.duration * 1000 + 1)
+  assert.deepEqual(events.filter(e => e[0] === 'on_listen_end').map(e => e[1]), [{ take_id: 'tk_1', reason: 'stopped', code: null }])
+})
+
+test('mock listen is refused while playing and start() stops a cover', async () => {
+  const { env, voice, events } = setup()
+  await voice.load_song('demo')
+  await voice.listen('tk_1')
+  voice.start()
+  assert.equal(await voice.listen('tk_2'), false)
+  await env.advance(ref.audio.duration * 1000 + 200)
+  assert.deepEqual(events.filter(e => e[0] === 'on_listen_end').map(e => e[1]), [
+    { take_id: 'tk_1', reason: 'stopped', code: null },
+    { take_id: 'tk_2', reason: 'error', code: 'audio_locked' }
+  ])
+  assert.equal(events.some(e => e[0] === 'on_error'), false)
 })
