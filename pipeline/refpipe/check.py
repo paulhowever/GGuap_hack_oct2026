@@ -1,20 +1,20 @@
 import argparse
 import dataclasses
-import json
 import statistics
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from itertools import pairwise
 from pathlib import Path
 
 import numpy as np
 
-from refpipe import audio, paths
-from refpipe.compile import read_reference
+from refpipe import audio, paths, usdx
+from refpipe.compile import GOLDEN, PITCHED, all_notes, compile_dir, read_reference, write_json
+from refpipe.errors import RefpipeError
+from refpipe.limits import FRAGMENT_S, GOLDEN_SHARE, LEAD_S, MAX_SPAN, MIN_NOTE_S, NOTE_COUNT, TAIL_S
 
-PITCHED = {"normal", "golden"}
-GOLDEN = {"golden", "rap_golden"}
 SR = 16000
+MAX_MEDIA_KB = 1024
 DIFFICULTY = "normal"
 ScoreFn = Callable[..., dict]
 
@@ -28,29 +28,30 @@ class Check:
     level: str = "error"
 
 
-def all_notes(ref: dict) -> list[dict]:
-    return [note for line in ref["lines"] for note in line["notes"]]
-
-
 def structural_checks(ref: dict) -> list[Check]:
     notes = all_notes(ref)
     overlaps = sum(1 for a, b in pairwise(notes) if a["beat"] + a["len"] > b["beat"])
-    short = sum(1 for n in notes if n["d"] < 0.1 - 1e-9)
+    short = sum(1 for n in notes if n["d"] < MIN_NOTE_S - 1e-9)
     pitched = [n["midi"] for n in notes if n["type"] in PITCHED]
     span = max(pitched) - min(pitched) if pitched else 0
     golden = sum(n["type"] in GOLDEN for n in notes) / len(notes)
     duration = ref["audio"]["duration"]
     first = notes[0]["t"]
     tail = round(duration - max(n["t"] + n["d"] for n in notes), 3)
+    glued = sum(1 for line in ref["lines"] if len(line["notes"]) >= 6 and " " not in line["text"].strip())
+    g_lo, g_hi = GOLDEN_SHARE
+    f_lo, f_hi = FRAGMENT_S
+    n_lo, n_hi = NOTE_COUNT
     return [
         Check("no_overlap", overlaps == 0, overlaps, "== 0"),
-        Check("min_note_len", short == 0, short, "notes shorter than 0.1 s == 0"),
-        Check("range", span <= 19, span, "<= 19 semitones"),
-        Check("golden_share", 0.05 <= golden <= 0.15, round(golden, 3), "0.05..0.15"),
-        Check("lead_in", first >= 2.5 - 1e-9, first, ">= 2.5 s"),
-        Check("tail", tail >= 1.5 - 1e-9, tail, ">= 1.5 s"),
-        Check("fragment_len", 20 <= duration <= 40, duration, "20..40 s", "warn"),
-        Check("note_count", 40 <= len(notes) <= 120, len(notes), "40..120", "warn"),
+        Check("min_note_len", short == 0, short, f"notes shorter than {MIN_NOTE_S:g} s == 0"),
+        Check("range", span <= MAX_SPAN, span, f"<= {MAX_SPAN} semitones"),
+        Check("golden_share", g_lo <= golden <= g_hi, round(golden, 3), f"{g_lo:g}..{g_hi:g}"),
+        Check("lead_in", first >= LEAD_S - 1e-9, first, f">= {LEAD_S:g} s"),
+        Check("tail", tail >= TAIL_S - 1e-9, tail, f">= {TAIL_S:g} s"),
+        Check("fragment_len", f_lo <= duration <= f_hi, duration, f"{f_lo}..{f_hi} s", "warn"),
+        Check("note_count", n_lo <= len(notes) <= n_hi, len(notes), f"{n_lo}..{n_hi}", "warn"),
+        Check("word_breaks", glued == 0, glued, "lines with >= 6 syllables and no spaces == 0", "warn"),
     ]
 
 
@@ -87,16 +88,24 @@ def self_score_checks(ref: dict, results: dict[str, dict]) -> list[Check]:
     pc_share = round(in_pc / len(scored), 3) if scored else 0.0
     onsets = [abs(n["onset_ms"]) for n in scored if n.get("onset_ms") is not None]
     onset = statistics.median(onsets) if onsets else None
+    found = round(len(onsets) / len(scored), 3) if scored else 0.0
     octave = max(abs(totals["octave_up"] - totals["guide"]), abs(totals["octave_down"] - totals["guide"]))
-    return [
+    lag = results["guide"].get("latency", {}).get("estimated_ms")
+    checks = [
         Check("guide_pitch_class", pc_share >= 0.9, pc_share, ">= 0.9 of notes within 100 cents"),
         Check("guide_onset", onset is not None and onset <= 80, onset, "median |onset| <= 80 ms"),
+        Check("guide_onset_found", found >= 0.8, found, ">= 0.8 of pitched notes have an onset", "warn"),
         Check("score_guide", totals["guide"] >= 0.9 * top, totals["guide"], f">= {0.9 * top:g}"),
         Check("score_octave", octave <= 0.01 * top, octave, f"|delta| <= {0.01 * top:g}"),
         Check("score_plus2", totals["plus2"] <= 0.4 * top, totals["plus2"], f"<= {0.4 * top:g}"),
         Check("score_silence", totals["silence"] == 0, totals["silence"], "== 0"),
         Check("score_delay150", totals["delay150"] >= 0.85 * top, totals["delay150"], f">= {0.85 * top:g}"),
     ]
+    if lag is not None:
+        checks.append(
+            Check("guide_lag", abs(lag) <= 50, round(lag), "|estimated guide lag| <= 50 ms", "warn")
+        )
+    return checks
 
 
 def build_report(
@@ -113,8 +122,16 @@ def build_report(
     }
 
 
-def run_check(ref: dict, guide: np.ndarray | None, sr: int, cfg, engine, score_fn: ScoreFn | None) -> dict:
-    checks = structural_checks(ref)
+def run_check(
+    ref: dict,
+    guide: np.ndarray | None,
+    sr: int,
+    cfg,
+    engine,
+    score_fn: ScoreFn | None,
+    extra: Iterable[Check] = (),
+) -> dict:
+    checks = structural_checks(ref) + list(extra)
     if guide is None:
         checks.append(Check("guide_present", False, None, "guide.mp3 exists"))
         return build_report(ref, checks)
@@ -124,9 +141,43 @@ def run_check(ref: dict, guide: np.ndarray | None, sr: int, cfg, engine, score_f
     return build_report(ref, checks, f"{engine.name}-{engine.version}", scores)
 
 
+def media_checks(song_dir: Path, ref: dict) -> list[Check]:
+    minus = song_dir / Path(ref["audio"]["minus"]).name
+    guide = song_dir / Path(ref["audio"]["guide"]).name
+    sizes = [path.stat().st_size for path in (minus, guide) if path.is_file()]
+    largest_kb = round(max(sizes, default=0) / 1024)
+    return [
+        Check("minus_present", minus.is_file(), None, "minus.mp3 exists"),
+        Check("media_size", largest_kb <= MAX_MEDIA_KB, largest_kb, "each mp3 <= 1 MB", "warn"),
+    ]
+
+
+def source_checks(song_dir: Path, ref: dict) -> list[Check]:
+    try:
+        fresh = compile_dir(song_dir, duration=ref["audio"]["duration"])
+    except RefpipeError:
+        fresh = None
+    checks = [
+        Check("reference_fresh", fresh == ref, None, "reference.json == compile(song.txt, meta.yaml)", "warn")
+    ]
+    txt = song_dir / "song.txt"
+    if txt.is_file():
+        try:
+            song = usdx.read(txt)
+        except RefpipeError:
+            song = None
+        if song is not None:
+            same = song.title == ref["title"] and song.artist == ref["artist"]
+            checks.append(
+                Check("meta_matches_txt", same, None, "#TITLE/#ARTIST == meta.yaml title/artist", "warn")
+            )
+    return checks
+
+
 def check_dir(song_dir: Path, scoring: Path = paths.SCORING_JSON) -> dict:
     song_dir = Path(song_dir)
     ref = read_reference(song_dir / "reference.json")
+    extra = media_checks(song_dir, ref) + source_checks(song_dir, ref)
     guide_path = song_dir / "guide.mp3"
     if guide_path.exists():
         from app.f0 import get_engine
@@ -134,12 +185,12 @@ def check_dir(song_dir: Path, scoring: Path = paths.SCORING_JSON) -> dict:
         from app.scoring.core import score_take
 
         guide = audio.load_audio(guide_path, SR)
-        report = run_check(ref, guide, SR, load_scoring_config(scoring), get_engine("swiftf0"), score_take)
+        report = run_check(
+            ref, guide, SR, load_scoring_config(scoring), get_engine("swiftf0"), score_take, extra
+        )
     else:
-        report = run_check(ref, None, SR, None, None, None)
-    (song_dir / "check.json").write_text(
-        json.dumps(report, ensure_ascii=False, indent=1) + "\n", encoding="utf-8"
-    )
+        report = run_check(ref, None, SR, None, None, None, extra)
+    write_json(report, song_dir / "check.json")
     return report
 
 

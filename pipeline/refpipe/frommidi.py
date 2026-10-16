@@ -1,5 +1,6 @@
 import argparse
 import math
+import re
 from collections import Counter
 from pathlib import Path
 
@@ -94,17 +95,45 @@ def channel_hint(mid: mido.MidiFile, channel: int | None) -> str:
     return f"; used channel {chosen}, notes per channel {counts}; pick the melody with --channel"
 
 
+def word_parts(word: str) -> list[str]:
+    parts: list[str] = []
+    current = ""
+    for token in re.split(r"(--|-)", word):
+        if token == "-":
+            if current:
+                parts.append(current)
+            current = ""
+        elif token == "--":
+            if current:
+                parts.append(current + "-")
+            elif parts:
+                parts[-1] += "-"
+            current = ""
+        else:
+            current += token
+    if current:
+        parts.append(current)
+    return parts
+
+
+def is_punctuation(word: str) -> bool:
+    return "~" not in word and not any(ch.isalpha() for ch in word)
+
+
 def syllables(text: str) -> list[list[str]]:
     lines = []
     for raw in text.splitlines():
         words = raw.split()
         syls: list[str] = []
         for index, word in enumerate(words):
-            parts = [part for part in word.split("-") if part]
+            parts = word_parts(word)
             if not parts:
                 continue
-            if index < len(words) - 1:
-                parts[-1] += " "
+            space = " " if index < len(words) - 1 else ""
+            if syls and is_punctuation(word):
+                syls[-1] += "".join(parts) + space
+                continue
+            parts[-1] += space
             syls.extend(parts)
         if syls:
             lines.append(syls)

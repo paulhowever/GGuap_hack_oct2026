@@ -103,9 +103,7 @@ def load_meta(path: Path) -> Meta:
         raise MetaError(f"{path}: {exc}") from exc
 
 
-def dump_meta(meta: Meta, path: Path) -> None:
-    data = meta.model_dump(mode="json", exclude_none=True)
-    Path(path).write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding="utf-8")
+T0_LINE = re.compile(r"^([ \t]*t0_ms:[ \t]*)([^#\n]*?)([ \t]+#.*)?$", re.MULTILINE)
 
 
 def set_t0_ms(path: Path, t0_ms: int) -> None:
@@ -116,4 +114,15 @@ def set_t0_ms(path: Path, t0_ms: int) -> None:
     if not isinstance(source, dict):
         raise MetaError(f"{path}: source must be a mapping")
     source["t0_ms"] = int(t0_ms)
-    Path(path).write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    text = Path(path).read_text(encoding="utf-8")
+    if len(T0_LINE.findall(text)) == 1:
+        edited = T0_LINE.sub(lambda m: f"{m.group(1)}{int(t0_ms)}{m.group(3) or ''}", text)
+        try:
+            same = yaml.safe_load(edited) == data
+        except yaml.YAMLError:
+            same = False
+        if same:
+            Path(path).write_text(edited, encoding="utf-8")
+            return
+    dumped = yaml.safe_dump(data, allow_unicode=True, sort_keys=False, width=10**6)
+    Path(path).write_text(dumped, encoding="utf-8")

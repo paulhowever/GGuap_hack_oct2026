@@ -3,7 +3,7 @@ import pytest
 
 from refpipe import usdx
 from refpipe.cli import main
-from refpipe.compile import compile_dir
+from refpipe.compile import compile_dir, line_text
 from refpipe.errors import MidiError
 from refpipe.frommidi import build_song, from_midi, melody_notes, syllables, txt_bpm
 
@@ -272,3 +272,35 @@ def test_lyrics_with_bom_or_cp1251(tmp_path, gamma, encode):
     lyrics.write_bytes(encode("до ре ми\nфа соль\n"))
     song = from_midi(gamma[0], lyrics, "T", "A")
     assert [n.syl for n in song.notes][:2] == ["до ", "ре "]
+
+
+def test_double_hyphen_keeps_literal_hyphen():
+    syls = syllables("Ой, пол-ным--пол-на мо-я\n")
+    assert syls == [["Ой, ", "пол", "ным-", "пол", "на ", "мо", "я"]]
+    notes = tuple(usdx.Note(":", 2 * k, 2, 0, syl) for k, syl in enumerate(syls[0]))
+    assert line_text(usdx.Line(notes, None)) == "Ой, полным-полна моя"
+
+
+def test_standalone_dash_is_glued_to_previous_syllable():
+    syls = syllables("Ка-лин-ка — мо-я\nой …\n— ой\n")
+    assert syls[0] == ["Ка", "лин", "ка — ", "мо", "я"]
+    assert syls[1] == ["ой …"]
+    assert syls[2] == ["— ", "ой"]
+
+
+def test_tilde_and_bare_hyphen_keep_old_meaning():
+    assert syllables("мо-я-~") == [["мо", "я", "~"]]
+    assert syllables("ка - мо") == [["ка ", "мо"]]
+    assert syllables("Ка-лин-ка мо-я!") == [["Ка", "лин", "ка ", "мо", "я!"]]
+
+
+def test_literal_hyphen_survives_compile(tmp_path, demo_meta_text):
+    melody = write_midi(tmp_path / "melody.mid", [(60 + k, 1, 0) for k in range(7)])
+    lyrics = tmp_path / "lyrics.txt"
+    lyrics.write_text("Ой, пол-ным--пол-на мо-я\n", encoding="utf-8")
+    song_dir = tmp_path / "korobeiniki"
+    song_dir.mkdir()
+    usdx.write(from_midi(melody, lyrics, "Коробейники", "нар."), song_dir / "song.txt")
+    (song_dir / "meta.yaml").write_text(demo_meta_text, encoding="utf-8")
+    ref = compile_dir(song_dir, duration=8.0)
+    assert [line["text"] for line in ref["lines"]] == ["Ой, полным-полна моя"]
