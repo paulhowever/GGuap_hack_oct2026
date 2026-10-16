@@ -1,0 +1,27 @@
+title: Калинка
+artist: нар. (И. Ларионов), аранж. huap team
+language: ru
+voice: female
+source:
+  origin: own_midi
+  generator: refpipe from-midi
+  t0_ms: 0
+license:
+  music:
+    title: Калинка
+    author: Иван Ларионов
+    author_died: 1889
+    license: PD
+  recording:
+    title: Калинка, аранжировка и вокал huap team
+    author: huap team
+    license: CC BY 4.0
+    license_url: https://creativecommons.org/licenses/by/4.0/
+  attribution: «Калинка», муз. и сл. И. Ларионова (PD); аранжировка и запись huap team, CC BY 4.0
+  changes:
+    - фрагмент 0:00–0:31 из своей аранжировки
+    - мелодия набрана в MuseScore 4, минус и вокал записаны командой
+vocalists:
+  - name: Анна
+    consent: true
+    consent_date: 2026-10-10

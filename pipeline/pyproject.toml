@@ -1,0 +1,35 @@
+[project]
+name = "refpipe"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+  "karaoke-backend",
+  "mido>=1.3",
+  "numpy>=1.26",
+  "pydantic>=2.7",
+  "pyyaml>=6.0",
+  "soundfile>=0.12",
+]
+
+[project.scripts]
+refpipe = "refpipe.cli:main"
+
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["refpipe"]
+
+[tool.uv.sources]
+karaoke-backend = { path = "../backend", editable = true }
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["integration: needs backend app.f0 and app.scoring", "gpu: needs CUDA"]
+
+[tool.ruff]
+line-length = 110
