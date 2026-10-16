@@ -54,6 +54,10 @@ func _ready() -> void:
 	VoiceBridge.bridge_error.connect(_on_bridge_error)
 	VoiceBridge.polled.connect(_on_polled)
 	create_tween().tween_property(%Fade, "modulate:a", 0.0, 0.35)
+	# персонаж и продюсер выезжают по бокам дорожки ещё во время загрузки;
+	# после «Спеть ещё раз» они уже на месте — только возвращаем яркость
+	Performers.enter()
+	Performers.dim(false)
 	if Session.song_id.is_empty():
 		_show_error("Песня не выбрана.", false)
 		return
@@ -236,6 +240,11 @@ func _leave(scene: String) -> void:
 	if _phase == Phase.PLAYING:
 		VoiceBridge.stop()
 	_phase = Phase.LEAVING
+	# на результат персонажи переезжают без шва (только приглушаются),
+	# к выбору песни — уезжают
+	Performers.dim(true)
+	if scene != RESULT_SCENE:
+		Performers.leave()
 	var tw := create_tween()
 	tw.tween_property(%Fade, "modulate:a", 1.0, 0.3)
 	await tw.finished

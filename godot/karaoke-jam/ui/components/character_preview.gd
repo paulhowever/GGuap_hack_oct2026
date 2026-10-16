@@ -18,6 +18,13 @@ signal clicked
 @export var click_threshold: float = 6.0
 ## Длительность возврата при отклонении на 180° (меньшие углы — быстрее).
 @export var return_time: float = 0.6
+## Можно крутить мышью и кликать. false — превью только для показа:
+## мышь проходит насквозь (персонажи по бокам дорожки нот, autoload Performers).
+@export var interactive: bool = true:
+	set(value):
+		interactive = value
+		if is_node_ready():
+			_apply_mouse()
 
 ## Текущий угол модели (радианы, без нормализации — может быть сколько угодно оборотов).
 var yaw: float = 0.0:
@@ -39,9 +46,12 @@ var _return_tween: Tween
 
 func _ready() -> void:
 	yaw = rest_yaw
+	_apply_mouse()
 
 
 func _gui_input(event: InputEvent) -> void:
+	if not interactive:
+		return
 	var mb := event as InputEventMouseButton
 	if mb and mb.button_index == MOUSE_BUTTON_LEFT:
 		if mb.pressed:
@@ -123,10 +133,20 @@ func copy_state_from(other: CharacterPreview) -> void:
 func set_active(on: bool) -> void:
 	_active = on
 	modulate.a = 1.0 if on else 0.0
-	mouse_filter = MOUSE_FILTER_STOP if on else MOUSE_FILTER_IGNORE
+	_apply_mouse()
 	_viewport.render_target_update_mode = SubViewport.UPDATE_WHEN_PARENT_VISIBLE if on \
 		else SubViewport.UPDATE_DISABLED
 	_anim.active = on
+	if not on:
+		_pressed = false
+		_dragging = false
+
+
+## Мышь ловит только включённое интерактивное превью (interactive).
+func _apply_mouse() -> void:
+	var on := _active and interactive
+	mouse_filter = MOUSE_FILTER_STOP if on else MOUSE_FILTER_IGNORE
+	mouse_default_cursor_shape = CURSOR_POINTING_HAND if on else CURSOR_ARROW
 	if not on:
 		_pressed = false
 		_dragging = false

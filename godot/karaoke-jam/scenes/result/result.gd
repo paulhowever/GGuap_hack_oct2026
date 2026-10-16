@@ -53,6 +53,9 @@ func _ready() -> void:
 		%AgainButton.text = "Спеть эту песню"
 	MenuMusic.start()   # музыка меню задаёт бит для ударов ранга
 	create_tween().tween_property(%Fade, "modulate:a", 0.0, 0.35)
+	# после пения персонажи уже на месте; «Мой последний результат» — выезжают
+	Performers.enter()
+	Performers.dim(false)
 	_fill(Session.last_result)
 	_setup_review()
 
@@ -228,6 +231,10 @@ func _go(scene: String) -> void:
 	if _leaving:
 		return
 	_leaving = true
+	# «Спеть ещё раз» / «Спеть эту песню» — персонажи остаются, иначе уезжают
+	Performers.dim(true)
+	if scene != GAME_SCENE:
+		Performers.leave()
 	var tw := create_tween()
 	tw.tween_property(%Fade, "modulate:a", 1.0, 0.3)
 	await tw.finished

@@ -30,6 +30,7 @@ Api="*res://autoload/api.gd"
 AudioService="*res://autoload/audio_service.gd"
 WebShell="*res://autoload/web_shell.gd"
 _mcp_game_helper="*res://addons/godot_ai/runtime/game_helper.gd"
+Performers="*res://autoload/performers.gd"
 
 [display]
 

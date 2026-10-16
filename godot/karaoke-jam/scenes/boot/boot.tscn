@@ -12,10 +12,10 @@
 [ext_resource type="PackedScene" path="res://ui/panels/calibration_panel.tscn" id="10_cal"]
 [ext_resource type="PackedScene" uid="uid://d2s636ykjydjh" path="res://ui/panels/settings_panel.tscn" id="11_set"]
 [ext_resource type="Theme" uid="uid://jo2ye60ryjcu" path="res://ui/theme/main_theme.tres" id="12_theme"]
-[ext_resource type="PackedScene" path="res://ui/components/character_preview.tscn" id="13_char"]
+[ext_resource type="PackedScene" uid="uid://kvrgorm425vb" path="res://ui/components/character_preview.tscn" id="13_char"]
 [ext_resource type="PackedScene" path="res://ui/panels/customize_panel.tscn" id="14_cust"]
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_3837e"]
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_elkq3"]
 content_margin_left = 28.0
 content_margin_top = 8.0
 content_margin_right = 28.0
@@ -25,12 +25,12 @@ border_width_left = 4
 border_width_top = 4
 border_width_right = 4
 border_width_bottom = 4
-border_color = Color(0.57945275, 0.31531, 0.21372798, 1)
+border_color = Color(0.57948244, 0.31532153, 0.21372977, 1)
 corner_radius_top_left = 12
 corner_radius_top_right = 12
 corner_radius_bottom_right = 12
 corner_radius_bottom_left = 12
-shadow_color = Color(1, 0.47843137, 0.23921569, 0.15752847)
+shadow_color = Color(1, 0.47843137, 0.23921569, 0.15754916)
 shadow_size = 6
 
 [node name="Boot" type="Control" unique_id=1582119351]
@@ -67,7 +67,7 @@ unique_name_in_owner = true
 custom_minimum_size = Vector2(560, 560)
 layout_mode = 2
 
-[node name="CharacterPreview" parent="Center/Row/VinylLogo" instance=ExtResource("13_char")]
+[node name="CharacterPreview" parent="Center/Row/VinylLogo" unique_id=2085825999 instance=ExtResource("13_char")]
 unique_name_in_owner = true
 layout_mode = 2
 
@@ -122,7 +122,7 @@ theme_override_constants/separation = 20
 layout_mode = 2
 size_flags_vertical = 4
 mouse_filter = 2
-theme_override_styles/panel = SubResource("StyleBoxFlat_3837e")
+theme_override_styles/panel = SubResource("StyleBoxFlat_elkq3")
 script = ExtResource("5_onair")
 
 [node name="Spacer" type="Control" parent="TopBar/Row" unique_id=501621540]
@@ -221,7 +221,7 @@ unique_name_in_owner = true
 visible = false
 layout_mode = 1
 
-[node name="CustomizePanel" parent="." instance=ExtResource("14_cust")]
+[node name="CustomizePanel" parent="." unique_id=741942567 instance=ExtResource("14_cust")]
 unique_name_in_owner = true
 visible = false
 layout_mode = 1
@@ -238,7 +238,7 @@ grow_vertical = 2
 mouse_filter = 2
 color = Color(0.118, 0.102, 0.141, 1)
 
-[node name="LoadingLabel" type="Label" parent="Fade"]
+[node name="LoadingLabel" type="Label" parent="Fade" unique_id=2067262271]
 unique_name_in_owner = true
 visible = false
 layout_mode = 1
