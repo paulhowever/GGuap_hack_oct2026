@@ -17,6 +17,11 @@ signal song_ended(t: float)
 signal result_received(result: Dictionary) # контракт TakeResult
 signal calibrated(lag_ms: int, hits: int)
 signal bridge_error(code: String, msg: String)
+## Каверы (ADR-023/024): итог publish/unpublish и прослушивание опубликованного дубля.
+signal published(take_id: String, is_published: bool, ok: bool, code: String)
+signal listen_started(take_id: String, duration: float)
+## reason: ended | stopped | error (тогда code — причина, например audio_locked)
+signal listen_ended(take_id: String, reason: String, code: String)
 ## Каждый кадр после poll(): новые кадры питча лежат в `frames`.
 signal polled
 
@@ -30,6 +35,9 @@ const CAL_GAP := 0.5
 const CAL_CLICKS := 8
 const CAL_MIN_HITS := 5
 const STUB_CLIENT_ID := "00000000-0000-4000-8000-000000000000"
+const STUB_PUBLISH_DELAY := 0.4  # с
+## Заглушка прослушивания кавера: длительность песни из мока, иначе столько секунд.
+const STUB_LISTEN_SEC := 10.0
 
 ## Последний результат poll(): часы песни (единственные часы игры), состояние, уровень.
 var t_now: float = 0.0
@@ -46,6 +54,7 @@ var last_error: String = ""
 var _js: JavaScriptObject
 var _cb: JavaScriptObject              # держим ссылку, иначе GC уберёт колбэк
 var _stub: Dictionary = {}
+var _methods: Dictionary = {}          # кэш _has(): имя метода window.voice → есть ли
 
 
 func _ready() -> void:
@@ -164,14 +173,16 @@ func client_id() -> String:
 ## Играть с позиции from_sec (< 0 — продолжить с текущей, после конца — с начала).
 func review_play(from_sec: float = -1.0) -> void:
 	if _js:
-		_js.review_play(from_sec)
+		if _has("review_play"):
+			_js.review_play(from_sec)
 	else:
 		_stub_review_play(from_sec)
 
 
 func review_pause() -> void:
 	if _js:
-		_js.review_pause()
+		if _has("review_pause"):
+			_js.review_pause()
 	elif _stub_review_is_playing():
 		_stub.review.pos = _stub_review_pos()
 		_stub.review.playing = false
@@ -179,7 +190,8 @@ func review_pause() -> void:
 
 func review_seek(t_sec: float) -> void:
 	if _js:
-		_js.review_seek(t_sec)
+		if _has("review_seek"):
+			_js.review_seek(t_sec)
 	elif _stub.has("review"):
 		var r: Dictionary = _stub.review
 		r.pos = clampf(t_sec, 0.0, float(r.dur))
@@ -189,7 +201,8 @@ func review_seek(t_sec: float) -> void:
 
 func review_stop() -> void:
 	if _js:
-		_js.review_stop()
+		if _has("review_stop"):
+			_js.review_stop()
 	elif _stub.has("review"):
 		_stub.review.playing = false
 		_stub.review.pos = 0.0
@@ -199,6 +212,8 @@ func review_stop() -> void:
 func review_state() -> Dictionary:
 	var empty := {"available": false, "state": "idle", "t": 0.0, "duration": 0.0, "song_id": null, "take_id": null}
 	if _js:
+		if not _has("review_state"):
+			return empty
 		var raw = _js.review_state()
 		var p = JSON.parse_string(str(raw)) if raw != null else null
 		return p if p is Dictionary else empty
@@ -212,6 +227,120 @@ func review_state() -> Dictionary:
 	var st := "playing" if bool(r.playing) else ("ended" if t >= float(r.dur) else "paused")
 	return {"available": true, "state": st, "t": t, "duration": float(r.dur),
 		"song_id": r.song_id, "take_id": r.take_id}
+
+
+# --- Каверы: публикация и прослушивание опубликованных дублей ---------------
+# Старая сборка движка без этих методов — has_covers() == false, кнопки не показываем.
+
+## Есть ли в движке публикация и прослушивание каверов.
+func has_covers() -> bool:
+	return _js == null or _has("publish")
+
+
+## Итог — сигнал published(take_id, true, ok, code).
+func publish(take_id: String) -> void:
+	_set_published(take_id, true)
+
+
+## Итог — сигнал published(take_id, false, ok, code).
+func unpublish(take_id: String) -> void:
+	_set_published(take_id, false)
+
+
+## Слушать опубликованный дубль поверх минуса. Итог — listen_started, затем ровно
+## один listen_ended. Новый listen останавливает предыдущий.
+func listen(take_id: String) -> void:
+	if _js:
+		if _has("listen"):
+			_js.listen(take_id)
+		else:
+			_dispatch("on_listen_end", JSON.stringify({"take_id": take_id, "reason": "error", "code": "unsupported"}))
+	else:
+		_stub_listen(take_id)
+
+
+func listen_stop() -> void:
+	if _js:
+		if _has("listen_stop"):
+			_js.listen_stop()
+	else:
+		_stub_listen_end("stopped")
+
+
+func listen_pause() -> void:
+	if _js:
+		if _has("listen_pause"):
+			_js.listen_pause()
+	elif _stub_listening() and bool(_stub.listen.playing):
+		_stub.listen.pos = _stub_listen_pos()
+		_stub.listen.playing = false
+
+
+## Продолжить с места паузы (после конца прослушивание уже закрыто — нужен новый listen).
+func listen_resume() -> void:
+	if _js:
+		if _has("listen_resume"):
+			_js.listen_resume()
+	elif _stub_listening() and not bool(_stub.listen.playing):
+		_stub.listen.start_pos = _stub.listen.pos
+		_stub.listen.start_ms = Time.get_ticks_msec()
+		_stub.listen.playing = true
+
+
+func listen_seek(t_sec: float) -> void:
+	if _js:
+		if _has("listen_seek"):
+			_js.listen_seek(t_sec)
+	elif _stub_listening():
+		var l: Dictionary = _stub.listen
+		l.pos = clampf(t_sec, 0.0, float(l.dur))
+		l.start_pos = l.pos
+		l.start_ms = Time.get_ticks_msec()
+
+
+## {take_id, state: idle|loading|playing|paused, t, duration}
+func listen_state() -> Dictionary:
+	var empty := {"take_id": null, "state": "idle", "t": 0.0, "duration": 0.0}
+	if _js:
+		if not _has("listen_state"):
+			return empty
+		var raw = _js.listen_state()
+		var p = JSON.parse_string(str(raw)) if raw != null else null
+		return p if p is Dictionary else empty
+	if not _stub_listening():
+		return empty
+	var l: Dictionary = _stub.listen
+	var t := _stub_listen_pos()
+	if bool(l.playing) and t >= float(l.dur):
+		_stub_listen_end("ended")
+		return empty
+	return {"take_id": l.take_id, "state": "playing" if bool(l.playing) else "paused",
+		"t": t, "duration": float(l.dur)}
+
+
+## Есть ли метод у window.voice (кэшируется: состояние плеера опрашивается каждый кадр).
+func _has(method: String) -> bool:
+	if _js == null:
+		return false
+	if not _methods.has(method):
+		_methods[method] = str(JavaScriptBridge.eval("typeof window.voice.%s" % method, true)) == "function"
+	return _methods[method]
+
+
+func _set_published(take_id: String, value: bool) -> void:
+	if _js:
+		if _has("publish"):
+			if value:
+				_js.publish(take_id)
+			else:
+				_js.unpublish(take_id)
+		else:
+			_dispatch("on_published", JSON.stringify({"take_id": take_id, "published": value,
+				"ok": false, "code": "unsupported"}))
+		return
+	# заглушка: как ?mock — без сети, всегда ok
+	await get_tree().create_timer(STUB_PUBLISH_DELAY).timeout
+	_dispatch("on_published", JSON.stringify({"take_id": take_id, "published": value, "ok": true, "code": null}))
 
 
 # --- Опрос ------------------------------------------------------------------
@@ -280,6 +409,18 @@ func _dispatch(event_name: String, json: String) -> void:
 				is_calibrating = false
 				calibrated.emit(Session.lag_ms, 0)
 			bridge_error.emit(code, str(p.get("msg", "")))
+		"on_published":
+			published.emit(str(p.get("take_id", "")), bool(p.get("published", false)),
+				bool(p.get("ok", false)), _code_of(p))
+		"on_listen":
+			listen_started.emit(str(p.get("take_id", "")), float(p.get("duration", 0.0)))
+		"on_listen_end":
+			listen_ended.emit(str(p.get("take_id", "")), str(p.get("reason", "stopped")), _code_of(p))
+
+
+func _code_of(p: Dictionary) -> String:
+	var c = p.get("code")
+	return "" if c == null else str(c)
 
 
 # --- Заглушка вне веба (как ?mock=perfect) -------------------------------------
@@ -395,6 +536,42 @@ func _stub_review_pos() -> float:
 	if not bool(r.playing):
 		return float(r.pos)
 	return minf(float(r.dur), float(r.start_pos) + (Time.get_ticks_msec() - int(r.start_ms)) / 1000.0)
+
+
+func _stub_listening() -> bool:
+	return _stub.has("listen")
+
+
+func _stub_listen_pos() -> float:
+	var l: Dictionary = _stub.listen
+	if not bool(l.playing):
+		return float(l.pos)
+	return minf(float(l.dur), float(l.start_pos) + (Time.get_ticks_msec() - int(l.start_ms)) / 1000.0)
+
+
+## Как мок в вебе: звука нет, только таймлайн и те же события.
+func _stub_listen(take_id: String) -> void:
+	_stub_listen_end("stopped")
+	if _stub.state == "playing":
+		_dispatch.call_deferred("on_listen_end", JSON.stringify({"take_id": take_id, "reason": "error", "code": "audio_locked"}))
+		return
+	if _stub_review_is_playing():
+		review_pause()
+	var ref = _stub.ref if not (_stub.ref as Dictionary).is_empty() else _load_json(MOCK_DIR + "demo.reference.json")
+	var dur := STUB_LISTEN_SEC
+	if ref is Dictionary and ref.get("audio") is Dictionary:
+		dur = float(ref.audio.get("duration", STUB_LISTEN_SEC))
+	_stub["listen"] = {"take_id": take_id, "dur": dur, "pos": 0.0, "playing": true,
+		"start_ms": Time.get_ticks_msec(), "start_pos": 0.0}
+	_dispatch.call_deferred("on_listen", JSON.stringify({"take_id": take_id, "duration": dur}))
+
+
+func _stub_listen_end(reason: String) -> void:
+	if not _stub_listening():
+		return
+	var take_id := str(_stub.listen.take_id)
+	_stub.erase("listen")
+	_dispatch.call_deferred("on_listen_end", JSON.stringify({"take_id": take_id, "reason": reason, "code": null}))
 
 
 func _stub_review_play(from_sec: float) -> void:

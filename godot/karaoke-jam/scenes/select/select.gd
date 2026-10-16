@@ -5,11 +5,14 @@ extends Control
 ## сложности (Session.difficulty) и кнопкой «Начать». Повторный клик по выбранной
 ## карточке (или Esc) снимает выбор — таблица уезжает, список возвращается в центр.
 ## «Мой последний результат» открывает сохранённый результат (Session.saved_result).
+## В таблице только опубликованные каверы (ADR-024); клик по строке открывает окно кавера
+## (CoverDialog: прослушивание, подробности ранга, комментарии, «Снять публикацию» у своей).
 ## Esc без выбора / «Назад» — в меню.
 
 const BOOT_SCENE := "res://scenes/boot/boot.tscn"
 const GAME_SCENE := "res://scenes/game/game.tscn"
 const RESULT_SCENE := "res://scenes/result/result.tscn"
+const COVER_SCENE := preload("res://scenes/cover/cover_dialog.tscn")
 const GRADE_COLORS: Dictionary = preload("res://scenes/result/result.gd").GRADE_COLORS
 const C_ACCENT := Color(1.0, 0.478, 0.239)
 const C_TEAL := Color(0.373, 0.827, 0.737)
@@ -45,6 +48,9 @@ var _board_open: bool = false
 var _board_seq: int = 0
 var _slide: Tween
 var _header_style: StyleBoxFlat
+var _cover: CoverDialog  # окно кавера (ModalPanel)
+## Строка, с которой открыли окно кавера, — вернуть ей фокус после закрытия.
+var _cover_from: Control
 
 
 func _ready() -> void:
@@ -66,6 +72,13 @@ func _ready() -> void:
 			Session.save_settings()
 			_load_board())
 	_build_board_header()
+	_cover = COVER_SCENE.instantiate()
+	add_child(_cover)
+	move_child(_cover, %Fade.get_index())   # под затемнением перехода
+	_cover.unpublished.connect(func(_id: String) -> void: _load_board())
+	_cover.closed.connect(func() -> void:
+		if is_instance_valid(_cover_from) and _cover_from.is_inside_tree() and not _leaving:
+			_cover_from.grab_focus.call_deferred())
 	_stage.resized.connect(_layout)
 	_song_card.minimum_size_changed.connect(_layout)
 	_board_card.minimum_size_changed.connect(_layout)
@@ -237,6 +250,7 @@ func _sync_selection() -> void:
 	var b := _song_group.get_pressed_button()
 	if b == null:
 		_selected = {}
+		_close_cover()
 		_show_board(false)
 		return
 	var song: Dictionary = b.get_meta(&"song", {})
@@ -310,6 +324,7 @@ func _row_style(me: bool) -> StyleBoxFlat:
 func _load_board() -> void:
 	if _selected.is_empty():
 		return
+	_close_cover()   # сменились песня/сложность или таблица перезагружается
 	_board_seq += 1
 	var seq := _board_seq
 	var song_id := str(_selected.get("id", ""))
@@ -323,7 +338,7 @@ func _load_board() -> void:
 		return
 	var rows: Array = r.data
 	if rows.is_empty():
-		_board_message("Здесь пока никто не пел на этой сложности.\nСтаньте первым!", false)
+		_board_message("Здесь пока нет опубликованных каверов на этой сложности.\nСпойте и опубликуйте первым!", false)
 		return
 	_clear_board()
 	if r.get("mock", false):
@@ -365,27 +380,64 @@ func _board_message(text: String, can_retry: bool) -> void:
 
 
 ## Строка таблицы: место · ник · очки · ранг. Своя строка (me) подсвечена.
+## В таблице только опубликованные каверы (ADR-024): строка — кнопка, открывает окно кавера.
 func _make_row(row: Dictionary) -> Control:
 	var me := bool(row.get("me", false))
-	var panel := PanelContainer.new()
-	panel.add_theme_stylebox_override(&"panel", _row_style(me))
+	var panel := Button.new()
+	panel.focus_mode = Control.FOCUS_ALL
+	panel.tooltip_text = "Послушать кавер"
+	panel.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	var style := _row_style(me)
+	var hover := style.duplicate() as StyleBoxFlat
+	hover.bg_color = hover.bg_color.lerp(C_ACCENT, 0.18)
+	hover.border_color = C_ACCENT
+	hover.set_border_width_all(2)
+	panel.add_theme_stylebox_override(&"normal", style)
+	panel.add_theme_stylebox_override(&"hover", hover)
+	panel.add_theme_stylebox_override(&"pressed", hover)
+	panel.add_theme_stylebox_override(&"focus", hover)
+	panel.pressed.connect(func() -> void: _open_cover(row, panel))
 
 	var h := HBoxContainer.new()
 	h.add_theme_constant_override(&"separation", 16)
+	h.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.add_child(h)
+	# кнопка не контейнер: растягиваем содержимое на всю строку и задаём высоту по нему
+	h.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	h.offset_left = style.content_margin_left
+	h.offset_right = -style.content_margin_right
+	h.minimum_size_changed.connect(func() -> void:
+		panel.custom_minimum_size.y = h.get_combined_minimum_size().y \
+			+ style.content_margin_top + style.content_margin_bottom)
 	var rank := int(row.get("rank", 0))
 	var rank_cell := _cell(str(rank), COL_RANK, HORIZONTAL_ALIGNMENT_CENTER)
 	if rank <= 3:
 		rank_cell.add_theme_color_override(&"font_color", [GRADE_COLORS.S, Color(0.82, 0.84, 0.88), Color(0.86, 0.6, 0.4)][rank - 1])
 	h.add_child(rank_cell)
-	var name_cell := _cell(str(row.get("player", "?")) + ("  (вы)" if me else ""), 0.0, HORIZONTAL_ALIGNMENT_LEFT)
+	var name_cell := _cell("♪  " + str(row.get("player", "?")) + ("  (вы)" if me else ""), 0.0, HORIZONTAL_ALIGNMENT_LEFT)
 	h.add_child(name_cell)
 	h.add_child(_cell(str(int(row.get("total", 0))), COL_TOTAL, HORIZONTAL_ALIGNMENT_RIGHT))
 	var grade := str(row.get("grade", "—"))
 	var grade_cell := _cell(grade, COL_GRADE, HORIZONTAL_ALIGNMENT_CENTER)
 	grade_cell.add_theme_color_override(&"font_color", GRADE_COLORS.get(grade, Color.WHITE))
 	h.add_child(grade_cell)
+	for c in h.get_children():
+		(c as Control).mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return panel
+
+
+# --- Окно кавера -------------------------------------------------------------------
+
+func _open_cover(row: Dictionary, from: Control) -> void:
+	if _leaving or _cover.is_open:
+		return
+	_cover_from = from
+	_cover.open_row(row)
+
+
+func _close_cover() -> void:
+	if _cover and _cover.is_open:
+		_cover.close()
 
 
 func _cell(text: String, width: float, align: HorizontalAlignment, hint: bool = false) -> Label:
@@ -428,6 +480,7 @@ func _open_last_result() -> void:
 
 
 func _fade_out() -> void:
+	_close_cover()
 	var tw := create_tween()
 	tw.tween_property(%Fade, "modulate:a", 1.0, 0.35)
 	await tw.finished
@@ -436,10 +489,13 @@ func _fade_out() -> void:
 func _back() -> void:
 	if _leaving:
 		return
+	_close_cover()
 	get_tree().change_scene_to_file(BOOT_SCENE)
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if _cover and _cover.is_open:
+		return   # Esc закрывает окно кавера (ModalPanel), а не таблицу
 	if event.is_action_pressed(&"ui_cancel"):
 		get_viewport().set_input_as_handled()
 		if _board_open:

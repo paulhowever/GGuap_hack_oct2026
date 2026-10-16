@@ -2,7 +2,7 @@
 
 FastAPI (Паша). Маршруты: `/healthz`, `/api/v1/{version,health,songs,sessions,takes,players,leaderboard,challenges,published}`, `/c/{id}`, `/media` (файлы `songs/`).
 
-Каверы (ADR-023): `POST /api/v1/published` публикует свой `ok`-дубль, `POST /api/v1/published/{take_id}/remove` снимает публикацию, `GET /api/v1/published?song_id=` — список, `GET /api/v1/published/{take_id}` — элемент, `/audio` — WAV с Range. Публикации хранятся в таблице `published_takes`, WAV — прежний `takes/<id>.wav`; `client_id` в ответах нет.
+Каверы (ADR-023): `POST /api/v1/published` публикует свой `ok`-дубль, `POST /api/v1/published/{take_id}/remove` снимает публикацию, `GET /api/v1/published?song_id=` — список, `GET /api/v1/published/{take_id}` — элемент, `/audio` — WAV с Range. Публикации хранятся в таблице `published_takes`, WAV — прежний `takes/<id>.wav`; `client_id` в ответах нет. Лидерборд (ADR-024) строится только из опубликованных `ok`-дублей, по одному на игрока: публикация другого дубля той же песни и сложности снимает прежнюю.
 
 Статика на `/`: по умолчанию `web/`; собранную игру `dist/web` отдаёт `make dev` и `make demo` через `KARAOKE_WEB_DIR`.
 

@@ -1,7 +1,8 @@
 extends Control
 ## Экран результата: Session.last_result (контракт TakeResult).
 ## Итог, оценка, точность по высоте/ритму, разбор строк с советами,
-## место в таблице (блок скрыт, если leaderboard == null).
+## место в таблице (блок скрыт, если leaderboard == null), прослушивание дубля
+## и «Опубликовать кавер» — в таблицу лидеров попадают только опубликованные (ADR-024).
 
 const SELECT_SCENE := "res://scenes/select/select.tscn"
 const GAME_SCENE := "res://scenes/game/game.tscn"
@@ -35,8 +36,15 @@ const GRADE_COLORS := {
 @onready var _seek: HSlider = %Seek
 @onready var _time: Label = %TimeLabel
 @onready var _player_hint: Label = %PlayerHint
+@onready var _publish: Button = %PublishButton
+@onready var _publish_hint: Label = %PublishHint
+
+const PUBLISH_TEXT := "Опубликовать кавер"  # подпись кнопки в покое
+const CONFIRM_SCENE := preload("res://ui/panels/confirm_panel.tscn")
 
 var _leaving: bool = false
+var _publishing: bool = false
+var _confirm: ConfirmPanel
 ## Дубль этого результата ещё в памяти страницы — можно послушать.
 var _can_review: bool = false
 var _review_state: String = "idle"
@@ -58,6 +66,9 @@ func _ready() -> void:
 	Performers.dim(false)
 	_fill(Session.last_result)
 	_setup_review()
+	_confirm = CONFIRM_SCENE.instantiate()
+	add_child(_confirm)
+	_setup_publish()
 
 
 func _exit_tree() -> void:
@@ -128,40 +139,196 @@ func _update_player(st: Dictionary) -> void:
 
 
 func _fmt(sec: float) -> String:
+	return fmt_time(sec)
+
+
+## «м:сс» для плееров (здесь и в окне кавера).
+static func fmt_time(sec: float) -> String:
 	var s := maxi(0, int(sec))
 	@warning_ignore("integer_division")
 	return "%d:%02d" % [s / 60, s % 60]
 
 
+## «Высота N% · Ритм N% · Бонусы N%» из score контракта TakeResult.
+static func details_text(score: Dictionary) -> String:
+	return "Высота %d%%   ·   Ритм %d%%   ·   Бонусы %d%%" % [
+		roundi(float(score.get("pitch_pct", 0))), roundi(float(score.get("rhythm_pct", 0))),
+		roundi(float(score.get("extras_pct", 0)))]
+
+
+## Строка разбора «текст — оценка (очки)» и совет под ней, если есть.
+static func make_line_label(line: Dictionary) -> Label:
+	var l := Label.new()
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l.add_theme_font_size_override(&"font_size", 24)
+	var tip = line.get("tip")
+	l.text = "«%s» — %s (%d)%s" % [line.get("text", ""), line.get("grade", ""),
+		int(line.get("score", 0)), ("\n   " + str(tip)) if tip != null and str(tip) != "" else ""]
+	return l
+
+
 func _fill(r: Dictionary) -> void:
 	var score: Dictionary = r.get("score", {}) if r.get("score") is Dictionary else {}
 	var total := clampi(int(score.get("total", 0)), 0, int(MAX_SCORE))
-	_details.text = "Высота %d%%   ·   Ритм %d%%   ·   Бонусы %d%%" % [
-		roundi(float(score.get("pitch_pct", 0))), roundi(float(score.get("rhythm_pct", 0))),
-		roundi(float(score.get("extras_pct", 0)))]
+	_details.text = details_text(score)
 	_animate_score(float(total), str(score.get("grade", "—")))
 
 	for line in r.get("lines", []):
-		if not line is Dictionary:
-			continue
-		var l := Label.new()
-		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		l.add_theme_font_size_override(&"font_size", 24)
-		var tip = line.get("tip")
-		l.text = "«%s» — %s (%d)%s" % [line.get("text", ""), line.get("grade", ""),
-			int(line.get("score", 0)), ("\n   " + str(tip)) if tip != null and str(tip) != "" else ""]
-		_lines.add_child(l)
+		if line is Dictionary:
+			_lines.add_child(make_line_label(line))
 
-	var lb = r.get("leaderboard")
-	_board.visible = lb is Dictionary
-	if lb is Dictionary:
-		_board.text = "Место %d из %d%s" % [int(lb.get("rank", 0)), int(lb.get("of", 0)),
-			"  ·  личный рекорд!" if lb.get("personal_best", false) else ""]
+	_show_board_place(r, false)
 
 	var integrity = r.get("integrity")
 	_warn.visible = integrity is Dictionary and str(integrity.get("status", "ok")) != "ok"
 	if _warn.visible:
-		_warn.text = "Запись не попала в таблицу: проверка честности не пройдена."
+		_warn.text = "Этот дубль нельзя опубликовать в таблицу: проверка честности не пройдена."
+
+
+## В таблице только опубликованные каверы (ADR-024): до публикации leaderboard —
+## место, которое займёт этот дубль, после — место в таблице.
+func _show_board_place(r: Dictionary, is_published: bool) -> void:
+	var lb = r.get("leaderboard")
+	_board.visible = lb is Dictionary
+	if not lb is Dictionary:
+		return
+	var place := "Место %d из %d" % [int(lb.get("rank", 0)), int(lb.get("of", 0))]
+	_board.text = (place + "  ·  кавер опубликован") if is_published \
+		else ("%s при публикации%s" % [place, "  ·  личный рекорд!" if lb.get("personal_best", false) else ""])
+
+
+# --- Публикация кавера ------------------------------------------------------------
+
+## Кнопка только после настоящего пения, только для честного дубля и если движок умеет.
+func _setup_publish() -> void:
+	var r := Session.last_result
+	var integrity = r.get("integrity")
+	var ok := not (integrity is Dictionary) or str(integrity.get("status", "ok")) == "ok"
+	_publish.visible = not Session.result_review and ok and r.get("take_id") != null \
+		and VoiceBridge.has_covers()
+	_publish_hint.visible = false
+	if _publish.visible:
+		_publish.pressed.connect(_on_publish_pressed)
+
+
+func _on_publish_pressed() -> void:
+	if _publishing:
+		return
+	_publishing = true
+	_publish.disabled = true
+	var r := Session.last_result
+	var take_id := str(r.get("take_id"))
+	var total := int((r.get("score", {}) as Dictionary).get("total", 0)) if r.get("score") is Dictionary else 0
+	var song_id := str(r.get("song_id", Session.song_id))
+	var difficulty := str(r.get("difficulty", Session.difficulty))
+	_publish.text = "Проверяем таблицу…"
+	var board: Dictionary = await Api.get_leaderboard(song_id, difficulty, 100)
+	if not is_inside_tree():
+		return
+	var ask := _publish_question(board, take_id, total)
+	_publish.text = PUBLISH_TEXT
+	if ask.is_empty():   # этот дубль уже в таблице
+		_published_done(board)
+		return
+	var yes: bool = await _confirm.ask(ask.title, ask.text, "Опубликовать")
+	if not is_inside_tree():
+		return
+	if not yes:
+		_publishing = false
+		_publish.disabled = false
+		_publish.grab_focus()
+		return
+	_publish.text = "Публикуем…"
+	_publish_hint.visible = false
+	VoiceBridge.publish(take_id)
+	var res: Array = await published_for(take_id)
+	if not is_inside_tree():
+		return
+	if bool(res[0]):
+		var fresh: Dictionary = await Api.get_leaderboard(song_id, difficulty, 100)
+		if is_inside_tree():
+			_published_done(fresh)
+		return
+	_publishing = false
+	_publish.disabled = false
+	_publish.text = PUBLISH_TEXT
+	_publish_hint.text = publish_error_text(str(res[1]))
+	_publish_hint.visible = true
+
+
+## Ждёт ответ моста именно для этого дубля: [ok, code].
+static func published_for(take_id: String) -> Array:
+	while true:
+		# await сигнала с несколькими аргументами отдаёт их массивом
+		var a: Array = await VoiceBridge.published
+		if str(a[0]) == take_id:
+			return [a[2], a[3]]
+	return [false, "unknown"]
+
+
+## Текст подтверждения: что сейчас в таблице и каким будет новое место.
+## Пусто — этот дубль уже опубликован.
+func _publish_question(board: Dictionary, take_id: String, total: int) -> Dictionary:
+	var privacy := "Запись голоса станет доступна всем: её можно будет послушать из таблицы лидеров."
+	if not board.get("ok", false) or not board.get("data") is Array:
+		return {"title": "Опубликовать кавер?", "text": privacy}
+	var rows: Array = board.data
+	var mine: Dictionary = {}
+	var others := 0
+	var ahead := 0
+	for row in rows:
+		if not row is Dictionary:
+			continue
+		if bool(row.get("me", false)):
+			mine = row
+			continue
+		others += 1
+		if int(row.get("total", 0)) >= total:
+			ahead += 1
+	if not mine.is_empty() and str(mine.get("take_id")) == take_id:
+		return {}
+	var new_place := "Новый дубль: %d очков, место %d из %d." % [total, ahead + 1, others + 1]
+	if mine.is_empty():
+		return {"title": "Опубликовать кавер?", "text": "%s\n%s" % [new_place, privacy]}
+	var old_place := "Сейчас в таблице ваш кавер: %d очков, место %d из %d." % [
+		int(mine.get("total", 0)), int(mine.get("rank", 0)), rows.size()]
+	if int(mine.get("total", 0)) > total:
+		return {"title": "Новый кавер хуже текущего",
+			"text": "%s\n%s\nОн заменит текущий, и ваша строка в таблице опустится." % [old_place, new_place]}
+	return {"title": "Заменить кавер в таблице?",
+		"text": "%s\n%s\nПрежний кавер снимется с публикации." % [old_place, new_place]}
+
+
+func _published_done(board: Dictionary) -> void:
+	_publishing = false
+	_publish.disabled = true
+	_publish.text = "Опубликовано ✓"
+	_publish_hint.visible = false
+	if board.get("ok", false) and board.get("data") is Array:
+		for row in board.data:
+			if row is Dictionary and bool(row.get("me", false)):
+				_board.visible = true
+				_board.text = "Место %d из %d  ·  кавер опубликован" % [int(row.get("rank", 0)), (board.data as Array).size()]
+				return
+	_show_board_place(Session.last_result, true)
+
+
+## Понятный текст ошибки publish/unpublish по коду моста или бэкенда.
+static func publish_error_text(code: String) -> String:
+	match code:
+		"not_owner":
+			return "Это не ваш дубль — опубликовать его нельзя."
+		"take_not_ok":
+			return "Дубль не прошёл проверку честности."
+		"take_not_found", "not_published":
+			return "Дубль не найден на сервере."
+		"audio_not_found":
+			return "Запись дубля не сохранилась на сервере."
+		"net":
+			return "Нет связи с сервером. Попробуйте ещё раз."
+		"unsupported":
+			return "Эта версия страницы не умеет публиковать — обновите её."
+	return "Не получилось (%s). Попробуйте ещё раз." % code
 
 
 ## Кольцо заполняется до процента, процент и очки «набегают»,
@@ -242,6 +409,8 @@ func _go(scene: String) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if _confirm and _confirm.is_open:
+		return   # Esc закрывает диалог подтверждения, а не экран
 	if event.is_action_pressed(&"ui_cancel"):
 		get_viewport().set_input_as_handled()
 		_go(SELECT_SCENE)

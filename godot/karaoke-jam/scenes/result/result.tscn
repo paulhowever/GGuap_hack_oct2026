@@ -178,10 +178,26 @@ theme_override_font_sizes/font_size = 20
 horizontal_alignment = 1
 autowrap_mode = 3
 
+[node name="PublishHint" type="Label" parent="Center/Card/VBox" unique_id=1700000007]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_type_variation = &"HintLabel"
+theme_override_font_sizes/font_size = 20
+horizontal_alignment = 1
+autowrap_mode = 3
+
 [node name="Buttons" type="HBoxContainer" parent="Center/Card/VBox" unique_id=485807034]
 layout_mode = 2
 theme_override_constants/separation = 24
 alignment = 1
+
+[node name="PublishButton" type="Button" parent="Center/Card/VBox/Buttons" unique_id=1700000006]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_type_variation = &"GhostButton"
+text = "Опубликовать кавер"
 
 [node name="AgainButton" type="Button" parent="Center/Card/VBox/Buttons" unique_id=585276630]
 unique_name_in_owner = true

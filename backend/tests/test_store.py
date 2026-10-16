@@ -85,7 +85,7 @@ def test_old_takes_schema_is_reset(settings, caplog):
 
 
 def test_current_schema_is_kept(settings, seed, client, caplog):
-    seed("tk_1", 9000)
+    seed("tk_1", 9000, published=True)
     with TestClient(create_app(settings)) as again:
         assert [i["take_id"] for i in again.get("/api/v1/leaderboard/demo").json()["items"]] == ["tk_1"]
     assert not [r for r in caplog.records if r.getMessage() == "schema_reset"]

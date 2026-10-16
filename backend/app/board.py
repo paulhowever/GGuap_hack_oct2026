@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.store.db import players_by_id
-from app.store.models import Player, Take
+from app.store.models import Player, PublishedTake, Take
 
 
 @dataclass(frozen=True)
@@ -18,6 +18,8 @@ class Entry:
     total: int
     grade: str
     at: datetime
+    # В таблицу идут только опубликованные дубли (ADR-024); по умолчанию True — для ручных списков.
+    published: bool = True
 
 
 def display_name(profile: Player | None, player: str) -> str:
@@ -36,13 +38,21 @@ def iso(at: datetime) -> str:
     return (at if at.tzinfo else at.replace(tzinfo=UTC)).isoformat(timespec="seconds")
 
 
-def rank_entries(entries: list[Entry]) -> list[dict]:
+def order(e: Entry) -> tuple[int, datetime]:
+    return -e.total, e.at
+
+
+def best_published(entries: list[Entry]) -> dict[str, Entry]:
+    """Строка игрока — его опубликованный дубль (если их несколько — лучший), в порядке таблицы."""
     best: dict[str, Entry] = {}
-    attempts: Counter[str] = Counter()
-    for e in sorted(entries, key=lambda e: (-e.total, e.at)):
-        key = player_key(e.client_id, e.player)
-        attempts[key] += 1
-        best.setdefault(key, e)
+    for e in sorted((e for e in entries if e.published), key=order):
+        best.setdefault(player_key(e.client_id, e.player), e)
+    return best
+
+
+def rank_entries(entries: list[Entry]) -> list[dict]:
+    attempts = Counter(player_key(e.client_id, e.player) for e in entries)
+    best = best_published(entries)
     return [
         {
             "rank": rank,
@@ -59,12 +69,23 @@ def rank_entries(entries: list[Entry]) -> list[dict]:
 
 
 async def board_entries(sessions: async_sessionmaker, song_id: str, difficulty: str) -> list[Entry]:
-    query = select(Take.id, Take.client_id, Take.player, Take.total, Take.grade, Take.created_at).where(
-        Take.song_id == song_id, Take.difficulty == difficulty, Take.integrity_status == "ok"
+    """Все ok-дубли песни на сложности с пометкой публикации (для attempts нужны и неопубликованные)."""
+    query = (
+        select(
+            Take.id,
+            Take.client_id,
+            Take.player,
+            Take.total,
+            Take.grade,
+            Take.created_at,
+            PublishedTake.take_id.is_not(None),
+        )
+        .outerjoin(PublishedTake, PublishedTake.take_id == Take.id)
+        .where(Take.song_id == song_id, Take.difficulty == difficulty, Take.integrity_status == "ok")
     )
     async with sessions() as session:
         rows = (await session.execute(query)).all()
-    return [Entry(*row) for row in rows]
+    return [Entry(*row[:6], published=bool(row[6])) for row in rows]
 
 
 async def leaderboard(
@@ -93,9 +114,18 @@ async def display_names(sessions: async_sessionmaker, takes: list[Take]) -> dict
 
 
 async def placement(sessions: async_sessionmaker, take: Take) -> dict | None:
-    rows = rank_entries(await board_entries(sessions, take.song_id, take.difficulty))
+    """Место, которое дубль займёт, если его опубликовать (ADR-024): среди опубликованных строк
+    других игроков. personal_best — лучший ли это ok-дубль игрока, опубликован он или нет."""
+    entries = await board_entries(sessions, take.song_id, take.difficulty)
     key = player_key(take.client_id, take.player)
-    for row in rows:
-        if player_key(row["client_id"], row["player"]) == key:
-            return {"rank": row["rank"], "of": len(rows), "personal_best": row["take_id"] == take.id}
-    return None
+    mine = [e for e in entries if player_key(e.client_id, e.player) == key]
+    this = next((e for e in mine if e.take_id == take.id), None)
+    if this is None:
+        return None
+    others = best_published([e for e in entries if player_key(e.client_id, e.player) != key])
+    ahead = sum(1 for e in others.values() if order(e) < order(this))
+    return {
+        "rank": ahead + 1,
+        "of": len(others) + 1,
+        "personal_best": min(mine, key=order).take_id == take.id,
+    }

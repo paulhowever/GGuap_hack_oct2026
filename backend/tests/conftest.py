@@ -11,6 +11,7 @@ from app.scoring.config import load_scoring_config
 from app.scoring.synth import synth_take
 from app.store.db import add_row
 from app.store.models import Take
+from app.store.published import add_published
 
 
 @pytest.fixture(scope="session")
@@ -108,7 +109,7 @@ def partial(demo_ref):
 
 @pytest.fixture
 def seed(client):
-    def go(take_id, total, player="A", client_id=None, difficulty="normal", status="ok"):
+    def go(take_id, total, player="A", client_id=None, difficulty="normal", status="ok", published=False):
         take = Take(
             id=take_id,
             song_id="demo",
@@ -121,6 +122,9 @@ def seed(client):
             result_json=json.dumps({"take_id": take_id}),
         )
         client.portal.call(add_row, client.app.state.sessions, take)
+        if published:
+            # в лидерборд попадают только опубликованные дубли (ADR-024)
+            client.portal.call(add_published, client.app.state.sessions, take_id, None)
         return take
 
     return go

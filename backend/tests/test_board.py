@@ -3,8 +3,8 @@ from datetime import datetime
 from app.board import Entry, player_key, rank_entries
 
 
-def entry(take_id, total, client_id=None, player="A", minute=0):
-    return Entry(take_id, client_id, player, total, "S", datetime(2026, 10, 17, 12, minute))
+def entry(take_id, total, client_id=None, player="A", minute=0, published=True):
+    return Entry(take_id, client_id, player, total, "S", datetime(2026, 10, 17, 12, minute), published)
 
 
 def test_player_key():

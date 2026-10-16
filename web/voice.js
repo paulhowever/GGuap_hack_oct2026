@@ -46,7 +46,7 @@ export function createVoice(cfg = {}, env = globalThis) {
     ref: null, buffer: null, state: 'idle', t0: 0, loadSeq: 0, judge: null,
     rec: null, flushRec: null, takeFrames: [], take: null, takeJob: null, recDone: null,
     tokenJob: null, identity: null, tokenState: 'none',
-    listenSeq: 0, listening: null, lastPub: null,
+    listenSeq: 0, listening: null, lastPub: null, reviewing: null, lastApplied: null,
     listeners: new Set()
   }
 
@@ -56,6 +56,8 @@ export function createVoice(cfg = {}, env = globalThis) {
       const r = JSON.parse(json)
       const w = s.take?.wav_t0
       s.lastPub = { take_id: r?.take_id ?? null, wav_t0: Number.isFinite(w) && Math.abs(w) <= WAV_T0_MAX ? round(w, 3) : null }
+      const applied = r?.latency?.applied_ms
+      s.lastApplied = Number.isFinite(applied) ? applied : null
     } catch {}
   })
 
@@ -270,6 +272,7 @@ export function createVoice(cfg = {}, env = globalThis) {
 
   async function load_song(id) {
     stopListen('stopped')
+    stopReview()
     if (!s.ctx || s.ctx.state !== 'running') return fail(ERR.LOCKED, 'load_song before unlock')
     if (s.state === 'playing') stop()
     const seq = ++s.loadSeq
@@ -309,6 +312,7 @@ export function createVoice(cfg = {}, env = globalThis) {
 
   function start() {
     stopListen('stopped')
+    stopReview()
     if (!s.buffer || !s.tap) return fail(ERR.LOCKED, 'start before load_song')
     if (s.state === 'playing') return true
     const ctx = s.ctx
@@ -454,6 +458,7 @@ export function createVoice(cfg = {}, env = globalThis) {
 
   async function calibrate(mode) {
     stopListen('stopped')
+    stopReview()
     if (s.calibrating) return false
     if (!s.tap || s.state === 'playing') return fail(ERR.LOCKED, 'calibrate needs unlock and no song playing')
     s.calibrating = true
@@ -511,10 +516,11 @@ export function createVoice(cfg = {}, env = globalThis) {
     return code === null
   }
 
-  function endListen(p, reason, code = null) {
-    if (!p || s.listening !== p) return false
-    s.listening = null
-    s.listenSeq++
+  // --- Транспорт прослушивания: вокал поверх минуса, пауза и перемотка ---
+  // p = { vocal, minus, offset, duration, state: 'loading'|'playing'|'paused'|'ended', pos, at, nodes }
+  // pos — позиция в секундах от начала прослушивания (song-time минуса), at — ctx-время позиции 0.
+
+  function haltNodes(p) {
     for (const n of p.nodes) {
       n.onended = null
       try {
@@ -524,8 +530,79 @@ export function createVoice(cfg = {}, env = globalThis) {
         n.disconnect()
       } catch {}
     }
+    p.nodes = []
+  }
+
+  function transportPos(p) {
+    if (p.state !== 'playing' || !p.vocal || !s.ctx) return p.pos
+    return clamp(s.ctx.currentTime - p.at, p.pos, p.duration)
+  }
+
+  function playFrom(p, pos, onEnd) {
+    haltNodes(p)
+    const ctx = s.ctx
+    const at = ctx.currentTime + LISTEN_LEAD
+    const from = clamp(pos, 0, p.duration)
+    p.pos = from
+    p.at = at - from
+    p.state = 'playing'
+    const voiceSrc = ctx.createBufferSource()
+    voiceSrc.buffer = p.vocal
+    voiceSrc.connect(ctx.destination)
+    p.nodes.push(voiceSrc)
+    voiceSrc.onended = () => onEnd(p)
+    if (p.minus) {
+      let out = s.music
+      if (!out) {
+        out = ctx.createGain()
+        out.gain.value = s.volume
+        out.connect(ctx.destination)
+        p.nodes.push(out)
+      }
+      const minusSrc = ctx.createBufferSource()
+      minusSrc.buffer = p.minus
+      minusSrc.connect(out)
+      p.nodes.push(minusSrc)
+      if (from > 0) minusSrc.start(at, from)
+      else minusSrc.start(at)
+      minusSrc.stop(at + p.duration - from)
+    }
+    const lead = p.offset - from
+    if (lead >= 0) voiceSrc.start(at + lead)
+    else voiceSrc.start(at, -lead)
+  }
+
+  function pauseTransport(p) {
+    if (!p || p.state !== 'playing') return false
+    p.pos = transportPos(p)
+    haltNodes(p)
+    p.state = 'paused'
+    return true
+  }
+
+  function seekTransport(p, t, onEnd) {
+    if (!p) return false
+    const pos = clamp(Number(t) || 0, 0, p.duration || 0)
+    if (p.state === 'playing' && p.vocal && audioReady()) {
+      playFrom(p, pos, onEnd)
+    } else {
+      p.pos = pos
+      if (p.state === 'ended') p.state = 'paused'
+    }
+    return true
+  }
+
+  function endListen(p, reason, code = null) {
+    if (!p || s.listening !== p) return false
+    s.listening = null
+    s.listenSeq++
+    haltNodes(p)
     bus.emit('on_listen_end', { take_id: p.take_id, reason, code })
     return false
+  }
+
+  const onListenEnded = p => {
+    if (s.listening === p && p.seq === s.listenSeq) endListen(p, 'ended')
   }
 
   function stopListen(reason) {
@@ -583,12 +660,13 @@ export function createVoice(cfg = {}, env = globalThis) {
   async function listen(id) {
     const take_id = takeIdOf(id)
     stopListen('stopped')
+    stopReview()
     const refused = !audioReady() ? ERR.LOCKED : take_id ? null : 'not_published'
     if (refused) {
       bus.emit('on_listen_end', { take_id, reason: 'error', code: refused })
       return false
     }
-    const p = { take_id, seq: ++s.listenSeq, nodes: [] }
+    const p = { take_id, seq: ++s.listenSeq, nodes: [], state: 'loading', pos: 0, at: 0, vocal: null, minus: null, offset: 0, duration: 0 }
     s.listening = p
     const live = () => s.listening === p && p.seq === s.listenSeq && audioReady()
     const bail = () => (s.ctx.state === 'running' ? endListen(p, 'stopped') : endListen(p, 'error', ERR.LOCKED))
@@ -603,36 +681,137 @@ export function createVoice(cfg = {}, env = globalThis) {
     } catch (e) {
       return live() ? endListen(p, 'error', e?.code || ERR.NET) : bail()
     }
-    const ctx = s.ctx
-    const at = ctx.currentTime + LISTEN_LEAD
-    const offset = Number.isFinite(item.offset_s) ? item.offset_s : 0
-    const duration = Math.max(0, offset + vocal.duration)
-    const voiceSrc = ctx.createBufferSource()
-    voiceSrc.buffer = vocal
-    voiceSrc.connect(ctx.destination)
-    p.nodes.push(voiceSrc)
-    voiceSrc.onended = () => {
-      if (s.listening === p && p.seq === s.listenSeq) endListen(p, 'ended')
-    }
-    if (minus) {
-      let out = s.music
-      if (!out) {
-        out = ctx.createGain()
-        out.gain.value = s.volume
-        out.connect(ctx.destination)
-        p.nodes.push(out)
-      }
-      const minusSrc = ctx.createBufferSource()
-      minusSrc.buffer = minus
-      minusSrc.connect(out)
-      p.nodes.push(minusSrc)
-      minusSrc.start(at)
-      minusSrc.stop(at + duration)
-    }
-    if (offset >= 0) voiceSrc.start(at + offset)
-    else voiceSrc.start(at, -offset)
-    bus.emit('on_listen', { take_id, duration: round(duration, 3) })
+    p.vocal = vocal
+    p.minus = minus
+    p.offset = Number.isFinite(item.offset_s) ? item.offset_s : 0
+    p.duration = Math.max(0, p.offset + vocal.duration)
+    playFrom(p, 0, onListenEnded)
+    bus.emit('on_listen', { take_id, duration: round(p.duration, 3) })
     return true
+  }
+
+  function listen_pause() {
+    return pauseTransport(s.listening)
+  }
+
+  function listen_resume() {
+    const p = s.listening
+    if (!p || p.state !== 'paused' || !audioReady()) return false
+    playFrom(p, p.pos, onListenEnded)
+    return true
+  }
+
+  function listen_seek(t) {
+    const p = s.listening
+    return p?.vocal ? seekTransport(p, t, onListenEnded) : false
+  }
+
+  function listen_state() {
+    const p = s.listening
+    if (!p) return JSON.stringify({ take_id: null, state: 'idle', t: 0, duration: 0 })
+    return JSON.stringify({ take_id: p.take_id, state: p.state, t: round(transportPos(p), 3), duration: round(p.duration, 3) })
+  }
+
+  // --- Прослушивание своего последнего дубля (s.take) на экране результата ---
+  // Дубль живёт только в памяти страницы. Буферы декодируются один раз и переживают паузу и конец.
+
+  function reviewInfo() {
+    const take = s.take
+    if (!take?.wav || !take.samples || !take.wav_sr) return null
+    const applied = Number.isFinite(s.lastApplied) ? s.lastApplied : Number(take.lag_ms) || 0
+    const offset = (Number(take.wav_t0) || 0) - applied / 1000
+    return { take, offset, duration: Math.max(0, offset + take.samples / take.wav_sr) }
+  }
+
+  function stopReview() {
+    const p = s.reviewing
+    if (!p) return
+    haltNodes(p)
+    if (p.state !== 'ended') p.state = 'paused'
+  }
+
+  const onReviewEnded = p => {
+    if (s.reviewing !== p) return
+    haltNodes(p)
+    p.state = 'ended'
+    p.pos = p.duration
+  }
+
+  function ensureReview() {
+    const info = reviewInfo()
+    if (!info || !s.ctx) return null
+    if (s.reviewing?.take === info.take) return s.reviewing
+    if (s.reviewing) haltNodes(s.reviewing)
+    const minus = s.buffer && s.ref?.id === info.take.song_id ? s.buffer : null
+    const p = { take: info.take, nodes: [], state: 'paused', pos: 0, at: 0, vocal: null, minus, offset: info.offset, duration: info.duration }
+    s.reviewing = p
+    s.ctx.decodeAudioData(info.take.wav.slice(0)).then(
+      vocal => {
+        if (s.reviewing !== p) return
+        p.vocal = vocal
+        if (p.state === 'playing' && audioReady()) playFrom(p, p.pos, onReviewEnded)
+        else if (p.state === 'playing') p.state = 'paused'
+      },
+      () => {
+        if (s.reviewing === p) s.reviewing = null
+      }
+    )
+    return p
+  }
+
+  function review_play(from = -1) {
+    if (!audioReady()) return false
+    const p = ensureReview()
+    if (!p) return false
+    stopListen('stopped')
+    const f = Number(from)
+    let pos = Number.isFinite(f) && f >= 0 ? f : transportPos(p)
+    if (pos >= p.duration - 0.05) pos = 0
+    if (p.vocal) playFrom(p, pos, onReviewEnded)
+    else {
+      p.pos = clamp(pos, 0, p.duration)
+      p.state = 'playing'
+    }
+    return true
+  }
+
+  function review_pause() {
+    const p = s.reviewing
+    if (!p) return false
+    if (!p.vocal && p.state === 'playing') {
+      p.state = 'paused'
+      return true
+    }
+    return pauseTransport(p)
+  }
+
+  function review_seek(t) {
+    const p = ensureReview()
+    return p ? seekTransport(p, t, onReviewEnded) : false
+  }
+
+  function review_stop() {
+    const p = s.reviewing
+    if (!p) return false
+    haltNodes(p)
+    p.state = 'paused'
+    p.pos = 0
+    return true
+  }
+
+  function review_state() {
+    const info = reviewInfo()
+    if (!info || !s.ctx) return JSON.stringify({ available: false, state: 'idle', t: 0, duration: 0, song_id: null, take_id: null })
+    const p = s.reviewing?.take === info.take ? s.reviewing : null
+    const take_id = s.lastPub?.take_id ?? null
+    return JSON.stringify({
+      available: true,
+      state: p ? p.state : 'paused',
+      t: p ? round(transportPos(p), 3) : 0,
+      duration: round(info.duration, 3),
+      song_id: info.take.song_id ?? null,
+      take_id
+    })
   }
 
   function poll() {
@@ -657,6 +836,15 @@ export function createVoice(cfg = {}, env = globalThis) {
     unpublish: id => setPublished(id, false),
     listen,
     listen_stop: () => stopListen('stopped'),
+    listen_pause,
+    listen_resume,
+    listen_seek,
+    listen_state,
+    review_play,
+    review_pause,
+    review_seek,
+    review_stop,
+    review_state,
     _take() {
       const take = s.take
       return take ? { wav: take.wav, meta: metaFor(take, 'dev', null), resampler: take.resampler } : null

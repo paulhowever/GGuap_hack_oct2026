@@ -1,0 +1,166 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scenes/cover/cover_dialog.gd" id="1_cov"]
+
+[node name="CoverDialog" type="Control" node_paths=PackedStringArray("initial_focus")]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_cov")
+initial_focus = NodePath("Center/Card/VBox/Player/CoverPlay")
+
+[node name="Dim" type="ColorRect" parent="."]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.07, 0.06, 0.09, 0.72)
+
+[node name="Center" type="CenterContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Card" type="PanelContainer" parent="Center"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(1000, 0)
+layout_mode = 2
+theme_type_variation = &"CardPanel"
+
+[node name="VBox" type="VBoxContainer" parent="Center/Card"]
+layout_mode = 2
+theme_override_constants/separation = 18
+
+[node name="Header" type="HBoxContainer" parent="Center/Card/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 28
+
+[node name="Character" type="PanelContainer" parent="Center/Card/VBox/Header"]
+custom_minimum_size = Vector2(200, 200)
+layout_mode = 2
+theme_type_variation = &"CardPanel"
+
+[node name="CharacterHint" type="Label" parent="Center/Card/VBox/Header/Character"]
+layout_mode = 2
+theme_type_variation = &"HintLabel"
+theme_override_font_sizes/font_size = 20
+text = "Персонаж
+автора
+скоро"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="Info" type="VBoxContainer" parent="Center/Card/VBox/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+alignment = 1
+
+[node name="CoverName" type="Label" parent="Center/Card/VBox/Header/Info"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"HeadingLabel"
+text = "Игрок"
+text_overrun_behavior = 3
+
+[node name="CoverMeta" type="Label" parent="Center/Card/VBox/Header/Info"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"AccentLabel"
+text = "Место 1   ·   0 очков"
+
+[node name="CoverDetails" type="Label" parent="Center/Card/VBox/Header/Info"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"HintLabel"
+autowrap_mode = 3
+
+[node name="CoverGrade" type="Label" parent="Center/Card/VBox/Header"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(140, 0)
+layout_mode = 2
+theme_type_variation = &"BigNumberLabel"
+theme_override_font_sizes/font_size = 140
+text = "—"
+horizontal_alignment = 1
+
+[node name="Player" type="HBoxContainer" parent="Center/Card/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 20
+alignment = 1
+
+[node name="CoverPlay" type="Button" parent="Center/Card/VBox/Player"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(240, 0)
+layout_mode = 2
+theme_type_variation = &"GhostButton"
+text = "▶  Послушать"
+
+[node name="CoverSeek" type="HSlider" parent="Center/Card/VBox/Player"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+max_value = 1.0
+step = 0.01
+editable = false
+
+[node name="CoverTime" type="Label" parent="Center/Card/VBox/Player"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(150, 0)
+layout_mode = 2
+theme_type_variation = &"HintLabel"
+text = "0:00 / 0:00"
+horizontal_alignment = 2
+
+[node name="CoverHint" type="Label" parent="Center/Card/VBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_type_variation = &"HintLabel"
+theme_override_font_sizes/font_size = 20
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="LinesCaption" type="Label" parent="Center/Card/VBox"]
+layout_mode = 2
+theme_type_variation = &"AccentLabel"
+text = "Комментарии по строкам"
+
+[node name="Scroll" type="ScrollContainer" parent="Center/Card/VBox"]
+custom_minimum_size = Vector2(0, 220)
+layout_mode = 2
+horizontal_scroll_mode = 0
+
+[node name="CoverLines" type="VBoxContainer" parent="Center/Card/VBox/Scroll"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 10
+
+[node name="Buttons" type="HBoxContainer" parent="Center/Card/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 24
+alignment = 1
+
+[node name="UnpublishButton" type="Button" parent="Center/Card/VBox/Buttons"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_type_variation = &"GhostButton"
+text = "Снять публикацию"
+
+[node name="CloseButton" type="Button" parent="Center/Card/VBox/Buttons"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"PrimaryButton"
+text = "Закрыть"

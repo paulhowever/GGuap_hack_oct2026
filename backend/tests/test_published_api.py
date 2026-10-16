@@ -214,7 +214,7 @@ def test_list_filters_and_sorts(client, seed, wav_file, publish):
     seed("tk_high", 9500, "Саня", c2)
     seed("tk_mid", 8000, "Гость", c3)
     seed("tk_easy", 9900, "Изи", c1, difficulty="easy")
-    seed("tk_sus", 9999, "Читер", c2, status="suspect")
+    seed("tk_sus", 9999, "Читер", cid(), status="suspect")
     seed("tk_hidden", 9800, "Тихий", c3)
     for take_id, owner in (("tk_low", c1), ("tk_high", c2), ("tk_mid", c3), ("tk_easy", c1)):
         wav_file(take_id)
@@ -270,19 +270,38 @@ def test_remove(client, settings, publish, take, owner):
     assert publish(take_id, owner).status_code == 200
 
 
-def test_publish_leaves_duel_and_board_unchanged(client, submit, publish, owner):
+def test_publish_leaves_duel_unchanged_and_fills_board(client, submit, publish, owner):
     own = submit(client_id=owner, player="Макс", synth={"mute_lines": frozenset({1})}).json()
     challenge = client.post("/api/v1/challenges", json={"take_id": own["take_id"]}).json()
     rival_owner = cid()
     rival = submit(client_id=rival_owner, player="Саня", challenge_id=challenge["id"]).json()
-    take_urls = [f"/api/v1/takes/{own['take_id']}", f"/api/v1/takes/{rival['take_id']}"]
-    urls = [*take_urls, f"/api/v1/challenges/{challenge['id']}", "/api/v1/leaderboard/demo", "/api/v1/songs"]
+    urls = [
+        f"/api/v1/takes/{own['take_id']}",
+        f"/api/v1/takes/{rival['take_id']}",
+        f"/api/v1/challenges/{challenge['id']}",
+    ]
     before = [client.get(u).content for u in urls]
-    board_keys = [list(row) for row in client.get("/api/v1/leaderboard/demo").json()["items"]]
+    board = "/api/v1/leaderboard/demo"
+    assert client.get(board).json()["items"] == []
     assert publish(own["take_id"], owner, 0.1).status_code == 200
     assert publish(rival["take_id"], rival_owner).status_code == 200
     assert [client.get(u).content for u in urls] == before
-    assert [list(row) for row in client.get("/api/v1/leaderboard/demo").json()["items"]] == board_keys
-    assert board_keys[0] == ["rank", "player", "total", "grade", "take_id", "at", "attempts", "avatar", "me"]
+    rows = client.get(board).json()["items"]
+    assert [r["take_id"] for r in rows] == [rival["take_id"], own["take_id"]]
+    assert list(rows[0]) == ["rank", "player", "total", "grade", "take_id", "at", "attempts", "avatar", "me"]
     client.post(f"/api/v1/published/{own['take_id']}/remove", json={"client_id": owner})
     assert [client.get(u).content for u in urls] == before
+    assert [r["take_id"] for r in client.get(board).json()["items"]] == [rival["take_id"]]
+
+
+def test_publishing_another_take_replaces_the_previous_one(client, submit, publish, owner):
+    first = submit(client_id=owner).json()
+    second = submit(client_id=owner, synth={"cents": 150}).json()
+    assert second["score"]["total"] < first["score"]["total"]
+    assert publish(first["take_id"], owner).status_code == 200
+    assert publish(second["take_id"], owner).status_code == 200
+    assert client.get(f"/api/v1/published/{first['take_id']}").status_code == 404
+    rows = client.get("/api/v1/leaderboard/demo").json()["items"]
+    assert [(r["take_id"], r["attempts"]) for r in rows] == [(second["take_id"], 2)]
+    listed = client.get("/api/v1/published", params={"song_id": "demo"}).json()["items"]
+    assert [i["take_id"] for i in listed] == [second["take_id"]]

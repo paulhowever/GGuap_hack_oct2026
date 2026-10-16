@@ -11,6 +11,7 @@ import { getJson } from './lib/http.js'
 import { playerName } from './lib/meta.js'
 import { DEFAULT_TOL } from './lib/scoring.js'
 import { CLICKS } from './lib/calibration.js'
+import { parseWavHeader } from './lib/wav.js'
 
 const BASE = new URL('./', import.meta.url).href
 const START_DELAY_MS = 150
@@ -19,6 +20,7 @@ const CALIBRATE_DELAY_MS = 1000
 const OPPONENT = 'Соперник'
 const OPPONENT_TOTAL = 7320
 const OPPONENT_LINE = 75
+const MOCK_LISTEN_S = 5
 
 function mockChallenge(id, r) {
   const delta = r.score.total - OPPONENT_TOTAL
@@ -40,16 +42,7 @@ export function createMockVoice(mode, cfg = {}, env = globalThis) {
   const rand = rng(7)
   const api = cfg.api || ''
   const base = cfg.mock_base || BASE
-  const s = { ref: null, state: 'idle', startAt: 0, lastT: 0, timer: null, level: 0, difficulty: cfg.difficulty || 'normal', lag: toMs(cfg.lag_ms) ?? 40, player: null, loadSeq: 0, review: null }
-  // Прослушивание в моке: звука нет, только таймлайн длиной в песню (для UI).
-  const reviewPos = r => (r.playing ? Math.min(r.dur, r.startPos + (env.performance.now() - r.startAt) / 1000) : r.pos)
-  const reviewHalt = () => {
-    const r = s.review
-    if (r?.playing) {
-      r.pos = reviewPos(r)
-      r.playing = false
-    }
-  }
+  const s = { ref: null, state: 'idle', startAt: 0, lastT: 0, timer: null, level: 0, difficulty: cfg.difficulty || 'normal', lag: toMs(cfg.lag_ms) ?? 40, player: null, loadSeq: 0, listenSeq: 0, listening: null, review: null }
 
   const tNow = () => (s.state === 'idle' ? 0 : (env.performance.now() - s.startAt) / 1000)
   const tolTable = cfg.tol_cents || DEFAULT_TOL
@@ -67,10 +60,93 @@ export function createMockVoice(mode, cfg = {}, env = globalThis) {
     return null
   }
 
+  // Таймлайн без звука: p = { state: 'loading'|'playing'|'paused'|'ended', pos, startAt, duration, timer }
+  const nowS = () => env.performance.now() / 1000
+  const posOf = p => (p.state === 'playing' ? Math.min(p.duration, p.pos + nowS() - p.startAt) : p.pos)
+
+  function runTimeline(p, pos, onEnd) {
+    env.clearTimeout(p.timer)
+    p.pos = Math.max(0, Math.min(pos, p.duration))
+    p.startAt = nowS()
+    p.state = 'playing'
+    p.timer = env.setTimeout(() => onEnd(p), (p.duration - p.pos) * 1000)
+  }
+
+  function holdTimeline(p) {
+    if (!p || p.state !== 'playing') return false
+    p.pos = posOf(p)
+    env.clearTimeout(p.timer)
+    p.state = 'paused'
+    return true
+  }
+
+  function seekTimeline(p, t, onEnd) {
+    if (!p || p.state === 'loading') return false
+    const pos = Math.max(0, Math.min(Number(t) || 0, p.duration))
+    if (p.state === 'playing') runTimeline(p, pos, onEnd)
+    else {
+      p.pos = pos
+      p.state = 'paused'
+    }
+    return true
+  }
+
+  const stateOf = (p, extra) => JSON.stringify({ ...extra, state: p.state, t: round(posOf(p), 3), duration: round(p.duration, 3) })
+
+  function endListen(p, reason, code = null) {
+    if (!p || s.listening !== p) return false
+    s.listening = null
+    s.listenSeq++
+    env.clearTimeout(p.timer)
+    bus.emit('on_listen_end', { take_id: p.take_id, reason, code })
+    return false
+  }
+
+  const onListenEnded = p => endListen(p, 'ended')
+
+  function stopReview() {
+    const r = s.review
+    if (r && r.state === 'playing') holdTimeline(r)
+  }
+
+  const onReviewEnded = r => {
+    if (s.review !== r) return
+    r.state = 'ended'
+    r.pos = r.duration
+  }
+
+  function stopListen(reason) {
+    if (!s.listening) {
+      s.listenSeq++
+      return false
+    }
+    endListen(s.listening, reason)
+    return true
+  }
+
+  async function wavSeconds(take_id) {
+    const item = await getJson(env, `${api}/api/v1/published/${encodeURIComponent(take_id)}`)
+    const audio = typeof item?.audio === 'string' ? (/^https?:\/\//.test(item.audio) ? item.audio : api + item.audio) : `${base}mock/take.wav`
+    try {
+      const r = await env.fetch(audio)
+      return r.ok ? parseWavHeader(await r.arrayBuffer())?.duration ?? null : null
+    } catch {
+      return null
+    }
+  }
+
+  function settle(name, payload, value) {
+    return new Promise(resolve => {
+      env.setTimeout(() => {
+        bus.emit(name, payload)
+        resolve(value)
+      }, 0)
+    })
+  }
+
   function finish() {
     if (s.state !== 'playing') return
     s.state = 'ended'
-    s.review = { dur: s.ref.audio.duration, songId: s.ref.id, takeId: null, pos: 0, playing: false, startAt: 0, startPos: 0 }
     for (const j of s.judge?.flush() ?? []) bus.emit('on_note_judged', j)
     bus.emit('on_song_end', { t: round(tNow(), 3) })
   }
@@ -91,6 +167,7 @@ export function createMockVoice(mode, cfg = {}, env = globalThis) {
       if (lag !== null) s.lag = lag
     },
     async load_song(id) {
+      stopListen('stopped')
       const seq = ++s.loadSeq
       const ref = await firstJson([`${api}/api/v1/songs/${encodeURIComponent(id)}`, `${base}mock/${id}.reference.json`])
       if (seq !== s.loadSeq) return false
@@ -102,9 +179,10 @@ export function createMockVoice(mode, cfg = {}, env = globalThis) {
       return true
     },
     start() {
+      stopListen('stopped')
+      stopReview()
       if (!s.ref) return fail(ERR.LOCKED, 'start before load_song')
       if (s.state === 'playing') return true
-      reviewHalt()
       s.state = 'playing'
       s.startAt = env.performance.now() + START_DELAY_MS
       s.lastT = -START_DELAY_MS / 1000
@@ -135,8 +213,11 @@ export function createMockVoice(mode, cfg = {}, env = globalThis) {
         env.setTimeout(async () => {
           const r = await firstJson([`${base}mock/result.${m}.json`, `${base}mock/result.perfect.json`])
           if (!r) return resolve(fail(ERR.NET, 'mock result not found'))
-          if (s.review) s.review.takeId = r.take_id ?? null
-          bus.emit('on_result', { ...r, song_id: s.ref?.id ?? r.song_id, client_id: clientId(env), player: playerName(player), difficulty: s.difficulty, challenge: challengeId ? mockChallenge(challengeId, r) : null })
+          const song_id = s.ref?.id ?? r.song_id
+          // мок «записал» дубль: прослушивание без звука, только таймлайн
+          if (s.review) env.clearTimeout(s.review.timer)
+          s.review = { take_id: r.take_id ?? null, song_id, state: 'paused', pos: 0, startAt: 0, duration: round(s.ref?.audio?.duration || MOCK_LISTEN_S, 3), timer: null }
+          bus.emit('on_result', { ...r, song_id, client_id: clientId(env), player: playerName(player), difficulty: s.difficulty, challenge: challengeId ? mockChallenge(challengeId, r) : null })
           resolve(true)
         }, SUBMIT_DELAY_MS)
       })
@@ -144,41 +225,9 @@ export function createMockVoice(mode, cfg = {}, env = globalThis) {
     client_id() {
       return clientId(env)
     },
-    review_play(from) {
-      const r = s.review
-      if (!r || s.state === 'playing') return fail(ERR.LOCKED, 'no take to review')
-      const at = Number(from)
-      let pos = Math.min(r.dur, Math.max(0, Number.isFinite(at) && at >= 0 ? at : reviewPos(r)))
-      if (pos >= r.dur - 0.05) pos = 0
-      Object.assign(r, { pos, startPos: pos, startAt: env.performance.now(), playing: true })
-      return true
-    },
-    review_pause() {
-      reviewHalt()
-      return true
-    },
-    review_seek(t) {
-      const r = s.review
-      if (!r) return false
-      const pos = Math.min(r.dur, Math.max(0, Number(t) || 0))
-      if (r.playing) Object.assign(r, { startPos: pos, startAt: env.performance.now() })
-      r.pos = pos
-      return true
-    },
-    review_stop() {
-      reviewHalt()
-      if (s.review) s.review.pos = 0
-      return true
-    },
-    review_state() {
-      const r = s.review
-      if (!r) return JSON.stringify({ available: false, state: 'idle', t: 0, duration: 0, song_id: null, take_id: null })
-      if (r.playing && reviewPos(r) >= r.dur) reviewHalt()
-      const t = reviewPos(r)
-      const state = r.playing ? 'playing' : t >= r.dur ? 'ended' : 'paused'
-      return JSON.stringify({ available: true, state, t: round(t, 3), duration: round(r.dur, 3), song_id: r.songId, take_id: r.takeId })
-    },
     calibrate(mode) {
+      stopListen('stopped')
+      stopReview()
       const kind = mode === 'headphones' ? 'headphones' : 'speakers'
       return new Promise(resolve => {
         env.setTimeout(() => {
@@ -186,6 +235,79 @@ export function createMockVoice(mode, cfg = {}, env = globalThis) {
           resolve(true)
         }, CALIBRATE_DELAY_MS)
       })
+    },
+    publish(id) {
+      const take_id = String(id ?? '')
+      return settle('on_published', { take_id, published: true, ok: true, code: null }, true)
+    },
+    unpublish(id) {
+      const take_id = String(id ?? '')
+      return settle('on_published', { take_id, published: false, ok: true, code: null }, true)
+    },
+    async listen(id) {
+      const take_id = String(id ?? '')
+      stopListen('stopped')
+      stopReview()
+      if (s.state === 'playing') {
+        bus.emit('on_listen_end', { take_id, reason: 'error', code: ERR.LOCKED })
+        return false
+      }
+      const p = { take_id, seq: ++s.listenSeq, timer: null, state: 'loading', pos: 0, startAt: 0, duration: 0 }
+      s.listening = p
+      const seconds = await wavSeconds(take_id)
+      if (s.listening !== p || p.seq !== s.listenSeq) return false
+      p.duration = round((Number.isFinite(seconds) && seconds > 0 ? seconds : s.ref?.audio?.duration) || MOCK_LISTEN_S, 3)
+      runTimeline(p, 0, onListenEnded)
+      bus.emit('on_listen', { take_id, duration: p.duration })
+      return true
+    },
+    listen_stop() {
+      return stopListen('stopped')
+    },
+    listen_pause() {
+      return holdTimeline(s.listening)
+    },
+    listen_resume() {
+      const p = s.listening
+      if (!p || p.state !== 'paused' || s.state === 'playing') return false
+      runTimeline(p, p.pos, onListenEnded)
+      return true
+    },
+    listen_seek(t) {
+      return seekTimeline(s.listening, t, onListenEnded)
+    },
+    listen_state() {
+      const p = s.listening
+      return p ? stateOf(p, { take_id: p.take_id }) : JSON.stringify({ take_id: null, state: 'idle', t: 0, duration: 0 })
+    },
+    review_play(from = -1) {
+      const r = s.review
+      if (!r || s.state === 'playing') return false
+      stopListen('stopped')
+      const f = Number(from)
+      let pos = Number.isFinite(f) && f >= 0 ? f : posOf(r)
+      if (pos >= r.duration - 0.05) pos = 0
+      runTimeline(r, pos, onReviewEnded)
+      return true
+    },
+    review_pause() {
+      return holdTimeline(s.review)
+    },
+    review_seek(t) {
+      return seekTimeline(s.review, t, onReviewEnded)
+    },
+    review_stop() {
+      const r = s.review
+      if (!r) return false
+      env.clearTimeout(r.timer)
+      r.state = 'paused'
+      r.pos = 0
+      return true
+    },
+    review_state() {
+      const r = s.review
+      if (!r) return JSON.stringify({ available: false, state: 'idle', t: 0, duration: 0, song_id: null, take_id: null })
+      return stateOf(r, { available: true, song_id: r.song_id, take_id: r.take_id })
     },
     async _planB() {
       const wav = await env.fetch(`${base}mock/take.wav`).then(r => (r.ok ? r.arrayBuffer() : null)).catch(() => null)

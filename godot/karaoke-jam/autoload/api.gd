@@ -11,6 +11,7 @@ const TIMEOUT_SEC := 10.0
 const MOCK_TIMEOUT_SEC := 2.0
 const MOCK_SONG := "res://mock/demo.reference.json"
 const MOCK_LEADERBOARD := "res://mock/leaderboard.json"
+const MOCK_TAKE := "res://mock/result.perfect.json"  # для get_take без бэкенда
 const LEADERBOARD_LIMIT := 20
 
 var base_url: String = DESKTOP_BASE
@@ -53,7 +54,8 @@ func get_song(id: String) -> Dictionary:
 
 
 ## GET /leaderboard/{song_id}?difficulty=&limit=&client_id= → data: Array строк
-## {rank, player, avatar, total, grade, take_id, at, attempts, me}.
+## {rank, player, avatar, total, grade, take_id, at, attempts, me}. В таблице только
+## опубликованные каверы, по одному на игрока (ADR-024) — у каждой строки можно послушать take_id.
 ## client_id передаём, чтобы сервер отметил строку игрока (me: true); ответ — data без обёртки items.
 ## В моке без бэкенда — res://mock/leaderboard.json (mock: true).
 func get_leaderboard(song_id: String, difficulty: String, limit: int = LEADERBOARD_LIMIT) -> Dictionary:
@@ -70,6 +72,24 @@ func get_leaderboard(song_id: String, difficulty: String, limit: int = LEADERBOA
 		var m = JSON.parse_string(FileAccess.get_file_as_string(MOCK_LEADERBOARD))
 		if m is Dictionary and m.get("items") is Array:
 			return {"ok": true, "status": 200, "data": (m.items as Array).slice(0, limit), "error": "", "mock": true}
+	if r.ok:
+		r.ok = false
+		r.error = "bad_payload"
+	return r
+
+
+## GET /takes/{take_id} → сохранённый TakeResult (score, lines с советами, tips…; client_id: null).
+## Для окна кавера: подробности ранга и комментарии. В моке без бэкенда — res://mock/result.perfect.json.
+func get_take(take_id: String) -> Dictionary:
+	var timeout := MOCK_TIMEOUT_SEC if VoiceBridge.is_mock() else TIMEOUT_SEC
+	var r := await _request(HTTPClient.METHOD_GET, "/takes/%s" % take_id.uri_encode(), null, timeout)
+	if r.ok and r.data is Dictionary:
+		return r
+	if VoiceBridge.is_mock() and FileAccess.file_exists(MOCK_TAKE):
+		var m = JSON.parse_string(FileAccess.get_file_as_string(MOCK_TAKE))
+		if m is Dictionary:
+			m["take_id"] = take_id
+			return {"ok": true, "status": 200, "data": m, "error": "", "mock": true}
 	if r.ok:
 		r.ok = false
 		r.error = "bad_payload"
