@@ -29,6 +29,9 @@ const RESUME_TIMEOUT_MS = 1000
 const SESSION_TIMEOUT_MS = 2000
 const AUTO_OUTLIER_MS = 150
 const ESTIMATED_SLACK_S = 0.15
+const PUBLISH_TIMEOUT_MS = 5000
+const LISTEN_LEAD = 0.1
+const WAV_T0_MAX = 5
 
 export function createVoice(cfg = {}, env = globalThis) {
   const bus = createBus({ sticky: ['on_unlocked'] })
@@ -43,8 +46,18 @@ export function createVoice(cfg = {}, env = globalThis) {
     ref: null, buffer: null, state: 'idle', t0: 0, loadSeq: 0, judge: null,
     rec: null, flushRec: null, takeFrames: [], take: null, takeJob: null, recDone: null,
     tokenJob: null, identity: null, tokenState: 'none',
+    listenSeq: 0, listening: null, lastPub: null,
     listeners: new Set()
   }
+
+  bus.subscribe((name, json) => {
+    if (name !== 'on_result') return
+    try {
+      const r = JSON.parse(json)
+      const w = s.take?.wav_t0
+      s.lastPub = { take_id: r?.take_id ?? null, wav_t0: Number.isFinite(w) && Math.abs(w) <= WAV_T0_MAX ? round(w, 3) : null }
+    } catch {}
+  })
 
   const fail = (code, err) => {
     bus.emit('on_error', errorPayload(code, err))
@@ -256,6 +269,7 @@ export function createVoice(cfg = {}, env = globalThis) {
   }
 
   async function load_song(id) {
+    stopListen('stopped')
     if (!s.ctx || s.ctx.state !== 'running') return fail(ERR.LOCKED, 'load_song before unlock')
     if (s.state === 'playing') stop()
     const seq = ++s.loadSeq
@@ -294,6 +308,7 @@ export function createVoice(cfg = {}, env = globalThis) {
   }
 
   function start() {
+    stopListen('stopped')
     if (!s.buffer || !s.tap) return fail(ERR.LOCKED, 'start before load_song')
     if (s.state === 'playing') return true
     const ctx = s.ctx
@@ -438,6 +453,7 @@ export function createVoice(cfg = {}, env = globalThis) {
   }
 
   async function calibrate(mode) {
+    stopListen('stopped')
     if (s.calibrating) return false
     if (!s.tap || s.state === 'playing') return fail(ERR.LOCKED, 'calibrate needs unlock and no song playing')
     s.calibrating = true
@@ -465,6 +481,160 @@ export function createVoice(cfg = {}, env = globalThis) {
     return r.lag_ms !== null
   }
 
+  const takeIdOf = id => (typeof id === 'string' ? id : String(id ?? ''))
+
+  async function requestJson(path, body) {
+    const ac = new env.AbortController()
+    const timer = env.setTimeout(() => ac.abort(), PUBLISH_TIMEOUT_MS)
+    try {
+      const r = await env.fetch(url(path), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: ac.signal })
+      if (r.ok) return null
+      const detail = await r.json().then(b => b?.detail, () => null)
+      return typeof detail === 'string' && detail ? detail : `http_${r.status}`
+    } catch {
+      return ERR.NET
+    } finally {
+      env.clearTimeout?.(timer)
+    }
+  }
+
+  async function setPublished(id, published) {
+    const take_id = takeIdOf(id)
+    let code = 'take_not_found'
+    if (take_id) {
+      const cid = clientId(env)
+      code = published
+        ? await requestJson('/api/v1/published', { take_id, client_id: cid, wav_t0: s.lastPub?.take_id === take_id ? s.lastPub.wav_t0 : null })
+        : await requestJson(`/api/v1/published/${encodeURIComponent(take_id)}/remove`, { client_id: cid })
+    }
+    bus.emit('on_published', { take_id, published, ok: code === null, code })
+    return code === null
+  }
+
+  function endListen(p, reason, code = null) {
+    if (!p || s.listening !== p) return false
+    s.listening = null
+    s.listenSeq++
+    for (const n of p.nodes) {
+      n.onended = null
+      try {
+        n.stop()
+      } catch {}
+      try {
+        n.disconnect()
+      } catch {}
+    }
+    bus.emit('on_listen_end', { take_id: p.take_id, reason, code })
+    return false
+  }
+
+  function stopListen(reason) {
+    if (!s.listening) {
+      s.listenSeq++
+      return false
+    }
+    endListen(s.listening, reason)
+    return true
+  }
+
+  function listenError(code, message) {
+    const e = new Error(message)
+    e.code = code
+    return e
+  }
+
+  async function fetchBuffer(path) {
+    let data
+    try {
+      const r = await env.fetch(url(path))
+      if (!r.ok) throw listenError(ERR.NET, `${path}: HTTP ${r.status}`)
+      data = await r.arrayBuffer()
+    } catch (e) {
+      throw e?.code ? e : listenError(ERR.NET, e?.message)
+    }
+    try {
+      return await s.ctx.decodeAudioData(data)
+    } catch (e) {
+      throw listenError(ERR.DECODE, e?.message)
+    }
+  }
+
+  async function fetchItem(take_id) {
+    let r
+    try {
+      r = await env.fetch(url(`/api/v1/published/${encodeURIComponent(take_id)}`))
+    } catch (e) {
+      throw listenError(ERR.NET, e?.message)
+    }
+    const body = await r.json().catch(() => null)
+    if (!r.ok) throw listenError(typeof body?.detail === 'string' && body.detail ? body.detail : `http_${r.status}`, `published/${take_id}`)
+    if (!body || typeof body.audio !== 'string') throw listenError(ERR.NET, `published/${take_id}: no audio`)
+    return body
+  }
+
+  function minusFor(item) {
+    if (s.buffer && s.ref?.id === item.song_id) return Promise.resolve(s.buffer)
+    if (typeof item.minus !== 'string' || !item.minus) return Promise.resolve(null)
+    return fetchBuffer(item.minus).catch(() => null)
+  }
+
+  const audioReady = () => !!s.ctx && s.ctx.state === 'running' && s.state !== 'playing' && !s.calibrating
+
+  async function listen(id) {
+    const take_id = takeIdOf(id)
+    stopListen('stopped')
+    const refused = !audioReady() ? ERR.LOCKED : take_id ? null : 'not_published'
+    if (refused) {
+      bus.emit('on_listen_end', { take_id, reason: 'error', code: refused })
+      return false
+    }
+    const p = { take_id, seq: ++s.listenSeq, nodes: [] }
+    s.listening = p
+    const live = () => s.listening === p && p.seq === s.listenSeq && audioReady()
+    const bail = () => (s.ctx.state === 'running' ? endListen(p, 'stopped') : endListen(p, 'error', ERR.LOCKED))
+    let item
+    let vocal
+    let minus
+    try {
+      item = await fetchItem(take_id)
+      if (!live()) return bail()
+      ;[vocal, minus] = await Promise.all([fetchBuffer(item.audio), minusFor(item)])
+      if (!live()) return bail()
+    } catch (e) {
+      return live() ? endListen(p, 'error', e?.code || ERR.NET) : bail()
+    }
+    const ctx = s.ctx
+    const at = ctx.currentTime + LISTEN_LEAD
+    const offset = Number.isFinite(item.offset_s) ? item.offset_s : 0
+    const duration = Math.max(0, offset + vocal.duration)
+    const voiceSrc = ctx.createBufferSource()
+    voiceSrc.buffer = vocal
+    voiceSrc.connect(ctx.destination)
+    p.nodes.push(voiceSrc)
+    voiceSrc.onended = () => {
+      if (s.listening === p && p.seq === s.listenSeq) endListen(p, 'ended')
+    }
+    if (minus) {
+      let out = s.music
+      if (!out) {
+        out = ctx.createGain()
+        out.gain.value = s.volume
+        out.connect(ctx.destination)
+        p.nodes.push(out)
+      }
+      const minusSrc = ctx.createBufferSource()
+      minusSrc.buffer = minus
+      minusSrc.connect(out)
+      p.nodes.push(minusSrc)
+      minusSrc.start(at)
+      minusSrc.stop(at + duration)
+    }
+    if (offset >= 0) voiceSrc.start(at + offset)
+    else voiceSrc.start(at, -offset)
+    bus.emit('on_listen', { take_id, duration: round(duration, 3) })
+    return true
+  }
+
   function poll() {
     return JSON.stringify({ t_now: s.state === 'idle' ? 0 : round(songNow(), 3), state: s.state, level: round(s.level, 4), frames: queue.drain() })
   }
@@ -483,6 +653,10 @@ export function createVoice(cfg = {}, env = globalThis) {
     client_id() {
       return clientId(env)
     },
+    publish: id => setPublished(id, true),
+    unpublish: id => setPublished(id, false),
+    listen,
+    listen_stop: () => stopListen('stopped'),
     _take() {
       const take = s.take
       return take ? { wav: take.wav, meta: metaFor(take, 'dev', null), resampler: take.resampler } : null

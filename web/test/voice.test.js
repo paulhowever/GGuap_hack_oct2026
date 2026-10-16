@@ -5,7 +5,7 @@ import { createMockVoice } from '../voice.mock.js'
 import { parseWavHeader } from '../lib/wav.js'
 import { frameTime } from '../lib/timing.js'
 
-const BRIDGE = ['subscribe', 'unlock', 'configure', 'load_song', 'start', 'stop', 'poll', 'submit', 'calibrate', 'client_id']
+const BRIDGE = ['subscribe', 'unlock', 'configure', 'load_song', 'start', 'stop', 'poll', 'submit', 'calibrate', 'client_id', 'publish', 'unpublish', 'listen', 'listen_stop']
 
 function listen(voice) {
   const events = []
