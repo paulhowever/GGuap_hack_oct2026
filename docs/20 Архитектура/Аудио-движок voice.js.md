@@ -1,7 +1,7 @@
 ---
 tags: [архитектура, audio, паша]
 status: draft
-updated: 2026-10-14
+updated: 2026-10-16
 ---
 
 # Аудио-движок voice.js
@@ -11,10 +11,10 @@ updated: 2026-10-14
 - Минус: `fetch → decodeAudioData → BufferSource → Gain(music) → destination`, запуск `src.start(t0 = ctx.currentTime + 0.15)`.
 - Микрофон: `getUserMedia({audio:{echoCancellation:aec, noiseSuppression:false, autoGainControl:false, channelCount:1}}) → MediaStreamSource → AudioWorklet 'tap' → Gain(0) → destination`.
 
-**Время.** `L = lag_ms/1000`, по умолчанию `outputLatency + baseLatency + (track.getSettings().latency || 0.02)`.
+**Время.** `L = lag_ms/1000`, по умолчанию `outputLatency + baseLatency + (track.getSettings().latency || 0.02)`, при `bt_suspect` вместо трека +0,2 с. После дублей `L` подстраивается сама ([[ADR-021 Автоподстройка задержки]]).
 - Позиция для Godot: `ts = ctx.getOutputTimestamp(); t_now = ts.contextTime + (performance.now() − ts.performanceTime)/1000 − t0`. Фолбэк: `ctx.currentTime − outputLatency − baseLatency − t0`.
 - Кадр: tap отдаёт индекс конца хопа `E`. Центр окна 2048 — `E − 1024`, `t = (E−1024)/sr − t0 − L`.
-- Если `outputLatency > 0.1`, выставляем `bt_suspect = true`, и Godot показывает «похоже на Bluetooth, нужен провод».
+- Если `outputLatency > 0.1`, выставляем `bt_suspect = true`, и Godot показывает баннер «похоже на Bluetooth»: в первой песне точки могут чуть смещаться, дальше задержка подстроится сама.
 
 **Питч.** pitchy (MIT, метод McLeod, чистый JS) прямо в AudioWorklet, без WASM и Worker.
 - `web/vendor/pitchy.bundle.js` собирается один раз: `cd web && npm run vendor` (в pitchy 4.1.0 нет `dist/`, точка входа — `index.js`; тянет fft.js).
@@ -51,6 +51,10 @@ registerProcessor('tap',Tap)
 - Результат сохраняется в `localStorage['voice.lag_ms']` в try/catch. Ручная подстройка шагом ±10 мс.
 - На демо `lag_ms` зашит в `web/config.js` после калибровки на целевой цепочке вывода (см. §8).
 
+**Калибровка в наушниках** `calibrate('headphones')` ([[ADR-020 Калибровка в наушниках и источник задержки]]). Микрофон не слышит щелчки из наушников, поэтому игрок сам хлопает в такт тому, что слышит: 2 вводных щелчка, чтобы поймать ритм, затем 8 измеряемых. Щелчки идут через 0,8 с, окно хлопка `[c − 0,1; c + 0,7)`, задержка принимается до 700 мс: так Bluetooth-цепочка 0,5–0,7 с не путается со следующим щелчком. Хлопки на вводные щелчки в окна не попадают. `onset − click` здесь — вся цепочка «вывод → ухо → голос → микрофон», включая Bluetooth. `on_calibrated` несёт `mode`. Движок помнит источник задержки (`calibrated`, `config`, `estimated`, `auto`, в `localStorage['voice.lag_src']`) и шлёт его в meta как `lag_source`: бэкенд обрезает свою оценку до `lag_ms ± 120` только для `calibrated`.
+
+**Автоподстройка** ([[ADR-021 Автоподстройка задержки]]). Калибровка необязательна и живёт в настройках. Перед `on_result` движок берёт `latency.estimated_ms`, если `confidence ≥ 0,2`, и сохраняет как `auto`: первое значение как есть, дальше EMA 0,5 с прежним; выброс дальше 150 мс применяется только со второго подряд. Новая задержка действует со следующей песни; `calibrated` и `config` подстройка не трогает. Пока источник `estimated`, живой судья засчитывает ноте хорошие кадры в 150 мс до и после неё (знаменатель — кадры самой ноты, `hit ≤ 1`) и выдаёт вердикт на 150 мс позже.
+
 **Мок.**
 - `?mock=perfect|offkey|octave|late200|silent`.
 - Часы от `performance.now()`. Кадры по нотам: ±30 центов шума, в режиме octave ±12, в late200 +0,2 с.
@@ -75,6 +79,7 @@ registerProcessor('tap',Tap)
 - Отладочные поля моста `_mode`, `_state()`, `_take()`, `_planB()` Godot не использует.
 - Калибровка принимается только при задержке от −20 до 400 мс; отклонённая по диапазону даёт `on_calibrated{lag_ms: прежний, hits: 0}`.
 - `submit`: сетевой сбой и таймаут 10 с → `on_error{net}`, ответ не 2xx → `on_error{upload_failed}`.
+- Повторный `submit()` отправляет тот же дубль без токена сессии (он одноразовый): `unverified` (недопетый — `incomplete`), а если первая отправка сохранилась — `suspect` с флагом `duplicate`.
 - WAV в JS-фолбэке пишется с частотой `min(sr, 16000)`, а не с родной.
 - Ник в meta режется до 24 code points (не UTF-16 единиц), пустой заменяется на «Игрок».
 - Живой судья (`on_note_judged`): окно онсета ноты начинается за 0,15 с до неё, но не раньше конца предыдущей ноты — как в бэкенде.

@@ -504,6 +504,15 @@
     }
   ],
   "octave_shift": 0,
+  "integrity": {
+    "status": "incomplete",
+    "flags": [
+      "incomplete"
+    ]
+  },
+  "completion": {
+    "ratio": 0.0
+  },
   "challenge": null,
   "leaderboard": null
 }

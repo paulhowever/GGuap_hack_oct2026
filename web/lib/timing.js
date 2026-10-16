@@ -6,6 +6,7 @@ export const FMIN = 65
 export const FMAX = 1100
 export const GATE_MIN = 0.01
 export const GATE_MAX = 0.05
+export const BT_EXTRA_S = 0.2
 
 export function frameTime(E, sr, t0, lagS, win = WIN) {
   return (E - win / 2) / sr - t0 - lagS
@@ -16,8 +17,9 @@ export function contextNow({ currentTime, outputLatency, baseLatency, ts, perfNo
   return currentTime - (outputLatency || 0) - (baseLatency || 0)
 }
 
-export function estimateLagMs({ outputLatency, baseLatency, trackLatency }) {
-  const ms = Math.round(1000 * ((outputLatency || 0) + (baseLatency || 0) + (trackLatency || 0.02)))
+export function estimateLagMs({ outputLatency, baseLatency, trackLatency, bt = false }) {
+  const tail = bt ? BT_EXTRA_S : trackLatency || 0.02
+  const ms = Math.round(1000 * ((outputLatency || 0) + (baseLatency || 0) + tail))
   return Number.isFinite(ms) ? ms : 0
 }
 

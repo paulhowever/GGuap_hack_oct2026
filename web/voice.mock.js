@@ -108,14 +108,16 @@ export function createMockVoice(mode, cfg = {}, env = globalThis) {
     client_id() {
       return clientId(env)
     },
-    calibrate() {
-      env.setTimeout(() => bus.emit('on_calibrated', { lag_ms: s.lag, hits: 8 }), CALIBRATE_DELAY_MS)
+    calibrate(mode) {
+      const kind = mode === 'headphones' ? 'headphones' : 'speakers'
+      env.setTimeout(() => bus.emit('on_calibrated', { lag_ms: s.lag, hits: 8, mode: kind }), CALIBRATE_DELAY_MS)
     },
     async _planB() {
       const wav = await env.fetch(`${base}mock/take.wav`).then(r => (r.ok ? r.arrayBuffer() : null)).catch(() => null)
       const meta = await firstJson([`${base}mock/take.meta.json`])
       if (!wav || !meta) return fail(ERR.UPLOAD, 'mock/take.wav or mock/take.meta.json missing')
       if (s.player) meta.player = s.player
+      meta.session_token = null
       try {
         bus.emit('on_result', await postTake({ env, url: `${api}/api/v1/takes`, wav, meta }))
         return true
@@ -127,7 +129,7 @@ export function createMockVoice(mode, cfg = {}, env = globalThis) {
       return null
     },
     _state() {
-      return { sr: 48000, lag_ms: s.lag, mode: m }
+      return { sr: 48000, lag_ms: s.lag, lag_source: 'config', mode: m, session: 'none' }
     }
   }
 }

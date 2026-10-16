@@ -104,11 +104,18 @@ test('submit returns the mock result after 500 ms with the player name', async (
   assert.equal(last('on_result').challenge, null)
 })
 
-test('calibrate reports the current lag with 8 hits', async () => {
+test('calibrate reports the current lag with 8 hits and echoes the mode', async () => {
   const { env, voice, last } = setup()
   voice.calibrate()
   await env.advance(1000)
-  assert.deepEqual(last('on_calibrated'), { lag_ms: 40, hits: 8 })
+  assert.deepEqual(last('on_calibrated'), { lag_ms: 40, hits: 8, mode: 'speakers' })
+  voice.calibrate('headphones')
+  await env.advance(1000)
+  assert.deepEqual(last('on_calibrated'), { lag_ms: 40, hits: 8, mode: 'headphones' })
+})
+
+test('mock reports its lag as config', () => {
+  assert.equal(setup().voice._state().lag_source, 'config')
 })
 
 test('unknown mode falls back to perfect', () => {
@@ -149,4 +156,29 @@ test('on_result carries the same client_id as client_id()', async () => {
   const id = voice.client_id()
   assert.match(id, /^[0-9a-f-]{36}$/)
   assert.equal(events.filter(e => e[0] === 'on_result').at(-1)[1].client_id, id)
+})
+
+test('plan b uploads the saved take without a session token', async () => {
+  let sent
+  const env = {
+    ...fakeEnv({}),
+    FormData,
+    Blob,
+    AbortController,
+    async fetch(url, init) {
+      const u = String(url)
+      if (u.endsWith('mock/take.wav')) return { ok: true, arrayBuffer: async () => new ArrayBuffer(44) }
+      if (u.endsWith('mock/take.meta.json')) return { ok: true, json: async () => ({ song_id: 'demo', client_id: null, session_token: 'used-token', player: 'dev' }) }
+      if (u.endsWith('/api/v1/takes')) {
+        sent = JSON.parse(init.body.get('meta'))
+        return { ok: true, json: async () => ({ take_id: 'tk_b' }) }
+      }
+      return { ok: false, status: 404 }
+    }
+  }
+  const voice = createMockVoice('perfect', CFG, env)
+  assert.equal(await voice._planB(), true)
+  assert.equal(sent.session_token, null)
+  assert.deepEqual(Object.keys(sent).slice(0, 3), ['song_id', 'client_id', 'session_token'])
+  assert.equal(voice._state().session, 'none')
 })

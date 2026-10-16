@@ -7,10 +7,20 @@
 <style>
   body { font: 14px/1.4 system-ui, sans-serif; margin: 0; background: #111; color: #eee }
   #overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, .85); z-index: 10 }
+  #overlayBox { display: flex; flex-direction: column; align-items: center; gap: 16px; max-width: 520px; text-align: center }
   #overlay button { font-size: 24px; padding: 24px 48px }
+  #unlockReason { color: #f96; font-size: 16px }
+  #unlockReason:empty { display: none }
+  #submitStatus { padding: 4px 8px }
+  #submitStatus:empty { display: none }
   main { padding: 12px; display: grid; gap: 10px; max-width: 980px }
   .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center }
   #bt { display: none; background: #a30; padding: 8px }
+  #fine summary { cursor: pointer; color: #999 }
+  #fine .row, #fine #calibHint { margin-top: 8px }
+  #calibHint { padding: 8px; background: #135 }
+  #calibHint:empty { display: none }
+  #calibHint.fail { background: #a30 }
   canvas { background: #1b1b1b; width: 960px; height: 320px; max-width: 100% }
   #meter { display: inline-block; width: 240px; height: 12px; background: #333 }
   #meter div { height: 100%; width: 0; background: #3c3 }
@@ -21,23 +31,33 @@
 </style>
 </head>
 <body>
-<div id="overlay"><button id="unlock">Нажми, чтобы начать</button></div>
+<div id="overlay"><div id="overlayBox"><button id="unlock">Нажми, чтобы начать</button><div id="unlockReason"></div></div></div>
 <main>
-  <div id="bt">Похоже на Bluetooth: outputLatency больше 100 мс. Подключи наушники проводом.</div>
+  <div id="bt"></div>
   <div class="row">
     <select id="song"></select>
     <select id="difficulty"><option>easy</option><option selected>normal</option><option>hard</option></select>
     <button id="load">Загрузить</button>
     <button id="start">Старт</button>
     <button id="stop">Стоп</button>
-    <button id="calibrate" title="8 щелчков, хлопай в такт каждому">Калибровка</button>
-    <button id="lagMinus">lag −10</button>
-    <button id="lagPlus">lag +10</button>
   </div>
+  <details id="fine">
+    <summary>Точная подстройка (необязательно)</summary>
+    <div class="row">
+      <button id="calibSpeakers" title="8 щелчков через динамики, микрофон слушает их сам">Калибровка: динамики</button>
+      <button id="calibHeadphones" title="10 щелчков в наушниках, хлопай в такт">Калибровка: наушники (хлопай)</button>
+      <button id="lagMinus">lag −10</button>
+      <button id="lagPlus">lag +10</button>
+      <button id="lagReset" title="Забыть сохранённую задержку и перезагрузить страницу">Сбросить задержку</button>
+    </div>
+    <div id="calibHint"></div>
+  </details>
   <div class="row">
     <input id="player" value="Паша" maxlength="32">
     <button id="submit">Отправить</button>
-    <button id="download">Скачать дубль</button>
+    <button id="downloadWav">Скачать WAV</button>
+    <button id="downloadMeta">Скачать meta</button>
+    <span id="submitStatus"></span>
     <span id="meter"><div></div></span>
     <span id="db"></span>
   </div>
@@ -54,12 +74,81 @@ import { parseWavHeader } from './lib/wav.js'
 
 const voice = window.voice
 const $ = id => document.getElementById(id)
+const CALIB_MIN_HITS = 5
+const CALIB_CLICKS = 8
+const CALIB_MODES = {
+  speakers: {
+    label: 'динамики',
+    before: 'Сними наушники, сделай погромче и посиди тихо — 8 щелчков.',
+    failed: hits => `Калибровка (динамики) не удалась: микрофон не услышал щелчки (${hits} из ${CALIB_CLICKS}). Сними наушники — калибровка идёт через динамики, сделай громче, проверь, что звук не идёт через Bluetooth, и выключи подавление шума и эха в настройках микрофона Windows/macOS. В наушниках выбери «Калибровка: наушники».`
+  },
+  headphones: {
+    label: 'наушники',
+    before: 'Надень наушники. Услышишь 10 щелчков: на первых двух поймай ритм, дальше хлопай в такт тому, что слышишь.',
+    failed: hits => `Калибровка (наушники) не удалась: микрофон не услышал хлопки (${hits} из ${CALIB_CLICKS}). Хлопай громче и ровно в такт щелчкам, держи микрофон ближе и выключи подавление шума в настройках микрофона Windows/macOS.`
+  }
+}
 const UNLOCK_ERRORS = ['insecure_context', 'mic_denied', 'mic_not_found', 'audio_locked', 'worklet_failed']
-const st = { ref: null, tol: 120, frames: [], tNow: 0, state: 'idle', level: 0, unlocked: null, lastFrames: 0, count: 0, fps: 0, wav: null }
+const UNLOCK_REASONS = {
+  mic_denied: 'Нет доступа к микрофону. Разреши его в настройках сайта (значок слева от адреса) и нажми ещё раз.',
+  mic_not_found: 'Микрофон не найден. Подключи его и нажми ещё раз.',
+  insecure_context: 'Микрофон работает только на localhost или https. Открой http://localhost:8000/dev.html.',
+  audio_locked: 'Браузер не дал включить звук. Нажми ещё раз.',
+  worklet_failed: 'Не загрузился модуль звука. Обнови страницу.'
+}
+const st = { ref: null, tol: 120, frames: [], tNow: 0, state: 'idle', level: 0, unlocked: null, lastFrames: 0, count: 0, fps: 0, wav: null, submitting: false, calibrating: false, unlocking: false, starting: false, lagBefore: null }
 
 function log(name, data) {
   const line = `${new Date().toISOString().slice(11, 23)} ${name} ${JSON.stringify(data)}`
   $('log').textContent = `${line}\n${$('log').textContent}`.slice(0, 20000)
+}
+
+function showCalibration(data) {
+  const hint = $('calibHint')
+  const mode = CALIB_MODES[data.mode] || CALIB_MODES.speakers
+  const failed = data.hits < CALIB_MIN_HITS
+  hint.classList.toggle('fail', failed)
+  hint.textContent = failed
+    ? mode.failed(data.hits)
+    : `Калибровка готова (${mode.label}): задержка ${data.lag_ms} мс (${data.hits} из ${CALIB_CLICKS} щелчков).`
+}
+
+function calibrate(mode) {
+  st.calibrating = true
+  $('calibHint').classList.remove('fail')
+  $('calibHint').textContent = CALIB_MODES[mode].before
+  voice.calibrate(mode)
+}
+
+function showBt(data) {
+  const out = voice._state().output_latency
+  $('bt').textContent = `Похоже на Bluetooth-наушники: задержка вывода ~${Math.round((out || 0) * 1000)} мс. В первой песне точки могут чуть смещаться, дальше задержка подстроится сама. Лучше пой в микрофон ноутбука, а не наушников.`
+  $('bt').style.display = data.bt_suspect ? 'block' : 'none'
+}
+
+function integrityLabel(data) {
+  const status = data.integrity?.status
+  if (status === 'ok') return 'в зачёте'
+  if (status === 'incomplete') return `недопето ${Math.round((data.completion?.ratio ?? 0) * 100)}% — не в рейтинге`
+  if (status === 'unverified') return 'без токена — не в рейтинге'
+  if (status === 'suspect') return `подозрительно (${(data.integrity.flags || []).join(', ')}) — не в рейтинге`
+  return status || '—'
+}
+
+function lagKey() {
+  const vs = voice._state()
+  return `${vs.lag_source}:${vs.lag_ms}`
+}
+
+function lagLabel() {
+  const vs = voice._state()
+  return vs.lag_source === 'auto' && lagKey() !== st.lagBefore ? ` · задержка подстроена: ${vs.lag_ms} мс` : ''
+}
+
+function showResult(data) {
+  $('result').textContent = JSON.stringify(data, null, 2)
+  $('submitStatus').textContent = `${data.score?.total ?? '—'} · ${data.score?.grade ?? '—'} · ${integrityLabel(data)}${lagLabel()}`
+  $('result').scrollIntoView({ behavior: 'smooth', block: 'nearest' })
 }
 
 function summary(name, data) {
@@ -73,24 +162,44 @@ voice.subscribe((name, json) => {
   log(name, summary(name, data))
   if (name === 'on_unlocked') {
     st.unlocked = data
-    $('bt').style.display = data.bt_suspect ? 'block' : 'none'
+    showBt(data)
   }
   if (name === 'on_ready') {
     st.ref = data
     st.tol = data.scoring.tol_cents
     st.frames = []
   }
+  if (name === 'on_calibrated') {
+    st.calibrating = false
+    showCalibration(data)
+  }
   if (name === 'on_song_end') showTake()
-  if (name === 'on_result') $('result').textContent = JSON.stringify(data, null, 2)
+  if (name === 'on_result') {
+    st.submitting = false
+    showResult(data)
+  }
   if (name === 'on_error') {
     $('result').textContent = `Ошибка ${data.code}: ${data.msg}`
-    if (UNLOCK_ERRORS.includes(data.code)) $('overlay').style.display = 'flex'
+    if (st.unlocking && UNLOCK_ERRORS.includes(data.code)) {
+      $('unlockReason').textContent = UNLOCK_REASONS[data.code] || ''
+      $('overlay').style.display = 'flex'
+    }
+    if (st.submitting) $('submitStatus').textContent = `Не отправилось: ${data.msg}`
+    if (st.starting) $('submitStatus').textContent = 'Сначала нажми «Загрузить»'
+    st.submitting = false
+    if (st.calibrating) {
+      $('calibHint').classList.add('fail')
+      $('calibHint').textContent = `Калибровка не запустилась: ${data.msg}`
+    }
+    st.calibrating = false
   }
 })
 
 $('unlock').onclick = () => {
+  $('unlockReason').textContent = ''
   $('overlay').style.display = 'none'
-  voice.unlock()
+  st.unlocking = true
+  Promise.resolve(voice.unlock()).finally(() => { st.unlocking = false })
 }
 
 async function loadSongs() {
@@ -115,19 +224,31 @@ function save(name, blob) {
   const a = document.createElement('a')
   a.href = URL.createObjectURL(blob)
   a.download = name
+  document.body.appendChild(a)
   a.click()
+  a.remove()
   setTimeout(() => URL.revokeObjectURL(a.href), 1000)
 }
 
-function downloadTake() {
+function downloadTake(name, type, body) {
   const take = voice._take()
-  if (!take) return log('dev', 'нет дубля')
-  save('take.wav', new Blob([take.wav], { type: 'audio/wav' }))
-  save('take.meta.json', new Blob([JSON.stringify(take.meta)], { type: 'application/json' }))
+  if (!take) {
+    $('submitStatus').textContent = 'Дубля нет — сначала спой песню до конца или нажми Стоп'
+    return log('dev', 'нет дубля')
+  }
+  save(name, new Blob([body(take)], { type }))
 }
 
 function nudge(d) {
   voice.configure(JSON.stringify({ lag_ms: voice._state().lag_ms + d }))
+}
+
+function resetLag() {
+  try {
+    localStorage.removeItem('voice.lag_ms')
+    localStorage.removeItem('voice.lag_src')
+  } catch {}
+  location.reload()
 }
 
 $('load').onclick = () => {
@@ -138,17 +259,25 @@ $('start').onclick = () => {
   st.frames = []
   st.wav = null
   $('result').textContent = ''
+  st.starting = true
   voice.start()
+  st.starting = false
 }
 $('stop').onclick = showTake
-$('calibrate').onclick = () => voice.calibrate()
+$('calibSpeakers').onclick = () => calibrate('speakers')
+$('calibHeadphones').onclick = () => calibrate('headphones')
 $('lagMinus').onclick = () => nudge(-10)
 $('lagPlus').onclick = () => nudge(10)
+$('lagReset').onclick = resetLag
 $('submit').onclick = () => {
   $('result').textContent = 'Судья слушает…'
+  $('submitStatus').textContent = 'Судья слушает…'
+  st.submitting = true
+  st.lagBefore = lagKey()
   voice.submit($('player').value, new URLSearchParams(location.search).get('challenge') || '')
 }
-$('download').onclick = downloadTake
+$('downloadWav').onclick = () => downloadTake('take.wav', 'audio/wav', take => take.wav)
+$('downloadMeta').onclick = () => downloadTake('take.meta.json', 'application/json', take => JSON.stringify(take.meta))
 
 const lane = $('lane')
 const g = lane.getContext('2d')
@@ -229,6 +358,7 @@ function stats() {
     ['outputLatency', ms(vs.output_latency)],
     ['baseLatency', ms(vs.base_latency)],
     ['lag_ms применён / оценка', `${vs.lag_ms} / ${vs.est_lag_ms ?? '—'}`],
+    ['источник lag', vs.lag_source ?? '—'],
     ['шум / gate', `${st.unlocked?.noise_db ?? '—'} dB / ${vs.gate ?? '—'}`],
     ['кадров/с, за poll', `${st.fps}, ${st.lastFrames}`],
     ['последний тон', last ? `${last.hz} Гц, midi ${hzToMidi(last.hz).toFixed(2)}, conf ${last.conf}` : '—'],

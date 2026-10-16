@@ -9,11 +9,14 @@ import { buildMeta } from './lib/meta.js'
 import { postTake } from './lib/upload.js'
 import { createJudge } from './lib/judge.js'
 import { clientId } from './lib/profile.js'
-import { CLICK_LEAD, CLICK_LEN, clickTimes, detectOnsets, estimateLag, onsetThreshold } from './lib/calibration.js'
+import { requestSession } from './lib/session.js'
+import { attachDebug, isDebug } from './lib/debug.js'
+import { CLICK_LEAD, CLICK_LEN, CLICKS, HEADPHONES, LEAD_IN, SPEAKERS, clickTimes, detectOnsets, estimateLag, onsetThreshold } from './lib/calibration.js'
 import { clamp, round } from './lib/num.js'
 import { createMockVoice, attachPlanB } from './voice.mock.js'
 
 const LAG_KEY = 'voice.lag_ms'
+const LAG_SRC_KEY = 'voice.lag_src'
 const TARGET_SR = 16000
 const START_DELAY = 0.15
 const NOISE_SECONDS = 1
@@ -22,6 +25,10 @@ const MAX_TAKE_FRAMES = 8000
 const UPLOAD_TIMEOUT_MS = 10000
 const REC_FLUSH_TIMEOUT_MS = 500
 const RESUME_TIMEOUT_MS = 1000
+const SESSION_TIMEOUT_MS = 2000
+const AUTO_MIN_CONFIDENCE = 0.2
+const AUTO_OUTLIER_MS = 150
+const ESTIMATED_SLACK_S = 0.15
 
 export function createVoice(cfg = {}, env = globalThis) {
   const bus = createBus({ sticky: ['on_unlocked'] })
@@ -32,9 +39,10 @@ export function createVoice(cfg = {}, env = globalThis) {
     ctx: null, stream: null, mic: null, tap: null, music: null, src: null, unlocking: null, calibrating: false,
     sr: 0, floor: 0, gate: 0.01, level: 0,
     difficulty: cfg.difficulty || 'normal', aec: !!cfg.aec, volume: cfg.music_volume ?? 1,
-    sessionLag: null, estLag: 20, lag: 20,
+    sessionLag: null, sessionSource: null, estLag: 20, lag: 20, lagSource: 'estimated', saved: null, outlier: null,
     ref: null, buffer: null, state: 'idle', t0: 0,
     rec: null, takeFrames: [], take: null, takeJob: null, recDone: null,
+    tokenJob: null, identity: null, tokenState: 'none',
     listeners: new Set()
   }
 
@@ -45,24 +53,65 @@ export function createVoice(cfg = {}, env = globalThis) {
   const url = p => (/^https?:\/\//.test(p) ? p : api + p)
   const tol = () => tolTable[s.difficulty] ?? tolTable.normal
 
-  function readStored() {
+  function readKey(key) {
     try {
-      return toMs(env.localStorage?.getItem(LAG_KEY))
+      return env.localStorage?.getItem(key) ?? null
     } catch {
       return null
     }
   }
 
-  function writeStored(v) {
+  function writeStored(v, source) {
+    s.saved = { ms: v, src: source }
     try {
       env.localStorage?.setItem(LAG_KEY, String(v))
+      env.localStorage?.setItem(LAG_SRC_KEY, source)
     } catch {}
   }
 
-  function refreshLag() {
-    s.lag = resolveLagMs({ session: s.sessionLag, pinned: toMs(cfg.lag_ms), stored: readStored(), estimated: s.estLag })
+  function setSessionLag(v, source) {
+    s.sessionLag = v
+    s.sessionSource = source
+    writeStored(v, source)
+    refreshLag()
   }
 
+  function resolveLag() {
+    const pinned = toMs(cfg.lag_ms)
+    const { ms: stored, src } = s.saved
+    const lag = resolveLagMs({ session: s.sessionLag, pinned, stored, estimated: s.estLag })
+    if (Number.isFinite(s.sessionLag)) return { lag, lagSource: s.sessionSource }
+    if (Number.isFinite(pinned)) return { lag, lagSource: 'config' }
+    if (Number.isFinite(stored)) return { lag, lagSource: src === 'config' || src === 'auto' ? src : 'calibrated' }
+    return { lag, lagSource: 'estimated' }
+  }
+
+  function refreshLag() {
+    Object.assign(s, resolveLag())
+  }
+
+  function autoLag(latency) {
+    const est = toMs(latency?.estimated_ms)
+    if (est === null || !(latency.confidence >= AUTO_MIN_CONFIDENCE)) return
+    const { lag: prev, lagSource } = resolveLag()
+    if (lagSource !== 'estimated' && lagSource !== 'auto') return
+    let next = est
+    if (lagSource === 'auto') {
+      if (Math.abs(est - prev) > AUTO_OUTLIER_MS) {
+        const first = s.outlier
+        s.outlier = est
+        if (first === null || Math.abs(est - first) > AUTO_OUTLIER_MS) return
+        next = Math.round((first + est) / 2)
+      } else {
+        next = Math.round((prev + est) / 2)
+      }
+    }
+    s.outlier = null
+    writeStored(next, 'auto')
+    if (s.state !== 'playing') refreshLag()
+  }
+
+  s.saved = { ms: toMs(readKey(LAG_KEY)), src: readKey(LAG_SRC_KEY) }
   refreshLag()
 
   function songNow() {
@@ -155,9 +204,10 @@ export function createVoice(cfg = {}, env = globalThis) {
     s.floor = noiseFloor(frames.map(f => f.rms))
     s.gate = gateFrom(s.floor)
     const track = s.stream.getAudioTracks()[0]
-    s.estLag = estimateLagMs({ outputLatency: ctx.outputLatency, baseLatency: ctx.baseLatency, trackLatency: track?.getSettings?.().latency })
+    const bt = isBtSuspect(ctx.outputLatency)
+    s.estLag = estimateLagMs({ outputLatency: ctx.outputLatency, baseLatency: ctx.baseLatency, trackLatency: track?.getSettings?.().latency, bt })
     refreshLag()
-    bus.emit('on_unlocked', { sr: s.sr, noise_db: toDb(s.floor), lag_ms: s.lag, bt_suspect: isBtSuspect(ctx.outputLatency) })
+    bus.emit('on_unlocked', { sr: s.sr, noise_db: toDb(s.floor), lag_ms: s.lag, bt_suspect: bt })
     return true
   }
 
@@ -199,11 +249,7 @@ export function createVoice(cfg = {}, env = globalThis) {
     const o = parseOptions(json)
     if (typeof o.difficulty === 'string' && o.difficulty in tolTable) s.difficulty = o.difficulty
     const lag = toMs(o.lag_ms)
-    if (lag !== null) {
-      s.sessionLag = lag
-      writeStored(lag)
-      refreshLag()
-    }
+    if (lag !== null) setSessionLag(lag, 'config')
     if (typeof o.music_volume === 'number') {
       s.volume = clamp(o.music_volume, 0, 1)
       if (s.music) s.music.gain.value = s.volume
@@ -260,7 +306,7 @@ export function createVoice(cfg = {}, env = globalThis) {
     s.t0 = ctx.currentTime + START_DELAY
     s.rec = new PcmRecorder(s.sr, MAX_TAKE_SECONDS)
     s.takeFrames = []
-    s.judge = createJudge(s.ref, { tolCents: tol() })
+    s.judge = createJudge(s.ref, { tolCents: tol(), slack: s.lagSource === 'estimated' ? ESTIMATED_SLACK_S : 0 })
     s.take = null
     s.takeJob = null
     queue.drain()
@@ -268,7 +314,19 @@ export function createVoice(cfg = {}, env = globalThis) {
     src.start(s.t0)
     s.src = src
     s.state = 'playing'
+    openSession()
     return true
+  }
+
+  function openSession() {
+    const identity = { songId: s.ref.id, clientId: clientId(env), difficulty: s.difficulty }
+    const job = requestSession({ env, url: url('/api/v1/sessions'), ...identity, timeoutMs: SESSION_TIMEOUT_MS })
+    s.tokenJob = job
+    s.identity = identity
+    s.tokenState = 'pending'
+    job.then(token => {
+      if (s.tokenJob === job) s.tokenState = token ? 'ok' : 'none'
+    })
   }
 
   async function resample16k(pcm, sr) {
@@ -317,10 +375,13 @@ export function createVoice(cfg = {}, env = globalThis) {
     })
     s.tap.port.postMessage({ rec: false })
     const rec = s.rec
-    const info = { t0: s.t0, frames: s.takeFrames, lag_ms: s.lag, difficulty: s.difficulty, song_id: s.ref.id }
+    const tokenJob = s.tokenJob
+    const { songId, clientId: takeClientId, difficulty } = s.identity
+    const info = { t0: s.t0, frames: s.takeFrames, lag_ms: s.lag, lag_source: s.lagSource, difficulty, song_id: songId, client_id: takeClientId }
+    refreshLag()
     s.takeJob = flushed
       .then(() => buildTake(rec, info))
-      .then(take => (s.take = take))
+      .then(async take => (s.take = { ...take, session_token: await tokenJob }))
       .catch(e => {
         fail(ERR.UPLOAD, e)
         return null
@@ -332,13 +393,15 @@ export function createVoice(cfg = {}, env = globalThis) {
     const ctx = s.ctx
     return buildMeta({
       songId: take.song_id,
-      clientId: clientId(env),
+      clientId: take.client_id,
+      sessionToken: take.token_spent ? null : take.session_token,
       player,
       difficulty: take.difficulty,
       challengeId,
       wavT0: take.wav_t0,
       wavSr: take.wav_sr,
       lagMs: take.lag_ms,
+      lagSource: take.lag_source,
       frames: take.frames,
       client: { ua: env.navigator?.userAgent ?? '', sr: s.sr, base_latency: round(ctx?.baseLatency || 0, 4), output_latency: round(ctx?.outputLatency || 0, 4), aec: s.aec }
     })
@@ -348,7 +411,10 @@ export function createVoice(cfg = {}, env = globalThis) {
     const take = await (s.takeJob || stop())
     if (!take || !take.samples) return fail(ERR.UPLOAD, 'no recorded take')
     try {
-      const result = await postTake({ env, url: url('/api/v1/takes'), wav: take.wav, meta: metaFor(take, player, challengeId), timeoutMs: UPLOAD_TIMEOUT_MS })
+      const meta = metaFor(take, player, challengeId)
+      take.token_spent = true
+      const result = await postTake({ env, url: url('/api/v1/takes'), wav: take.wav, meta, timeoutMs: UPLOAD_TIMEOUT_MS })
+      autoLag(result?.latency)
       bus.emit('on_result', result)
       return true
     } catch (e) {
@@ -356,13 +422,17 @@ export function createVoice(cfg = {}, env = globalThis) {
     }
   }
 
-  async function calibrate() {
+  async function calibrate(mode) {
     if (s.calibrating) return false
     if (!s.tap || s.state === 'playing') return fail(ERR.LOCKED, 'calibrate needs unlock and no song playing')
     s.calibrating = true
     const ctx = s.ctx
-    const clicks = clickTimes(ctx.currentTime + CLICK_LEAD)
-    for (const c of clicks) {
+    const kind = mode === 'headphones' ? 'headphones' : 'speakers'
+    const plan = kind === 'headphones' ? HEADPHONES : SPEAKERS
+    const lead = kind === 'headphones' ? LEAD_IN : 0
+    const all = clickTimes(ctx.currentTime + CLICK_LEAD, lead + CLICKS, plan.gap)
+    const clicks = all.slice(lead)
+    for (const c of all) {
       const osc = ctx.createOscillator()
       const g = ctx.createGain()
       osc.frequency.value = 1000
@@ -372,15 +442,11 @@ export function createVoice(cfg = {}, env = globalThis) {
       osc.start(c)
       osc.stop(c + CLICK_LEN)
     }
-    const frames = await collect(clicks.at(-1) - ctx.currentTime + 0.6)
+    const frames = await collect(clicks.at(-1) - ctx.currentTime + plan.late + 0.2)
     s.calibrating = false
-    const r = estimateLag(clicks, detectOnsets(frames, { sr: s.sr, threshold: onsetThreshold(s.floor) }))
-    if (r.lag_ms !== null) {
-      s.sessionLag = r.lag_ms
-      writeStored(r.lag_ms)
-      refreshLag()
-    }
-    bus.emit('on_calibrated', { lag_ms: s.lag, hits: r.hits })
+    const r = estimateLag(clicks, detectOnsets(frames, { sr: s.sr, threshold: onsetThreshold(s.floor) }), { late: plan.late, range: plan.range })
+    if (r.lag_ms !== null) setSessionLag(r.lag_ms, 'calibrated')
+    bus.emit('on_calibrated', { lag_ms: s.lag, hits: r.hits, mode: kind })
     return r.lag_ms !== null
   }
 
@@ -407,7 +473,7 @@ export function createVoice(cfg = {}, env = globalThis) {
       return take ? { wav: take.wav, meta: metaFor(take, 'dev', null), resampler: take.resampler } : null
     },
     _state() {
-      return { sr: s.sr, floor: s.floor, gate: s.gate, lag_ms: s.lag, est_lag_ms: s.estLag, output_latency: s.ctx?.outputLatency ?? null, base_latency: s.ctx?.baseLatency ?? null, ctx_state: s.ctx?.state ?? null }
+      return { sr: s.sr, floor: s.floor, gate: s.gate, lag_ms: s.lag, lag_source: s.lagSource, est_lag_ms: s.estLag, output_latency: s.ctx?.outputLatency ?? null, base_latency: s.ctx?.baseLatency ?? null, ctx_state: s.ctx?.state ?? null, session: s.tokenState }
     }
   }
 }
@@ -420,6 +486,9 @@ export function installVoice(win) {
     attachPlanB(win.voice, win)
   } else {
     win.voice = createVoice(cfg, win)
+  }
+  if (isDebug(win.location?.search) && win.document) {
+    attachDebug(win, win.voice, { apiUrl: `${cfg.api || ''}/api/v1/version`, versionUrl: new URL('./version.json', import.meta.url).href })
   }
   return win.voice
 }

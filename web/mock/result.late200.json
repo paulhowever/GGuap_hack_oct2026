@@ -498,6 +498,13 @@
     }
   ],
   "octave_shift": 0,
+  "integrity": {
+    "status": "ok",
+    "flags": []
+  },
+  "completion": {
+    "ratio": 1.0
+  },
   "challenge": null,
   "leaderboard": null
 }

@@ -5,8 +5,10 @@ import sqlite3
 import uuid
 
 import numpy as np
+import pytest
 import soundfile as sf
 
+from app.core.config import ROOT
 from app.scoring.synth import synth_take
 
 
@@ -140,3 +142,64 @@ def test_engine_value_error_is_bad_audio(client, demo_ref):
     r = post(client, wav_bytes(synth_take(demo_ref)), meta())
     assert r.status_code == 422
     assert r.json()["detail"] == "bad_audio"
+
+
+def float_wav(x, sr=16000):
+    buf = io.BytesIO()
+    sf.write(buf, x, sr, format="WAV", subtype="FLOAT")
+    return buf.getvalue()
+
+
+@pytest.mark.parametrize("bad", [np.nan, np.inf])
+def test_non_finite_audio_is_bad_audio_and_keeps_the_token(client, demo_ref, clock, bad):
+    body = {"song_id": "demo", "client_id": None, "difficulty": "normal"}
+    token = client.post("/api/v1/sessions", json=body).json()["token"]
+    clock.advance(demo_ref["audio"]["duration"])
+    x = synth_take(demo_ref, jitter_cents=20.0).astype(np.float32)
+    broken = x.copy()
+    broken[8000] = bad
+    r = post(client, float_wav(broken), meta(session_token=token))
+    assert r.status_code == 422
+    assert r.json()["detail"] == "bad_audio"
+    assert post(client, float_wav(x), meta(session_token=token)).json()["integrity"] == {
+        "status": "ok",
+        "flags": [],
+    }
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "contracts/fixtures/result.perfect.json",
+        *(f"web/mock/result.{mode}.json" for mode in ("perfect", "offkey", "octave", "late200", "silent")),
+    ],
+)
+def test_mock_results_have_the_real_keys(submit, path):
+    body = submit().json()
+    mock = json.loads((ROOT / path).read_text(encoding="utf-8"))
+    assert list(mock) == list(body)
+    assert list(mock["score"]) == list(body["score"])
+
+
+def logged_scored(caplog):
+    return [r.fields for r in caplog.records if r.getMessage() == "take_scored"]
+
+
+@pytest.mark.parametrize(
+    ("source", "applied"),
+    [("estimated", 300), ("config", 300), ("auto", 300), (None, 300), ("calibrated", 160)],
+)
+def test_lag_source_decides_the_clip(submit, caplog, source, applied):
+    extra = {} if source is None else {"lag_source": source}
+    r = submit(synth={"delay_s": 0.3}, lag_ms=40, **extra)
+    assert r.status_code == 200
+    body = r.json()
+    assert body["latency"]["applied_ms"] == pytest.approx(applied, abs=20)
+    if source != "calibrated":
+        assert body["score"]["total"] >= 9000
+    assert logged_scored(caplog)[0]["lag_source"] == source
+
+
+def test_unknown_lag_source_is_bad_meta(client, demo_ref):
+    r = post(client, wav_bytes(synth_take(demo_ref)), meta(lag_source="guess"))
+    assert r.status_code == 422

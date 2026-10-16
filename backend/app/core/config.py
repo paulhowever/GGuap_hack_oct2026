@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     score_concurrency: int = 2
     log_level: str = "INFO"
     git_sha: str = "dev"
+    secret: str = ""
 
 
 @lru_cache

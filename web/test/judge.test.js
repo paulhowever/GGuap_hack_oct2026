@@ -73,3 +73,51 @@ test('contiguous notes do not borrow the previous note frames for onset', () => 
   assert.ok(v.every(x => x.hit >= 0.9))
   assert.ok(v.every(x => x.onset_ms !== null && Math.abs(x.onset_ms) <= 80))
 })
+
+function shortNotes() {
+  const short = structuredClone(ref)
+  for (const l of short.lines) for (const n of l.notes) n.d = 0.4
+  return short
+}
+
+test('slack keeps a 150 ms lag error a hit on short notes either way', () => {
+  const short = shortNotes()
+  for (const delay of [0.15, -0.15]) {
+    const strict = run(sing({ delay, source: short }), {}, short)
+    const soft = run(sing({ delay, source: short }), { slack: 0.15 }, short)
+    assert.ok(strict.every(x => x.hit < 0.8), `strict ${delay}: ${strict.map(x => x.hit)}`)
+    assert.ok(soft.every(x => x.hit >= 0.8), `soft ${delay}: ${soft.map(x => x.hit)}`)
+  }
+})
+
+test('slack does not inflate on-time, silent or off-key singing', () => {
+  const short = shortNotes()
+  assert.ok(run(sing({ source: short }), { slack: 0.15 }, short).every(x => x.hit === 1 && x.onset_ms >= 0 && x.onset_ms <= 15))
+  assert.ok(run(sing({ source: short, mute: new Set([0, 1, 2, 3, 4, 5]) }), { slack: 0.15 }, short).every(x => x.hit === 0 && x.onset_ms === null))
+  assert.ok(run(sing({ source: short, cents: 150, delay: 0.15 }), { slack: 0.15 }, short).every(x => x.hit === 0 && x.cents === 150))
+})
+
+test('slack holds the verdict until the slack after the note ends', () => {
+  const j = createJudge(ref, { slack: 0.15 })
+  const first = judgeNotes(ref)[0]
+  assert.equal(sing().filter(f => f.t < first.end + 0.15).flatMap(f => j.push(f)).length, 0)
+  assert.deepEqual(j.push({ t: first.end + 0.151, hz: 0, conf: 0, rms: 0 }).map(x => x.i), [0])
+})
+
+test('a note inside a longer one is judged on its own window', () => {
+  const nested = structuredClone(ref)
+  nested.lines = [{ i: 0, t0: 1, t1: 3, notes: [
+    { i: 0, t: 1.0, d: 2.0, beat: 0, len: 40, midi: 60, pc: 0, type: 'normal', syl: 'а' },
+    { i: 1, t: 1.5, d: 0.5, beat: 10, len: 10, midi: 67, pc: 7, type: 'normal', syl: 'о' }
+  ] }]
+  const frames = []
+  for (let t = 0; t < 4; t += HOP) {
+    const midi = t >= 1.5 && t < 2.0 ? 67 : t >= 1.0 && t < 3.0 ? 60 : null
+    frames.push(midi === null ? { t, hz: 0, conf: 0, rms: 0.001 } : { t, hz: midiToHz(midi), conf: 1, rms: 0.1 })
+  }
+  for (const slack of [0, 0.15]) {
+    const v = run(frames, { slack }, nested)
+    assert.ok(v.find(x => x.i === 1).hit >= 0.95, `slack ${slack}: ${v.map(x => x.hit)}`)
+    assert.ok(Math.abs(v.find(x => x.i === 0).hit - 0.75) <= 0.03, `slack ${slack}: ${v.map(x => x.hit)}`)
+  }
+})

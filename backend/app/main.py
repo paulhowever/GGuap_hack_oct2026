@@ -1,12 +1,15 @@
 import asyncio
 import logging
+import secrets
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.ext.asyncio import async_sessionmaker
+from starlette.responses import Response
+from starlette.types import Scope
 
-from app.api import health, players, songs, takes
+from app.api import board, challenges, health, players, sessions, songs, takes
 from app.core.config import Settings, get_settings
 from app.core.logging import RequestIdMiddleware, configure_logging, log_event
 from app.core.version import app_version
@@ -17,6 +20,13 @@ from app.songs import SongRepo
 from app.store.db import init_db, make_engine
 
 log = logging.getLogger("karaoke")
+
+
+class NoCacheStaticFiles(StaticFiles):
+    async def get_response(self, path: str, scope: Scope) -> Response:
+        response = await super().get_response(path, scope)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
 
 
 @asynccontextmanager
@@ -31,6 +41,9 @@ async def lifespan(app: FastAPI):
     app.state.sessions = async_sessionmaker(app.state.db, expire_on_commit=False)
     app.state.songs = SongRepo(s.songs_dir)
     app.state.score_sem = asyncio.Semaphore(s.score_concurrency)
+    app.state.secret = s.secret or secrets.token_hex(32)
+    if not s.secret:
+        log.warning("secret_generated", extra={"fields": {"hint": "set KARAOKE_SECRET"}})
     log_event(
         log,
         "startup",
@@ -55,10 +68,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(songs.router)
     app.include_router(takes.router)
     app.include_router(players.router)
+    app.include_router(board.router)
+    app.include_router(challenges.router)
+    app.include_router(challenges.short)
+    app.include_router(sessions.router)
     if settings.songs_dir.is_dir():
         app.mount("/media", StaticFiles(directory=settings.songs_dir), name="media")
     if settings.web_dir is not None and settings.web_dir.is_dir():
-        app.mount("/", StaticFiles(directory=settings.web_dir, html=True), name="web")
+        app.mount("/", NoCacheStaticFiles(directory=settings.web_dir, html=True), name="web")
     return app
 
 
