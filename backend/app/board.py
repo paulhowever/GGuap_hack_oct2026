@@ -30,6 +30,10 @@ def avatar_of(profile: Player | None) -> dict | None:
     return json.loads(profile.avatar) if profile else None
 
 
+def bio_of(profile: Player | None) -> str:
+    return (profile.bio or "") if profile else ""
+
+
 def player_key(client_id: str | None, player: str) -> str:
     return client_id or f"name:{player}"
 
@@ -102,6 +106,7 @@ async def leaderboard(
                 **public,
                 "player": display_name(profile, row["player"]),
                 "avatar": avatar_of(profile),
+                "bio": bio_of(profile),
                 "me": client_id is not None and row["client_id"] == client_id,
             }
         )

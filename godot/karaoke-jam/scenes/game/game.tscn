@@ -1,11 +1,11 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://jls3y4lpjhqg"]
 
-[ext_resource type="Script" path="res://scenes/game/game.gd" id="1_game"]
+[ext_resource type="Script" uid="uid://bnshpvjsyiiwq" path="res://scenes/game/game.gd" id="1_game"]
 [ext_resource type="PackedScene" uid="uid://kvfxehvfomao" path="res://ui/components/studio_background.tscn" id="2_bg"]
 [ext_resource type="Theme" uid="uid://jo2ye60ryjcu" path="res://ui/theme/main_theme.tres" id="3_theme"]
-[ext_resource type="Script" path="res://ui/components/note_lane.gd" id="4_lane"]
+[ext_resource type="Script" uid="uid://bpkw5nh5e7a8a" path="res://ui/components/note_lane.gd" id="4_lane"]
 
-[node name="Game" type="Control"]
+[node name="Game" type="Control" unique_id=1114517082]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -15,10 +15,10 @@ grow_vertical = 2
 theme = ExtResource("3_theme")
 script = ExtResource("1_game")
 
-[node name="StudioBackground" parent="." instance=ExtResource("2_bg")]
+[node name="StudioBackground" parent="." unique_id=991826502 instance=ExtResource("2_bg")]
 layout_mode = 1
 
-[node name="Margin" type="MarginContainer" parent="."]
+[node name="Margin" type="MarginContainer" parent="." unique_id=1774529018]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -30,15 +30,15 @@ theme_override_constants/margin_top = 32
 theme_override_constants/margin_right = 48
 theme_override_constants/margin_bottom = 40
 
-[node name="VBox" type="VBoxContainer" parent="Margin"]
+[node name="VBox" type="VBoxContainer" parent="Margin" unique_id=476938952]
 layout_mode = 2
 theme_override_constants/separation = 20
 
-[node name="TopRow" type="HBoxContainer" parent="Margin/VBox"]
+[node name="TopRow" type="HBoxContainer" parent="Margin/VBox" unique_id=1517097493]
 layout_mode = 2
 theme_override_constants/separation = 24
 
-[node name="SongTitle" type="Label" parent="Margin/VBox/TopRow"]
+[node name="SongTitle" type="Label" parent="Margin/VBox/TopRow" unique_id=1973141582]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -46,7 +46,7 @@ theme_type_variation = &"HeadingLabel"
 text = "Песня"
 text_overrun_behavior = 3
 
-[node name="SongProgress" type="ProgressBar" parent="Margin/VBox"]
+[node name="SongProgress" type="ProgressBar" parent="Margin/VBox" unique_id=1218598742]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 8)
 layout_mode = 2
@@ -54,11 +54,11 @@ max_value = 1.0
 step = 0.001
 show_percentage = false
 
-[node name="LaneBox" type="Control" parent="Margin/VBox"]
+[node name="LaneBox" type="Control" parent="Margin/VBox" unique_id=596705060]
 layout_mode = 2
 size_flags_vertical = 3
 
-[node name="NoteLane" type="Control" parent="Margin/VBox/LaneBox"]
+[node name="NoteLane" type="Control" parent="Margin/VBox/LaneBox" unique_id=100209864]
 unique_name_in_owner = true
 clip_contents = true
 layout_mode = 1
@@ -72,7 +72,7 @@ grow_vertical = 2
 mouse_filter = 2
 script = ExtResource("4_lane")
 
-[node name="JudgeLabel" type="Label" parent="Margin/VBox/LaneBox"]
+[node name="JudgeLabel" type="Label" parent="Margin/VBox/LaneBox" unique_id=1227872997]
 unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 5
@@ -87,7 +87,7 @@ theme_type_variation = &"HeadingLabel"
 text = "Отлично!"
 horizontal_alignment = 1
 
-[node name="StatusLabel" type="Label" parent="Margin/VBox/LaneBox"]
+[node name="StatusLabel" type="Label" parent="Margin/VBox/LaneBox" unique_id=2096694970]
 unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 8
@@ -105,23 +105,23 @@ theme_type_variation = &"HeadingLabel"
 text = "Загружаем песню…"
 horizontal_alignment = 1
 
-[node name="Lyrics" type="RichTextLabel" parent="Margin/VBox"]
+[node name="Lyrics" type="RichTextLabel" parent="Margin/VBox" unique_id=1399257888]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 64)
+custom_minimum_size = Vector2(0, 80)
 layout_mode = 2
-theme_override_font_sizes/normal_font_size = 44
+theme_override_font_sizes/normal_font_size = 56
 bbcode_enabled = true
 fit_content = true
 scroll_active = false
 
-[node name="NextLyrics" type="Label" parent="Margin/VBox"]
+[node name="NextLyrics" type="Label" parent="Margin/VBox" unique_id=170221169]
 unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"HintLabel"
-theme_override_font_sizes/font_size = 30
+theme_override_font_sizes/font_size = 38
 horizontal_alignment = 1
 
-[node name="ErrorBox" type="CenterContainer" parent="."]
+[node name="ErrorBox" type="CenterContainer" parent="." unique_id=111802012]
 unique_name_in_owner = true
 visible = false
 layout_mode = 1
@@ -131,16 +131,16 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 
-[node name="Card" type="PanelContainer" parent="ErrorBox"]
+[node name="Card" type="PanelContainer" parent="ErrorBox" unique_id=799901830]
 custom_minimum_size = Vector2(760, 0)
 layout_mode = 2
 theme_type_variation = &"CardPanel"
 
-[node name="VBox" type="VBoxContainer" parent="ErrorBox/Card"]
+[node name="VBox" type="VBoxContainer" parent="ErrorBox/Card" unique_id=1980288218]
 layout_mode = 2
 theme_override_constants/separation = 24
 
-[node name="ErrorText" type="Label" parent="ErrorBox/Card/VBox"]
+[node name="ErrorText" type="Label" parent="ErrorBox/Card/VBox" unique_id=1710282702]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_font_sizes/font_size = 28
@@ -148,25 +148,26 @@ text = "Ошибка"
 horizontal_alignment = 1
 autowrap_mode = 3
 
-[node name="Buttons" type="HBoxContainer" parent="ErrorBox/Card/VBox"]
+[node name="Buttons" type="HBoxContainer" parent="ErrorBox/Card/VBox" unique_id=682566004]
 layout_mode = 2
 theme_override_constants/separation = 24
 alignment = 1
 
-[node name="RetryButton" type="Button" parent="ErrorBox/Card/VBox/Buttons"]
+[node name="RetryButton" type="Button" parent="ErrorBox/Card/VBox/Buttons" unique_id=2034319340]
 unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"PrimaryButton"
 text = "Отправить ещё раз"
 
-[node name="ExitButton" type="Button" parent="ErrorBox/Card/VBox/Buttons"]
+[node name="ExitButton" type="Button" parent="ErrorBox/Card/VBox/Buttons" unique_id=1195291040]
 unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"GhostButton"
 text = "К выбору песни"
 
-[node name="Fade" type="ColorRect" parent="."]
+[node name="Fade" type="ColorRect" parent="." unique_id=1889203949]
 unique_name_in_owner = true
+visible = false
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0

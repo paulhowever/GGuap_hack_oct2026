@@ -41,6 +41,14 @@ const GRADE_COLORS := {
 
 const PUBLISH_TEXT := "Опубликовать кавер"  # подпись кнопки в покое
 const CONFIRM_SCENE := preload("res://ui/panels/confirm_panel.tscn")
+## Значки кнопок — SVG, а не символы ▶ ❚❚ ✓: в Nunito их нет, и в вебе
+## (где нет системных шрифтов для подмены) они не рисуются.
+const ICON_PLAY := preload("res://ui/icons/play.svg")
+const ICON_PAUSE := preload("res://ui/icons/pause.svg")
+const ICON_CHECK := preload("res://ui/icons/check.svg")
+## Все подписи кнопки публикации — ширину кнопки фиксируем по самой длинной,
+## иначе смена текста меняет ширину карточки и центрированное окно «прыгает».
+const PUBLISH_TEXTS: Array[String] = [PUBLISH_TEXT, "Проверяем таблицу…", "Публикуем…", "Опубликовано"]
 
 var _leaving: bool = false
 var _publishing: bool = false
@@ -64,6 +72,8 @@ func _ready() -> void:
 	# после пения персонажи уже на месте; «Мой последний результат» — выезжают
 	Performers.enter()
 	Performers.dim(false)
+	Performers.set_producer_mood(ProducerPreview.Mood.RESULT)
+	Performers.set_character_mood(SingerPreview.Mood.RESULT)
 	_fill(Session.last_result)
 	_setup_review()
 	_confirm = CONFIRM_SCENE.instantiate()
@@ -87,6 +97,7 @@ func _setup_review() -> void:
 	_can_review = bool(st.get("available", false)) and (st.get("take_id") == null or take_id == null
 		or str(st.get("take_id")) == str(take_id))
 	_player.visible = true
+	set_play_button(_play, false)
 	_player_hint.visible = not _can_review
 	if not _can_review:
 		_player.modulate.a = 0.45
@@ -132,7 +143,7 @@ func _update_player(st: Dictionary) -> void:
 		if _review_state == "playing" and state == "ended":
 			MenuMusic.duck(false)
 		_review_state = state
-		_play.text = "❚❚  Пауза" if state == "playing" else "▶  Послушать"
+		set_play_button(_play, state == "playing")
 	if not _seeking:
 		_seek.set_value_no_signal(t)
 	_time.text = "%s / %s" % [_fmt(_seek.value if _seeking else t), _fmt(dur)]
@@ -140,6 +151,12 @@ func _update_player(st: Dictionary) -> void:
 
 func _fmt(sec: float) -> String:
 	return fmt_time(sec)
+
+
+## Кнопка плеера «Послушать» / «Пауза» со значком (здесь и в окне кавера).
+static func set_play_button(b: Button, playing: bool) -> void:
+	b.icon = ICON_PAUSE if playing else ICON_PLAY
+	b.text = "Пауза" if playing else "Послушать"
 
 
 ## «м:сс» для плееров (здесь и в окне кавера).
@@ -151,7 +168,7 @@ static func fmt_time(sec: float) -> String:
 
 ## «Высота N% · Ритм N% · Бонусы N%» из score контракта TakeResult.
 static func details_text(score: Dictionary) -> String:
-	return "Высота %d%%   ·   Ритм %d%%   ·   Бонусы %d%%" % [
+	return "Продюсер оценил: Высота - %d%%; Ритм - %d%%; Бонусы - %d%%" % [
 		roundi(float(score.get("pitch_pct", 0))), roundi(float(score.get("rhythm_pct", 0))),
 		roundi(float(score.get("extras_pct", 0)))]
 
@@ -189,12 +206,14 @@ func _fill(r: Dictionary) -> void:
 ## место, которое займёт этот дубль, после — место в таблице.
 func _show_board_place(r: Dictionary, is_published: bool) -> void:
 	var lb = r.get("leaderboard")
-	_board.visible = lb is Dictionary
 	if not lb is Dictionary:
+		_set_reserved(_board, "")
 		return
-	var place := "Место %d из %d" % [int(lb.get("rank", 0)), int(lb.get("of", 0))]
-	_board.text = (place + "  ·  кавер опубликован") if is_published \
-		else ("%s при публикации%s" % [place, "  ·  личный рекорд!" if lb.get("personal_best", false) else ""])
+	_board.visible = true
+	_board.modulate.a = 1.0
+	var place := "%d Место в таблице лидеров" % [int(lb.get("rank", 0))]
+	_board.text = (place + ", кавер опубликован") if is_published \
+		else ("%s при публикации%s" % [place, ", личный рекорд!" if lb.get("personal_best", false) else ""])
 
 
 # --- Публикация кавера ------------------------------------------------------------
@@ -207,8 +226,38 @@ func _setup_publish() -> void:
 	_publish.visible = not Session.result_review and ok and r.get("take_id") != null \
 		and VoiceBridge.has_covers()
 	_publish_hint.visible = false
-	if _publish.visible:
-		_publish.pressed.connect(_on_publish_pressed)
+	if not _publish.visible:
+		return
+	_publish.pressed.connect(_on_publish_pressed)
+	_fix_publish_width()
+	# подсказка и строка места появляются/исчезают во время публикации — место под
+	# них держим сразу, иначе меняется высота карточки и окно сдвигается
+	_set_reserved(_publish_hint, "")
+	if not _board.visible:
+		_set_reserved(_board, "")
+
+
+## Ширина кнопки публикации — по самой длинной из её подписей (со значком).
+func _fix_publish_width() -> void:
+	var w := 0.0
+	for t in PUBLISH_TEXTS:
+		_publish.text = t
+		_publish.icon = ICON_CHECK if t == PUBLISH_TEXTS[-1] else null
+		w = maxf(w, _publish.get_minimum_size().x)
+	_publish.icon = null
+	_publish.text = PUBLISH_TEXT
+	_publish.custom_minimum_size.x = w
+
+
+## Текст в метке, которая всегда занимает место в раскладке: пустой текст —
+## метка прозрачная (а не скрытая), высота карточки не меняется.
+func _set_reserved(label: Label, text: String) -> void:
+	if text.is_empty() and not _publish.visible:
+		label.visible = false   # публикации нет — резервировать место незачем
+		return
+	label.visible = true
+	label.text = text if not text.is_empty() else " "
+	label.modulate.a = 0.0 if text.is_empty() else 1.0
 
 
 func _on_publish_pressed() -> void:
@@ -239,7 +288,7 @@ func _on_publish_pressed() -> void:
 		_publish.grab_focus()
 		return
 	_publish.text = "Публикуем…"
-	_publish_hint.visible = false
+	_set_reserved(_publish_hint, "")
 	VoiceBridge.publish(take_id)
 	var res: Array = await published_for(take_id)
 	if not is_inside_tree():
@@ -252,8 +301,7 @@ func _on_publish_pressed() -> void:
 	_publishing = false
 	_publish.disabled = false
 	_publish.text = PUBLISH_TEXT
-	_publish_hint.text = publish_error_text(str(res[1]))
-	_publish_hint.visible = true
+	_set_reserved(_publish_hint, publish_error_text(str(res[1])))
 
 
 ## Ждёт ответ моста именно для этого дубля: [ok, code].
@@ -302,13 +350,15 @@ func _publish_question(board: Dictionary, take_id: String, total: int) -> Dictio
 func _published_done(board: Dictionary) -> void:
 	_publishing = false
 	_publish.disabled = true
-	_publish.text = "Опубликовано ✓"
-	_publish_hint.visible = false
+	_publish.text = PUBLISH_TEXTS[-1]
+	_publish.icon = ICON_CHECK
+	_set_reserved(_publish_hint, "")
 	if board.get("ok", false) and board.get("data") is Array:
 		for row in board.data:
 			if row is Dictionary and bool(row.get("me", false)):
 				_board.visible = true
-				_board.text = "Место %d из %d  ·  кавер опубликован" % [int(row.get("rank", 0)), (board.data as Array).size()]
+				_board.modulate.a = 1.0
+				_board.text = "Место %d из %d, кавер опубликован" % [int(row.get("rank", 0)), (board.data as Array).size()]
 				return
 	_show_board_place(Session.last_result, true)
 

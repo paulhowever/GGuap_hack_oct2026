@@ -13,7 +13,7 @@
 [ext_resource type="PackedScene" uid="uid://d2s636ykjydjh" path="res://ui/panels/settings_panel.tscn" id="11_set"]
 [ext_resource type="Theme" uid="uid://jo2ye60ryjcu" path="res://ui/theme/main_theme.tres" id="12_theme"]
 [ext_resource type="PackedScene" uid="uid://kvrgorm425vb" path="res://ui/components/character_preview.tscn" id="13_char"]
-[ext_resource type="PackedScene" path="res://ui/panels/customize_panel.tscn" id="14_cust"]
+[ext_resource type="PackedScene" uid="uid://b70lwk20j4jcb" path="res://ui/panels/customize_panel.tscn" id="14_cust"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_elkq3"]
 content_margin_left = 28.0
@@ -25,12 +25,12 @@ border_width_left = 4
 border_width_top = 4
 border_width_right = 4
 border_width_bottom = 4
-border_color = Color(0.57948244, 0.31532153, 0.21372977, 1)
+border_color = Color(0.57984805, 0.31546333, 0.21375194, 1)
 corner_radius_top_left = 12
 corner_radius_top_right = 12
 corner_radius_bottom_right = 12
 corner_radius_bottom_left = 12
-shadow_color = Color(1, 0.47843137, 0.23921569, 0.15754916)
+shadow_color = Color(1, 0.47843137, 0.23921569, 0.15780343)
 shadow_size = 6
 
 [node name="Boot" type="Control" unique_id=1582119351]
@@ -62,12 +62,17 @@ mouse_filter = 2
 theme_override_constants/separation = 120
 alignment = 1
 
-[node name="VinylLogo" parent="Center/Row" unique_id=69667275 instance=ExtResource("3_logo")]
+[node name="LogoColumn" type="VBoxContainer" parent="Center/Row" unique_id=1203948571]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 4
+
+[node name="VinylLogo" parent="Center/Row/LogoColumn" unique_id=69667275 instance=ExtResource("3_logo")]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(560, 560)
 layout_mode = 2
 
-[node name="CharacterPreview" parent="Center/Row/VinylLogo" unique_id=2085825999 instance=ExtResource("13_char")]
+[node name="CharacterPreview" parent="Center/Row/LogoColumn/VinylLogo" unique_id=2085825999 instance=ExtResource("13_char")]
 unique_name_in_owner = true
 layout_mode = 2
 
@@ -101,9 +106,9 @@ script = ExtResource("4_btn")
 beat_scale = 0.02
 
 [node name="MenuHint" type="Label" parent="Center/Row/Menu" unique_id=225128047]
+visible = false
 layout_mode = 2
 theme_type_variation = &"HintLabel"
-text = "Enter — выбрать   ·   Esc — настройки"
 horizontal_alignment = 1
 
 [node name="TopBar" type="PanelContainer" parent="." unique_id=2092436194]
@@ -124,30 +129,28 @@ size_flags_vertical = 4
 mouse_filter = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_elkq3")
 script = ExtResource("5_onair")
+text = "UNBAD"
+
+[node name="NickLabel" type="Label" parent="TopBar/Row" unique_id=1488332872]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Ник меняется в гардеробе — нажмите на персонажа"
+mouse_filter = 1
+theme_type_variation = &"AccentLabel"
+theme_override_colors/font_outline_color = Color(0.07, 0.06, 0.09, 1)
+theme_override_constants/outline_size = 10
+theme_override_font_sizes/font_size = 40
+text = "Гость"
+horizontal_alignment = 1
 
 [node name="Spacer" type="Control" parent="TopBar/Row" unique_id=501621540]
 layout_mode = 2
 size_flags_horizontal = 3
 mouse_filter = 2
 
-[node name="MicStatusChip" parent="TopBar/Row" unique_id=1227851745 instance=ExtResource("6_mic")]
-layout_mode = 2
-size_flags_vertical = 4
-
-[node name="NickChip" type="PanelContainer" parent="TopBar/Row" unique_id=584377146]
-layout_mode = 2
-size_flags_vertical = 4
-theme_type_variation = &"Chip"
-
-[node name="NickLabel" type="Label" parent="TopBar/Row/NickChip" unique_id=1488332872]
-unique_name_in_owner = true
-layout_mode = 2
-theme_type_variation = &"AccentLabel"
-theme_override_font_sizes/font_size = 24
-text = "Гость"
-
 [node name="GearButton" type="Button" parent="TopBar/Row" unique_id=2004508024]
 unique_name_in_owner = true
+visible = false
 custom_minimum_size = Vector2(60, 56)
 layout_mode = 2
 size_flags_vertical = 4
@@ -157,6 +160,12 @@ theme_type_variation = &"IconButton"
 icon = ExtResource("7_gear")
 icon_alignment = 1
 expand_icon = true
+
+[node name="LagLabel" type="Label" parent="TopBar/Row" unique_id=1715118637]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"HintLabel"
+text = "Задержка: 120 мс"
 
 [node name="BottomBar" type="PanelContainer" parent="." unique_id=1612557122]
 layout_mode = 1
@@ -172,6 +181,15 @@ theme_type_variation = &"BarPanel"
 [node name="Row" type="HBoxContainer" parent="BottomBar" unique_id=501885007]
 layout_mode = 2
 theme_override_constants/separation = 16
+
+[node name="CalibrateLink" type="Button" parent="BottomBar/Row" unique_id=1937782475]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 4
+focus_mode = 0
+theme_type_variation = &"GhostButton"
+theme_override_font_sizes/font_size = 22
+text = "Калибровать"
 
 [node name="HpIcon" type="TextureRect" parent="BottomBar/Row" unique_id=2092807101]
 modulate = Color(0.373, 0.827, 0.737, 1)
@@ -193,23 +211,13 @@ layout_mode = 2
 size_flags_horizontal = 3
 mouse_filter = 2
 
-[node name="LagLabel" type="Label" parent="BottomBar/Row" unique_id=1715118637]
-unique_name_in_owner = true
-layout_mode = 2
-theme_type_variation = &"HintLabel"
-text = "Задержка: 120 мс"
-
-[node name="CalibrateLink" type="Button" parent="BottomBar/Row" unique_id=1937782475]
-unique_name_in_owner = true
+[node name="MicStatusChip" parent="BottomBar/Row" unique_id=1227851745 instance=ExtResource("6_mic")]
 layout_mode = 2
 size_flags_vertical = 4
-focus_mode = 0
-theme_type_variation = &"GhostButton"
-theme_override_font_sizes/font_size = 22
-text = "Калибровать"
 
 [node name="FirstRunPanel" parent="." unique_id=1366539156 instance=ExtResource("9_fr")]
 unique_name_in_owner = true
+visible = false
 layout_mode = 1
 
 [node name="CalibrationPanel" parent="." unique_id=1449080679 instance=ExtResource("10_cal")]

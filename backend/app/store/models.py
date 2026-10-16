@@ -31,6 +31,8 @@ class Player(Base):
     client_id: Mapped[str] = mapped_column(String(36), primary_key=True)
     nickname: Mapped[str] = mapped_column(String(24))
     avatar: Mapped[str] = mapped_column(Text, default="{}")
+    # «О себе» для окна кавера; колонку в старую БД добавляет init_db (без сброса данных).
+    bio: Mapped[str] = mapped_column(Text, default="", server_default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC)

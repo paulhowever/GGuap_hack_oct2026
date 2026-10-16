@@ -1,7 +1,8 @@
 extends ModalPanel
-## Калибровка задержки: 8 щелчков метронома (их играет JS-движок), игрок хлопает/говорит «та».
-## Godot анимирует щелчки по таймеру той же сетки (0.6 с + 7 × 0.5 с), а итог —
-## lag_ms и число попаданий — возвращает JS. Успех — не меньше 5 из 8.
+## Калибровка задержки в наушниках (ADR-020): 2 вводных + 8 измеряемых щелчков метронома
+## (их играет JS-движок), игрок хлопает/говорит «та». Godot анимирует щелчки по таймеру
+## той же сетки (0.6 с + 9 × 0.8 с): вводные только мигают кольцом, измеряемые зажигают точки.
+## Итог — lag_ms и число попаданий — возвращает JS. Успех — не меньше 5 из 8.
 ## После — результат «N из 8» и ручная подстройка ±10 мс.
 
 signal calibration_done(lag_ms: int)
@@ -76,15 +77,15 @@ func _set_step(s: Step) -> void:
 	match s:
 		Step.INTRO:
 			_title.text = "Калибровка задержки"
-			_hint.text = "Наденьте наушники. Услышите %d щелчков —\nхлопайте в ладоши или говорите «та» точно вместе с ними." \
-				% AudioService.CAL_CLICKS
+			_hint.text = "Наденьте наушники. Услышите %d щелчков: на первых %d поймайте ритм,\nдальше хлопайте в ладоши или говорите «та» точно вместе с ними." \
+				% [AudioService.CAL_TOTAL, AudioService.CAL_LEAD_IN]
 			_start_btn.text = "Начать"
 			_build_dots()
 			if not AudioService.is_mic_on():
 				_hint.text += "\nСначала разрешите браузеру доступ к микрофону."
 		Step.RUNNING:
-			_title.text = "Хлопайте в такт!"
-			_hint.text = "Каждый щелчок — один хлопок."
+			_title.text = "Слушайте ритм…"
+			_hint.text = "Первые %d щелчка — просто слушайте." % AudioService.CAL_LEAD_IN
 		Step.RESULT:
 			_title.text = "Готово! Поймали %d из %d" % [_hits, AudioService.CAL_CLICKS]
 			_hint.text = "Если ощущается, что голос «опаздывает» — подстройте вручную."
@@ -108,8 +109,15 @@ func _start() -> void:
 
 func _on_click(index: int, _total: int) -> void:
 	_ring_flash = 1.0
-	if index - 1 < _dot_nodes.size():
-		_dot_nodes[index - 1].color = COLOR_CLICKED
+	if _step != Step.RUNNING:
+		return
+	var measured := index - AudioService.CAL_LEAD_IN   # 1..CAL_CLICKS; ≤ 0 — вводный
+	if measured == 0:
+		# последний вводный: со следующего щелчка — хлопать
+		_title.text = "Хлопайте в такт!"
+		_hint.text = "Каждый щелчок — один хлопок."
+	elif measured > 0 and measured - 1 < _dot_nodes.size():
+		_dot_nodes[measured - 1].color = COLOR_CLICKED
 
 
 func _on_finished(success: bool, _lag_ms: int, hits: int) -> void:

@@ -19,7 +19,9 @@ def pub(seed):
 
 def test_leaderboard_best_per_player(client, pub):
     c1, c2 = cid(), cid()
-    client.post("/api/v1/players", json={"client_id": c1, "nickname": "Макс", "avatar": {"hat": 2}})
+    client.post(
+        "/api/v1/players", json={"client_id": c1, "nickname": "Макс", "avatar": {"hat": 2}, "bio": "Бас"}
+    )
     pub("tk_a1", 8000, "Max", c1)
     pub("tk_a2", 9000, "Max", c1)
     pub("tk_b1", 9500, "Саня", c2)
@@ -35,6 +37,7 @@ def test_leaderboard_best_per_player(client, pub):
         "me": False,
         "player": "Макс",
         "avatar": {"hat": 2},
+        "bio": "Бас",
         "total": 9000,
         "grade": "S",
         "take_id": "tk_a2",
@@ -44,6 +47,7 @@ def test_leaderboard_best_per_player(client, pub):
     assert all(i["at"].endswith("+00:00") for i in items)
     assert items[2]["player"] == "Гость"
     assert items[2]["avatar"] is None
+    assert items[2]["bio"] == ""
     assert items[2]["attempts"] == 2
     easy = client.get("/api/v1/leaderboard/demo", params={"difficulty": "easy"}).json()["items"]
     assert [i["take_id"] for i in easy] == ["tk_e1"]

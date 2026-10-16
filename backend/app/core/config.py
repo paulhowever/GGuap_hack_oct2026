@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     git_sha: str = "dev"
     secret: str = ""
     public_url: str | None = None
+    # Проверка подлинности по сигналу (replay / not_voice). Выключена: метрики
+    # считаются и пишутся в лог, но дубль из-за них не становится suspect.
+    anticheat_signal_flags: bool = False
 
 
 @lru_cache

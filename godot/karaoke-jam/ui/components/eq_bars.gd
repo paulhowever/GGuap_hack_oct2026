@@ -27,7 +27,9 @@ var _spectrum: AudioEffectSpectrumAnalyzerInstance
 func _ready() -> void:
 	_levels.resize(bar_count)
 	_peaks.resize(bar_count)
-	if not Engine.is_editor_hint():
+	# в вебе музыка меню — Sample, эффекты шины его не видят: спектр был бы нулевым,
+	# поэтому там столбики всегда в «холостом» режиме по фазе бита
+	if not Engine.is_editor_hint() and not OS.has_feature("web"):
 		var idx := AudioServer.get_bus_index(bus)
 		if idx >= 0:
 			for i in AudioServer.get_bus_effect_count(idx):

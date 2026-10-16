@@ -39,6 +39,7 @@ def settings(tmp_path, demo_ref) -> Settings:
         scoring_path=ROOT / "contracts" / "scoring.json",
         git_sha="abc1234def",
         secret="",
+        anticheat_signal_flags=True,
     )
 
 

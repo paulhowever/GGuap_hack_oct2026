@@ -6,9 +6,11 @@ extends CanvasLayer
 ## Мышь не ловят (крутить нельзя). Пока скрыты — SubViewport не рендерится.
 ##
 ## API: enter() — выехать, leave() — уехать, dim(on) — приглушить вместе
-## с затемнением сцены (%Fade) при переходах, is_shown — выехали ли.
+## с затемнением сцены (%Fade) при переходах, is_shown — выехали ли,
+## set_producer_mood(mood) / set_character_mood(mood) — анимации продюсера
+## и персонажа под экран (песня / результат).
 
-const CHARACTER_SCENE := preload("res://ui/components/character_preview.tscn")
+const CHARACTER_SCENE := preload("res://ui/components/singer_preview.tscn")
 const PRODUCER_SCENE := preload("res://ui/components/producer_preview.tscn")
 
 ## Ширина слота персонажа, px (боковая зона у дорожки — 420 px).
@@ -18,6 +20,11 @@ const SIDE_PAD := 10.0
 ## Отступы слота сверху/снизу: по высоте — область дорожки нот, над текстом песни.
 const SLOT_TOP := 140.0
 const SLOT_BOTTOM := 190.0
+## Запас превью персонажа над слотом и в сторону дорожки нот, px: под
+## растяжение вверх и наклон по громкости микрофона (SingerPreview).
+## Персонаж в покое стоит там же и того же размера — растёт только холст.
+const SINGER_MARGIN_TOP := 120.0
+const SINGER_MARGIN_SIDE := 320.0
 ## Насколько слот уходит за край экрана в скрытом положении, px.
 const HIDE_GAP := 60.0
 const ENTER_SEC := 0.6
@@ -36,8 +43,8 @@ var _slide: float = 0.0:
 		_layout()
 
 var _root: Control
-var _character: CharacterPreview
-var _producer: CharacterPreview
+var _character: SingerPreview
+var _producer: ProducerPreview
 var _slide_tween: Tween
 var _dim_tween: Tween
 
@@ -50,8 +57,11 @@ func _ready() -> void:
 	_root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_root)
-	_character = _make(CHARACTER_SCENE, "Character", 0.0)
-	_producer = _make(PRODUCER_SCENE, "Producer", 1.0)
+	_character = _make(CHARACTER_SCENE, "Character", 0.0) as SingerPreview
+	_character.offset_top = SLOT_TOP - SINGER_MARGIN_TOP
+	_character.frame_margin_top = SINGER_MARGIN_TOP
+	_character.frame_margin_side = SINGER_MARGIN_SIDE
+	_producer = _make(PRODUCER_SCENE, "Producer", 1.0) as ProducerPreview
 	_layout()
 
 
@@ -92,6 +102,19 @@ func leave() -> void:
 			_producer.set_active(false))
 
 
+## Анимация продюсера под экран: SONG — вступление при появлении, потом
+## MUSIC_IDLE; RESULT — анимация результата. Переходы — с блендом.
+## Вызывать после enter(): только что выехавший продюсер начнёт со вступления.
+func set_producer_mood(mood: ProducerPreview.Mood) -> void:
+	_producer.set_mood(mood)
+
+
+## Анимация персонажа игрока под экран: SONG — IDOL (и реакция на микрофон),
+## RESULT — joke (только что выехавший — через короткий IDOL). Переходы — с блендом.
+func set_character_mood(mood: SingerPreview.Mood) -> void:
+	_character.set_mood(mood)
+
+
 ## Приглушить (on) / вернуть яркость — синхронно с затемнением сцены.
 func dim(on: bool) -> void:
 	if _dim_tween and _dim_tween.is_valid():
@@ -116,7 +139,7 @@ func _layout() -> void:
 		return
 	var left := lerpf(-SLOT_W - HIDE_GAP, SIDE_PAD, _slide)
 	_character.offset_left = left
-	_character.offset_right = left + SLOT_W
+	_character.offset_right = left + SLOT_W + SINGER_MARGIN_SIDE
 	var right := lerpf(HIDE_GAP, -SIDE_PAD - SLOT_W, _slide)
 	_producer.offset_left = right
 	_producer.offset_right = right + SLOT_W

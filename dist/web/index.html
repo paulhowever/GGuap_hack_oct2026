@@ -56,7 +56,7 @@ body { background: #1e1a24; color: #f3e6d3; overflow: hidden; touch-action: none
 
 <script src="index.js"></script>
 <script>
-const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":true,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":13657976,"index.wasm":38550519},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4};
+const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":true,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":20650076,"index.wasm":38550519},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4};
 const GODOT_THREADS_ENABLED = false;
 const engine = new Engine(GODOT_CONFIG);
 
@@ -89,8 +89,13 @@ const engine = new Engine(GODOT_CONFIG);
     return v;
   }
 
-  // Контракт для autoload WebShell (Godot): kjGetNickname / kjEditNickname / kjOnNicknameChanged
+  // Контракт для autoload WebShell (Godot): kjGetNickname / kjSetNickname / kjEditNickname / kjOnNicknameChanged
   window.kjGetNickname = () => (nick.value || '').trim();
+  // ник сменили в игре (гардероб) — запоминаем, чтобы оверлей при следующем запуске не вернул старый
+  window.kjSetNickname = v => {
+    v = saveNick(v);
+    if (v) nick.value = v;
+  };
   window.kjEditNickname = () => {
     $('kj-nick-edit').value = window.kjGetNickname();
     $('kj-nick-layer').style.display = 'flex';

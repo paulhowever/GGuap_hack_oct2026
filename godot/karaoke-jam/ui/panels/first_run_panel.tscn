@@ -4,7 +4,6 @@
 [ext_resource type="Texture2D" uid="uid://wkupnuu6558u" path="res://ui/icons/headphones.svg" id="2_hp"]
 
 [node name="FirstRunPanel" type="Control" unique_id=1662901920 node_paths=PackedStringArray("initial_focus")]
-visible = false
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -72,12 +71,13 @@ custom_minimum_size = Vector2(740, 0)
 layout_mode = 2
 theme_type_variation = &"HintLabel"
 theme_override_font_sizes/font_size = 26
-text = "Чтобы голос совпадал с ритмом, за 15 секунд откалибруем задержку вашего устройства."
+text = "Чтобы голос совпадал с ритмом, откалибруем задержку вашего устройства."
 horizontal_alignment = 1
 autowrap_mode = 3
 
 [node name="HeadphonesCheck" type="CheckBox" parent="Center/Card/VBox" unique_id=965408598]
 unique_name_in_owner = true
+visible = false
 layout_mode = 2
 size_flags_horizontal = 4
 text = "Я в проводных наушниках"

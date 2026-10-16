@@ -472,7 +472,11 @@ export function createVoice(cfg = {}, env = globalThis) {
       const osc = ctx.createOscillator()
       const g = ctx.createGain()
       osc.frequency.value = 1000
-      g.gain.value = 0.5
+      // Огибающая: без неё у тона резкие фронт и срез, и на слабых динамиках
+      // и Bluetooth каждый щелчок слышен как двойной (два щелчка через 20 мс).
+      g.gain.setValueAtTime(0, c)
+      g.gain.linearRampToValueAtTime(0.5, c + 0.002)
+      g.gain.exponentialRampToValueAtTime(0.001, c + CLICK_LEN)
       osc.connect(g)
       g.connect(ctx.destination)
       osc.start(c)

@@ -19,7 +19,7 @@ function audioEnv({ items = { tk_1: item('tk_1'), tk_2: item('tk_2') }, badMinus
   const ctl = { hold: false }
   class Node {
     constructor() {
-      this.gain = { value: 1 }
+      this.gain = { value: 1, setValueAtTime() {}, linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {} }
       this.buffer = null
       this.onended = null
       this.out = null

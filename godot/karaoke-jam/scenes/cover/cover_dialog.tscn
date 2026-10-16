@@ -2,6 +2,17 @@
 
 [ext_resource type="Script" path="res://scenes/cover/cover_dialog.gd" id="1_cov"]
 
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_char"]
+content_margin_left = 4.0
+content_margin_top = 4.0
+content_margin_right = 4.0
+content_margin_bottom = 4.0
+bg_color = Color(0.227, 0.192, 0.251, 0.55)
+corner_radius_top_left = 16
+corner_radius_top_right = 16
+corner_radius_bottom_right = 16
+corner_radius_bottom_left = 16
+
 [node name="CoverDialog" type="Control" node_paths=PackedStringArray("initial_focus")]
 layout_mode = 3
 anchors_preset = 15
@@ -33,7 +44,7 @@ mouse_filter = 2
 
 [node name="Card" type="PanelContainer" parent="Center"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(1000, 0)
+custom_minimum_size = Vector2(1120, 0)
 layout_mode = 2
 theme_type_variation = &"CardPanel"
 
@@ -46,48 +57,58 @@ layout_mode = 2
 theme_override_constants/separation = 28
 
 [node name="Character" type="PanelContainer" parent="Center/Card/VBox/Header"]
-custom_minimum_size = Vector2(200, 200)
+unique_name_in_owner = true
+custom_minimum_size = Vector2(280, 280)
 layout_mode = 2
-theme_type_variation = &"CardPanel"
-
-[node name="CharacterHint" type="Label" parent="Center/Card/VBox/Header/Character"]
-layout_mode = 2
-theme_type_variation = &"HintLabel"
-theme_override_font_sizes/font_size = 20
-text = "Персонаж
-автора
-скоро"
-horizontal_alignment = 1
-vertical_alignment = 1
+size_flags_vertical = 0
+tooltip_text = "Персонаж автора — потяните, чтобы покрутить"
+theme_override_styles/panel = SubResource("StyleBoxFlat_char")
 
 [node name="Info" type="VBoxContainer" parent="Center/Card/VBox/Header"]
 layout_mode = 2
 size_flags_horizontal = 3
-alignment = 1
+theme_override_constants/separation = 6
 
 [node name="CoverName" type="Label" parent="Center/Card/VBox/Header/Info"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"HeadingLabel"
+theme_override_font_sizes/font_size = 30
 text = "Игрок"
-text_overrun_behavior = 3
+autowrap_mode = 3
 
 [node name="CoverMeta" type="Label" parent="Center/Card/VBox/Header/Info"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"AccentLabel"
+theme_override_font_sizes/font_size = 24
 text = "Место 1   ·   0 очков"
 
 [node name="CoverDetails" type="Label" parent="Center/Card/VBox/Header/Info"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"HintLabel"
+theme_override_font_sizes/font_size = 20
+autowrap_mode = 3
+
+[node name="BioCaption" type="Label" parent="Center/Card/VBox/Header/Info"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"AccentLabel"
+theme_override_font_sizes/font_size = 20
+text = "О себе"
+
+[node name="CoverBio" type="Label" parent="Center/Card/VBox/Header/Info"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
 autowrap_mode = 3
 
 [node name="CoverGrade" type="Label" parent="Center/Card/VBox/Header"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(140, 0)
 layout_mode = 2
+size_flags_vertical = 0
 theme_type_variation = &"BigNumberLabel"
 theme_override_font_sizes/font_size = 140
 text = "—"
@@ -103,7 +124,7 @@ unique_name_in_owner = true
 custom_minimum_size = Vector2(240, 0)
 layout_mode = 2
 theme_type_variation = &"GhostButton"
-text = "▶  Послушать"
+text = "Послушать"
 
 [node name="CoverSeek" type="HSlider" parent="Center/Card/VBox/Player"]
 unique_name_in_owner = true
@@ -137,7 +158,7 @@ theme_type_variation = &"AccentLabel"
 text = "Комментарии по строкам"
 
 [node name="Scroll" type="ScrollContainer" parent="Center/Card/VBox"]
-custom_minimum_size = Vector2(0, 220)
+custom_minimum_size = Vector2(0, 180)
 layout_mode = 2
 horizontal_scroll_mode = 0
 

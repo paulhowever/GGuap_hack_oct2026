@@ -18,6 +18,15 @@ signal clicked
 @export var click_threshold: float = 6.0
 ## Длительность возврата при отклонении на 180° (меньшие углы — быстрее).
 @export var return_time: float = 0.6
+## Корень 3D-модели внутри SubViewport — его крутит перетаскивание.
+@export var model: Node3D
+## AnimationPlayer модели.
+@export var anim_player: AnimationPlayer
+## Анимация, которая запускается при появлении (у экземпляра импортированной
+## модели autoplay в инспекторе не задать). Пусто — ничего не запускать.
+@export var default_animation: StringName = &""
+## Скорость анимации по умолчанию (custom_speed у AnimationPlayer.play).
+@export_range(0.05, 4.0, 0.05) var default_animation_speed: float = 1.0
 ## Можно крутить мышью и кликать. false — превью только для показа:
 ## мышь проходит насквозь (персонажи по бокам дорожки нот, autoload Performers).
 @export var interactive: bool = true:
@@ -40,13 +49,15 @@ var _press_pos: Vector2
 var _return_tween: Tween
 
 @onready var _viewport: SubViewport = $SubViewport
-@onready var _model: Node3D = %GV_Anim_Pack_1
-@onready var _anim: AnimationPlayer = $SubViewport/GV_Anim_Pack_1/AnimationPlayer
+@onready var _model: Node3D = model
+@onready var _anim: AnimationPlayer = anim_player
 
 
 func _ready() -> void:
 	yaw = rest_yaw
 	_apply_mouse()
+	if default_animation != &"" and _anim.has_animation(default_animation):
+		_anim.play(default_animation, -1, default_animation_speed)
 
 
 func _gui_input(event: InputEvent) -> void:
@@ -124,7 +135,11 @@ func copy_state_from(other: CharacterPreview) -> void:
 	var was_active := _anim.active
 	_anim.active = true
 	_anim.speed_scale = other._anim.speed_scale
-	_anim.play(anim_name)
+	# собственная скорость анимации (custom_speed) — без общего speed_scale
+	var speed := default_animation_speed
+	if not is_zero_approx(other._anim.speed_scale) and other._anim.get_playing_speed() != 0.0:
+		speed = other._anim.get_playing_speed() / other._anim.speed_scale
+	_anim.play(anim_name, -1, speed)
 	_anim.seek(other._anim.current_animation_position, true)
 	_anim.active = was_active
 

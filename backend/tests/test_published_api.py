@@ -10,6 +10,7 @@ KEYS = [
     "difficulty",
     "player",
     "avatar",
+    "bio",
     "total",
     "grade",
     "at",
@@ -28,7 +29,9 @@ def cid():
 @pytest.fixture
 def owner(client):
     c = cid()
-    client.post("/api/v1/players", json={"client_id": c, "nickname": "Макс", "avatar": {"hat": 2}})
+    client.post(
+        "/api/v1/players", json={"client_id": c, "nickname": "Макс", "avatar": {"hat": 2}, "bio": "Пою басом"}
+    )
     return c
 
 
@@ -72,6 +75,7 @@ def test_publish_own_ok_take(client, publish, take, owner):
     assert item["difficulty"] == "normal"
     assert item["player"] == "Макс"
     assert item["avatar"] == {"hat": 2}
+    assert item["bio"] == "Пою басом"
     assert item["total"] == take["score"]["total"]
     assert item["grade"] == take["score"]["grade"]
     assert item["at"].endswith("+00:00")
@@ -288,7 +292,18 @@ def test_publish_leaves_duel_unchanged_and_fills_board(client, submit, publish, 
     assert [client.get(u).content for u in urls] == before
     rows = client.get(board).json()["items"]
     assert [r["take_id"] for r in rows] == [rival["take_id"], own["take_id"]]
-    assert list(rows[0]) == ["rank", "player", "total", "grade", "take_id", "at", "attempts", "avatar", "me"]
+    assert list(rows[0]) == [
+        "rank",
+        "player",
+        "total",
+        "grade",
+        "take_id",
+        "at",
+        "attempts",
+        "avatar",
+        "bio",
+        "me",
+    ]
     client.post(f"/api/v1/published/{own['take_id']}/remove", json={"client_id": owner})
     assert [client.get(u).content for u in urls] == before
     assert [r["take_id"] for r in client.get(board).json()["items"]] == [rival["take_id"]]

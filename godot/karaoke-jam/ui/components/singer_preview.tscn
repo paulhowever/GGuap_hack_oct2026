@@ -1,0 +1,9 @@
+[gd_scene format=4]
+
+[ext_resource type="PackedScene" uid="uid://kvrgorm425vb" path="res://ui/components/character_preview.tscn" id="1_base"]
+[ext_resource type="Script" uid="uid://cx3gq3r7crdt1" path="res://ui/components/singer_preview.gd" id="2_singer"]
+
+[node name="SingerPreview" instance=ExtResource("1_base")]
+mouse_filter = 2
+script = ExtResource("2_singer")
+interactive = false

@@ -3,7 +3,10 @@ extends Node
 ## Ожидаемый контракт со стороны HTML (делает фронтенд):
 ##   <input id="kj-nickname">            — поле ника на оверлее «Нажми, чтобы начать»
 ##   window.kjGetNickname() -> string    — (опционально) вернуть ник
+##   window.kjSetNickname(nick)          — (опционально) запомнить ник, сменённый в игре
 ##   window.kjOnNicknameChanged = fn     — (опционально) Godot подпишется на смену ника
+## Оверлей — только первый ввод ника; дальше ник меняется в гардеробе, и новое значение
+## уходит обратно на страницу (иначе при следующем запуске оверлей вернул бы старый ник).
 ## Вне веба (редактор/десктоп) работает как заглушка: ник берётся из Session.
 
 signal nickname_received(nickname: String)
@@ -18,6 +21,7 @@ func _ready() -> void:
 	if not is_web():
 		return
 	_subscribe_nickname_changes()
+	Session.nickname_changed.connect(push_nickname)
 
 
 func is_web() -> bool:
@@ -46,6 +50,20 @@ func sync_nickname_to_session() -> void:
 		Session.nickname = nick
 		Session.save_settings()
 		nickname_received.emit(Session.nickname)
+
+
+## Записать ник на страницу (поле оверлея и localStorage). Без kjSetNickname — только поле.
+func push_nickname(nick: String) -> void:
+	if not is_web():
+		return
+	var js := """
+		(function(v){
+			if (typeof window.kjSetNickname === 'function') { window.kjSetNickname(v); return; }
+			var el = document.getElementById('%s');
+			if (el) el.value = v;
+		})(%s)
+	""" % [INPUT_ID, JSON.stringify(nick)]
+	JavaScriptBridge.eval(js, true)
 
 
 ## Попросить страницу показать поле ника снова (для смены ника из настроек).

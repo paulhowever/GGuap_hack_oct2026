@@ -153,7 +153,7 @@ function recordingEnv({ sampleRate = 16000, takes, offline = false, decodeFails 
   const gains = []
   class Node {
     constructor() {
-      this.gain = { value: 1 }
+      this.gain = { value: 1, setValueAtTime() {}, linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {} }
       this.buffer = null
       this.onended = null
     }

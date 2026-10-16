@@ -1,0 +1,48 @@
+[remap]
+
+importer="texture"
+type="CompressedTexture2D"
+uid="uid://b1gb1vmebwt0s"
+path.s3tc="res://.godot/imported/Ai_char_Gdot_export_texture_pbr_20250901_normal.png-29349cb86440b05138a908c730172d13.s3tc.ctex"
+path.etc2="res://.godot/imported/Ai_char_Gdot_export_texture_pbr_20250901_normal.png-29349cb86440b05138a908c730172d13.etc2.ctex"
+metadata={
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
+}
+generator_parameters={
+"md5": "06e336e4469fa01896178d3166cfe39c"
+}
+
+[deps]
+
+source_file="res://assets/Ai_char_Gdot_export_texture_pbr_20250901_normal.png"
+dest_files=["res://.godot/imported/Ai_char_Gdot_export_texture_pbr_20250901_normal.png-29349cb86440b05138a908c730172d13.s3tc.ctex", "res://.godot/imported/Ai_char_Gdot_export_texture_pbr_20250901_normal.png-29349cb86440b05138a908c730172d13.etc2.ctex"]
+
+[params]
+
+compress/mode=2
+compress/high_quality=false
+compress/high_quality_mode=0
+compress/lossy_quality=0.7
+compress/uastc_level=0
+compress/rdo_quality_loss=0.0
+compress/hdr_compression=1
+compress/normal_map=1
+compress/channel_pack=0
+mipmaps/generate=true
+mipmaps/limit=-1
+mipmaps/preserve_alpha_test_coverage=false
+mipmaps/alpha_test_threshold=0.5
+roughness/mode=1
+roughness/src_normal="res://assets/Ai_char_Gdot_export_texture_pbr_20250901_normal.png"
+process/channel_remap/red=0
+process/channel_remap/green=1
+process/channel_remap/blue=2
+process/channel_remap/alpha=3
+process/fix_alpha_border=true
+process/premult_alpha=false
+process/normal_map_invert_y=false
+process/hdr_as_srgb=false
+process/hdr_clamp_exposure=false
+process/size_limit=1024
+detect_3d/compress_to=0

@@ -1,16 +1,23 @@
 class_name CoverDialog
 extends ModalPanel
-## Окно кавера из таблицы лидеров (ADR-024): место под персонажа автора, ник, очки и ранг,
-## плеер (вокал поверх минуса: ▶/❚❚ и перемотка, как на экране результата), подробности
-## ранга и комментарии по строкам из GET /takes/{id}. У своей строки — «Снять публикацию».
-## open_row(row) — строка лидерборда {rank, player, total, grade, take_id, me, …}.
+## Окно кавера из таблицы лидеров (ADR-024): персонаж автора в его наряде (avatar.outfit),
+## ник полностью, очки и ранг, «О себе», плеер (вокал поверх минуса: ▶/❚❚ и перемотка,
+## как на экране результата), подробности ранга и комментарии по строкам из GET /takes/{id}.
+## У своей строки — «Снять публикацию».
+## open_row(row) — строка лидерборда {rank, player, avatar, bio, total, grade, take_id, me, …}.
 
 ## Публикацию сняли — таблицу нужно перезагрузить.
 signal unpublished(take_id: String)
 
 const ResultScene := preload("res://scenes/result/result.gd")
 const CONFIRM_SCENE := preload("res://ui/panels/confirm_panel.tscn")
+const PREVIEW_SCENE := preload("res://ui/components/character_preview.tscn")
+## Сколько отрисованных кадров держать окно видимым при прогреве шейдеров.
+const WARM_UP_FRAMES := 3
 
+@onready var _character_slot: Control = %Character
+@onready var _bio_caption: Label = %BioCaption
+@onready var _bio: Label = %CoverBio
 @onready var _name: Label = %CoverName
 @onready var _meta: Label = %CoverMeta
 @onready var _grade: Label = %CoverGrade
@@ -32,12 +39,17 @@ var _seeking: bool = false
 var _ducked: bool = false
 var _seq: int = 0  # отменяет устаревшие загрузки подробностей
 var _confirm: ConfirmPanel
+## Персонаж автора: свой экземпляр превью, наряд задаётся из строки, а не из Session.
+var _preview: CharacterPreview
+var _outfit: CharacterOutfit
+var _warming: bool = false
 
 
 func _ready() -> void:
 	super._ready()
 	_confirm = CONFIRM_SCENE.instantiate()
 	add_child(_confirm)
+	_build_preview()
 	_play.pressed.connect(_toggle_play)
 	_close.pressed.connect(close)
 	_unpublish.pressed.connect(_on_unpublish)
@@ -56,10 +68,19 @@ func _ready() -> void:
 
 
 func open_row(row: Dictionary) -> void:
+	if _warming:
+		return
 	_row = row
 	_take_id = str(row.get("take_id", ""))
 	_seq += 1
 	_name.text = str(row.get("player", "?")) + ("  (вы)" if bool(row.get("me", false)) else "")
+	_outfit.apply_outfit(outfit_of(row.get("avatar")))
+	var bio := str(row.get("bio", "")).strip_edges() if row.get("bio") is String else ""
+	_bio.text = bio
+	_bio.visible = not bio.is_empty()
+	_bio_caption.visible = not bio.is_empty()
+	_preview.set_active(true)
+	_preview.yaw = _preview.rest_yaw
 	_meta.text = "Место %d   ·   %d очков" % [int(row.get("rank", 0)), int(row.get("total", 0))]
 	var grade := str(row.get("grade", "—"))
 	_grade.text = grade
@@ -76,6 +97,60 @@ func open_row(row: Dictionary) -> void:
 	_play.disabled = not VoiceBridge.has_covers()
 	open()
 	_load_details(_seq)
+
+
+# --- Персонаж автора ---------------------------------------------------------------
+
+## Превью создаётся в коде: CharacterOutfit нужно выключить follow_session до его _ready,
+## иначе он наденет на автора наряд текущего игрока и будет следить за гардеробом.
+func _build_preview() -> void:
+	_preview = PREVIEW_SCENE.instantiate()
+	_preview.name = "AuthorPreview"
+	_outfit = _preview.get_node("SubViewport/GV_Anim_Pack_1/Outfit") as CharacterOutfit
+	_outfit.follow_session = false
+	_character_slot.add_child(_preview)
+	_preview.set_active(false)
+
+
+## avatar из строки ({outfit: {slot: item_id}} или null) → наряд для apply_outfit.
+static func outfit_of(avatar: Variant) -> Dictionary:
+	if not avatar is Dictionary or not avatar.get("outfit") is Dictionary:
+		return {}
+	var out := {}
+	var o: Dictionary = avatar.outfit
+	for slot: Variant in o:
+		var item := str(o[slot])
+		if not item.is_empty() and ItemCatalog.get_default().find(StringName(item)) != null:
+			out[StringName(str(slot))] = StringName(item)
+	return out
+
+
+## Прогрев шейдеров: окно на несколько кадров видимо, но прозрачно, а персонаж в нём —
+## в полном наряде (по предмету на слот). WebGL компилирует шейдеры сейчас, а не на
+## первом клике по строке. Вызывать, пока экран закрыт затемнением.
+func warm_up() -> void:
+	if is_open or visible or _warming:
+		return
+	_warming = true
+	var full := {}
+	for def: ItemDef in ItemCatalog.get_default().items:
+		if def and def.scene and not full.has(def.slot):
+			full[def.slot] = def.id
+	_outfit.apply_outfit(full)
+	modulate.a = 0.0
+	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	visible = true
+	_preview.set_active(true)
+	for i in WARM_UP_FRAMES:
+		await RenderingServer.frame_post_draw
+	if not is_inside_tree():
+		return
+	_preview.set_active(false)
+	_outfit.apply_outfit({})
+	visible = false
+	modulate.a = 1.0
+	mouse_filter = Control.MOUSE_FILTER_STOP
+	_warming = false
 
 
 # --- Подробности ранга и комментарии ---------------------------------------------
@@ -156,11 +231,12 @@ func _set_state(state: String) -> void:
 	_seek.editable = state == "playing" or state == "paused"
 	match state:
 		"playing":
-			_play.text = "❚❚  Пауза"
+			ResultScene.set_play_button(_play, true)
 		"loading":
+			_play.icon = null
 			_play.text = "Загружаем…"
 		_:
-			_play.text = "▶  Послушать"
+			ResultScene.set_play_button(_play, false)
 	_play.disabled = state == "loading"
 	if state == "idle" or state == "paused":
 		_duck(false)
@@ -219,6 +295,7 @@ func _on_unpublish() -> void:
 
 func _on_closing() -> void:
 	_seq += 1
+	_preview.set_active(false)
 	if _state != "idle":
 		VoiceBridge.listen_stop()
 	_set_state("idle")

@@ -11,7 +11,7 @@ const SELECT_SCENE := "res://scenes/select/select.tscn"
 const RESULT_SCENE := "res://scenes/result/result.tscn"
 const C_SUNG := Color(1.0, 0.478, 0.239)
 ## Шаги ожидания оценки (сменяются по кругу, последний остаётся).
-const SUBMIT_STEPS := ["Отправляем запись…", "Нейросеть слушает…", "Считаем очки…"]
+const SUBMIT_STEPS := ["Отправляем запись на оценку…", "Продюсер слушает…", "Считаем очки…"]
 const SUBMIT_STEP_SEC := 1.2
 
 enum Phase { LOADING, PLAYING, SUBMITTING, ERROR, LEAVING }
@@ -58,6 +58,8 @@ func _ready() -> void:
 	# после «Спеть ещё раз» они уже на месте — только возвращаем яркость
 	Performers.enter()
 	Performers.dim(false)
+	Performers.set_producer_mood(ProducerPreview.Mood.SONG)
+	Performers.set_character_mood(SingerPreview.Mood.SONG)
 	if Session.song_id.is_empty():
 		_show_error("Песня не выбрана.", false)
 		return
@@ -256,4 +258,3 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		if _phase != Phase.SUBMITTING:
 			_leave(SELECT_SCENE)
-

@@ -6,7 +6,7 @@ import soundfile as sf
 from scipy.signal import resample_poly
 
 from app.anticheat.signal import METRIC_KEYS
-from app.core.config import ROOT
+from app.core.config import ROOT, Settings
 from app.demo import build_demo
 from app.scoring.synth import synth_take
 
@@ -17,6 +17,17 @@ def test_flat_synth_keeps_score_but_is_suspect(submit):
     assert body["integrity"]["status"] == "suspect"
     assert "not_voice" in body["integrity"]["flags"]
     assert body["leaderboard"] is None
+
+
+def test_signal_flags_are_off_by_default():
+    assert Settings(_env_file=None).anticheat_signal_flags is False
+
+
+def test_flat_synth_is_ok_when_signal_flags_are_off(client, submit):
+    client.app.state.settings.anticheat_signal_flags = False
+    body = submit(synth={"jitter_cents": 0.0}).json()
+    assert body["integrity"] == {"status": "ok", "flags": []}
+    assert body["leaderboard"]["rank"] == 1
 
 
 def test_jittered_take_is_ok(submit):

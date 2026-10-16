@@ -1,0 +1,179 @@
+{
+  "schema": 1,
+  "id": "kalinka-malinka",
+  "title": "Калинка-Малинка",
+  "artist": "Русская народная песня",
+  "language": "ru",
+  "audio": {
+    "minus": "/media/kalinka-malinka/minus.wav",
+    "guide": "/media/kalinka-malinka/guide.wav",
+    "duration": 50.0,
+    "offset_ms": 0
+  },
+  "timing": {
+    "bpm_txt": 120.0,
+    "gap_ms": 2000,
+    "beat_s": 0.05
+  },
+  "stats": {
+    "notes": 74,
+    "lines": 8,
+    "range_midi": [55, 81],
+    "difficulty": 2,
+    "first_note": 0.0,
+    "last_end": 50.0,
+    "golden_share": 0.0905
+  },
+  "lines": [
+    {
+      "i": 0,
+      "t0": 0.0,
+      "t1": 7.0,
+      "text": "Под сосною под зеленою",
+      "notes": [
+        { "i": 0,  "t": 0.0,   "d": 1.0,  "beat": 0.0,   "len": 20.0,  "midi": 69, "pc": 9,  "type": "normal", "syl": "Под " },
+        { "i": 1,  "t": 1.0,   "d": 1.0,  "beat": 20.0,  "len": 20.0,  "midi": 69, "pc": 9,  "type": "normal", "syl": "сос" },
+        { "i": 2,  "t": 2.0,   "d": 1.0,  "beat": 40.0,  "len": 20.0,  "midi": 71, "pc": 11, "type": "normal", "syl": "но" },
+        { "i": 3,  "t": 3.0,   "d": 1.0,  "beat": 60.0,  "len": 20.0,  "midi": 72, "pc": 0,  "type": "normal", "syl": "ю " },
+        { "i": 4,  "t": 4.0,   "d": 0.83, "beat": 80.0,  "len": 16.6,  "midi": 69, "pc": 9,  "type": "normal", "syl": "под " },
+        { "i": 5,  "t": 4.83,  "d": 0.67, "beat": 96.6,  "len": 13.4,  "midi": 67, "pc": 7,  "type": "normal", "syl": "зе" },
+        { "i": 6,  "t": 5.5,   "d": 0.33, "beat": 110.0, "len": 6.6,   "midi": 69, "pc": 9,  "type": "normal", "syl": "ле" },
+        { "i": 7,  "t": 5.83,  "d": 0.97, "beat": 116.6, "len": 19.4,  "midi": 69, "pc": 9,  "type": "normal", "syl": "но" },
+        { "i": 8,  "t": 6.8,   "d": 0.53, "beat": 136.0, "len": 10.6,  "midi": 69, "pc": 9,  "type": "normal", "syl": "ю" }
+      ]
+    },
+    {
+      "i": 1,
+      "t0": 7.36,
+      "t1": 14.3,
+      "text": "Спать положите вы меня",
+      "notes": [
+        { "i": 9,  "t": 7.36,  "d": 0.9,  "beat": 147.2, "len": 18.0,  "midi": 69, "pc": 9,  "type": "normal", "syl": "Спать " },
+        { "i": 10, "t": 8.5,   "d": 0.33, "beat": 170.0, "len": 6.6,   "midi": 67, "pc": 7,  "type": "normal", "syl": "по" },
+        { "i": 11, "t": 8.83,  "d": 0.43, "beat": 176.6, "len": 8.6,   "midi": 69, "pc": 9,  "type": "normal", "syl": "ло" },
+        { "i": 12, "t": 9.26,  "d": 0.97, "beat": 185.2, "len": 19.4,  "midi": 71, "pc": 11, "type": "normal", "syl": "жи" },
+        { "i": 13, "t": 10.23, "d": 0.93, "beat": 204.6, "len": 18.6,  "midi": 72, "pc": 0,  "type": "normal", "syl": "те " },
+        { "i": 14, "t": 11.16, "d": 0.67, "beat": 223.2, "len": 13.4,  "midi": 69, "pc": 9,  "type": "normal", "syl": "вы " },
+        { "i": 15, "t": 11.83, "d": 1.1,  "beat": 236.6, "len": 22.0,  "midi": 67, "pc": 7,  "type": "normal", "syl": "ме" },
+        { "i": 16, "t": 12.93, "d": 2.57, "beat": 258.6, "len": 51.4,  "midi": 69, "pc": 9,  "type": "normal", "syl": "ня" }
+      ]
+    },
+    {
+      "i": 2,
+      "t0": 14.96,
+      "t1": 20.83,
+      "text": "Ай, люли, люли, ай, люли, люли",
+      "notes": [
+        { "i": 17, "t": 14.96, "d": 0.8,  "beat": 299.2, "len": 16.0,  "midi": 72, "pc": 0,  "type": "normal", "syl": "Ай, " },
+        { "i": 18, "t": 15.76, "d": 0.44, "beat": 315.2, "len": 8.8,   "midi": 69, "pc": 9,  "type": "normal", "syl": "лю" },
+        { "i": 19, "t": 16.2,  "d": 0.4,  "beat": 324.0, "len": 8.0,   "midi": 71, "pc": 11, "type": "normal", "syl": "ли, " },
+        { "i": 20, "t": 16.6,  "d": 0.73, "beat": 332.0, "len": 14.6,  "midi": 69, "pc": 9,  "type": "normal", "syl": "лю" },
+        { "i": 21, "t": 17.33, "d": 0.5,  "beat": 346.6, "len": 10.0,  "midi": 67, "pc": 7,  "type": "normal", "syl": "ли, " },
+        { "i": 22, "t": 18.0,  "d": 0.73, "beat": 360.0, "len": 14.6,  "midi": 72, "pc": 0,  "type": "normal", "syl": "ай, " },
+        { "i": 23, "t": 18.73, "d": 0.63, "beat": 374.6, "len": 12.6,  "midi": 71, "pc": 11, "type": "normal", "syl": "лю" },
+        { "i": 24, "t": 19.36, "d": 0.3,  "beat": 387.2, "len": 6.0,   "midi": 69, "pc": 9,  "type": "normal", "syl": "ли, " },
+        { "i": 25, "t": 19.66, "d": 0.8,  "beat": 393.2, "len": 16.0,  "midi": 71, "pc": 11, "type": "normal", "syl": "лю" },
+        { "i": 26, "t": 20.46, "d": 0.37, "beat": 409.2, "len": 7.4,   "midi": 69, "pc": 9,  "type": "normal", "syl": "ли" }
+      ]
+    },
+    {
+      "i": 3,
+      "t0": 20.96,
+      "t1": 29.7,
+      "text": "Спать положите вы меня",
+      "notes": [
+        { "i": 27, "t": 20.96, "d": 1.04, "beat": 419.2, "len": 20.8,  "midi": 69, "pc": 9,  "type": "normal", "syl": "Спать " },
+        { "i": 28, "t": 22.0,  "d": 0.5,  "beat": 440.0, "len": 10.0,  "midi": 67, "pc": 7,  "type": "normal", "syl": "по" },
+        { "i": 29, "t": 22.5,  "d": 0.4,  "beat": 450.0, "len": 8.0,   "midi": 69, "pc": 9,  "type": "normal", "syl": "ло" },
+        { "i": 30, "t": 22.9,  "d": 0.9,  "beat": 458.0, "len": 18.0,  "midi": 71, "pc": 11, "type": "normal", "syl": "жи" },
+        { "i": 31, "t": 23.8,  "d": 0.7,  "beat": 476.0, "len": 14.0,  "midi": 72, "pc": 0,  "type": "normal", "syl": "те " },
+        { "i": 32, "t": 24.66, "d": 1.27, "beat": 493.2, "len": 25.4,  "midi": 69, "pc": 9,  "type": "normal", "syl": "вы " },
+        { "i": 33, "t": 25.93, "d": 1.33, "beat": 518.6, "len": 26.6,  "midi": 69, "pc": 9,  "type": "normal", "syl": "ме" },
+        { "i": 34, "t": 27.26, "d": 0.44, "beat": 545.2, "len": 8.8,   "midi": 69, "pc": 9,  "type": "normal", "syl": "ня" }
+      ]
+    },
+    {
+      "i": 4,
+      "t0": 31.33,
+      "t1": 37.13,
+      "text": "Калинка, калинка, калинка моя",
+      "notes": [
+        { "i": 35, "t": 31.33, "d": 0.8,  "beat": 626.6, "len": 16.0,  "midi": 69, "pc": 9,  "type": "normal", "syl": "Ка" },
+        { "i": 36, "t": 32.13, "d": 1.2,  "beat": 642.6, "len": 24.0,  "midi": 71, "pc": 11, "type": "golden", "syl": "лин" },
+        { "i": 37, "t": 33.33, "d": 0.33, "beat": 666.6, "len": 6.6,   "midi": 72, "pc": 0,  "type": "normal", "syl": "ка, " },
+        { "i": 38, "t": 33.66, "d": 0.34, "beat": 673.2, "len": 6.8,   "midi": 72, "pc": 0,  "type": "normal", "syl": "ка" },
+        { "i": 39, "t": 34.0,  "d": 0.86, "beat": 680.0, "len": 17.2,  "midi": 71, "pc": 11, "type": "normal", "syl": "лин" },
+        { "i": 40, "t": 34.86, "d": 0.27, "beat": 697.2, "len": 5.4,   "midi": 69, "pc": 9,  "type": "normal", "syl": "ка, " },
+        { "i": 41, "t": 35.13, "d": 0.43, "beat": 702.6, "len": 8.6,   "midi": 72, "pc": 0,  "type": "normal", "syl": "ка" },
+        { "i": 42, "t": 35.56, "d": 0.44, "beat": 711.2, "len": 8.8,   "midi": 71, "pc": 11, "type": "normal", "syl": "лин" },
+        { "i": 43, "t": 36.0,  "d": 1.13, "beat": 720.0, "len": 22.6,  "midi": 69, "pc": 9,  "type": "normal", "syl": "ка моя" }
+      ]
+    },
+    {
+      "i": 5,
+      "t0": 37.33,
+      "t1": 41.04,
+      "text": "В саду ягода малинка, малинка моя",
+      "notes": [
+        { "i": 44, "t": 37.33, "d": 0.47, "beat": 746.6, "len": 9.4,   "midi": 69, "pc": 9,  "type": "normal", "syl": "В са" },
+        { "i": 45, "t": 37.8,  "d": 0.16, "beat": 756.0, "len": 3.2,   "midi": 67, "pc": 7,  "type": "normal", "syl": "ду " },
+        { "i": 46, "t": 37.96, "d": 0.4,  "beat": 759.2, "len": 8.0,   "midi": 69, "pc": 9,  "type": "normal", "syl": "я" },
+        { "i": 47, "t": 38.36, "d": 0.24, "beat": 767.2, "len": 4.8,   "midi": 71, "pc": 11, "type": "golden", "syl": "го" },
+        { "i": 48, "t": 38.6,  "d": 0.16, "beat": 772.0, "len": 3.2,   "midi": 72, "pc": 0,  "type": "normal", "syl": "да " },
+        { "i": 49, "t": 38.76, "d": 0.24, "beat": 775.2, "len": 4.8,   "midi": 69, "pc": 9,  "type": "normal", "syl": "ма" },
+        { "i": 50, "t": 39.0,  "d": 0.5,  "beat": 780.0, "len": 10.0,  "midi": 71, "pc": 11, "type": "normal", "syl": "лин" },
+        { "i": 51, "t": 39.5,  "d": 0.3,  "beat": 790.0, "len": 6.0,   "midi": 69, "pc": 9,  "type": "normal", "syl": "ка, " },
+        { "i": 52, "t": 39.8,  "d": 0.26, "beat": 796.0, "len": 5.2,   "midi": 69, "pc": 9,  "type": "normal", "syl": "ма" },
+        { "i": 53, "t": 40.06, "d": 0.44, "beat": 801.2, "len": 8.8,   "midi": 71, "pc": 11, "type": "normal", "syl": "лин" },
+        { "i": 54, "t": 40.5,  "d": 0.54, "beat": 810.0, "len": 10.8,  "midi": 69, "pc": 9,  "type": "normal", "syl": "ка моя" }
+      ]
+    },
+    {
+      "i": 6,
+      "t0": 41.76,
+      "t1": 44.43,
+      "text": "Калинка, калинка, калинка моя",
+      "notes": [
+        { "i": 55, "t": 41.76, "d": 0.32, "beat": 835.2, "len": 6.4,   "midi": 69, "pc": 9,  "type": "normal", "syl": "Ка" },
+        { "i": 56, "t": 42.08, "d": 0.48, "beat": 841.6, "len": 9.6,   "midi": 71, "pc": 11, "type": "golden", "syl": "лин" },
+        { "i": 57, "t": 42.56, "d": 0.13, "beat": 851.2, "len": 2.6,   "midi": 72, "pc": 0,  "type": "normal", "syl": "ка, " },
+        { "i": 58, "t": 42.69, "d": 0.54, "beat": 853.8, "len": 10.8,  "midi": 72, "pc": 0,  "type": "normal", "syl": "ка" },
+        { "i": 59, "t": 43.23, "d": 0.34, "beat": 864.6, "len": 6.8,   "midi": 71, "pc": 11, "type": "normal", "syl": "лин" },
+        { "i": 60, "t": 43.57, "d": 0.11, "beat": 871.4, "len": 2.2,   "midi": 69, "pc": 9,  "type": "normal", "syl": "ка, " },
+        { "i": 61, "t": 43.68, "d": 0.17, "beat": 873.6, "len": 3.4,   "midi": 72, "pc": 0,  "type": "normal", "syl": "ка" },
+        { "i": 62, "t": 43.85, "d": 0.18, "beat": 877.0, "len": 3.6,   "midi": 71, "pc": 11, "type": "normal", "syl": "лин" },
+        { "i": 63, "t": 44.03, "d": 0.4,  "beat": 880.6, "len": 8.0,   "midi": 69, "pc": 9,  "type": "normal", "syl": "ка моя" }
+      ]
+    },
+    {
+      "i": 7,
+      "t0": 44.66,
+      "t1": 48.0,
+      "text": "В саду ягода малинка, малинка моя",
+      "notes": [
+        { "i": 64, "t": 44.66, "d": 0.19, "beat": 893.2, "len": 3.8,   "midi": 69, "pc": 9,  "type": "normal", "syl": "В са" },
+        { "i": 65, "t": 44.85, "d": 0.06, "beat": 897.0, "len": 1.2,   "midi": 67, "pc": 7,  "type": "normal", "syl": "ду " },
+        { "i": 66, "t": 44.91, "d": 0.16, "beat": 898.2, "len": 3.2,   "midi": 69, "pc": 9,  "type": "normal", "syl": "я" },
+        { "i": 67, "t": 45.07, "d": 0.1,  "beat": 901.4, "len": 2.0,   "midi": 71, "pc": 11, "type": "golden", "syl": "го" },
+        { "i": 68, "t": 45.17, "d": 0.49, "beat": 903.4, "len": 1.2,   "midi": 72, "pc": 0,  "type": "normal", "syl": "да " },
+        { "i": 69, "t": 45.66, "d": 0.27,  "beat": 904.6, "len": 2.0,   "midi": 69, "pc": 9,  "type": "normal", "syl": "ма" },
+        { "i": 70, "t": 45.93, "d": 0.4,  "beat": 906.6, "len": 4.0,   "midi": 71, "pc": 11, "type": "normal", "syl": "лин" },
+        { "i": 71, "t": 46.33, "d": 0.17, "beat": 910.6, "len": 2.4,   "midi": 69, "pc": 9,  "type": "normal", "syl": "ка, " },
+        { "i": 72, "t": 46.5, "d": 0.16,  "beat": 913.0, "len": 2.0,   "midi": 69, "pc": 9,  "type": "normal", "syl": "ма" },
+        { "i": 73, "t": 46.66, "d": 0.34, "beat": 915.0, "len": 3.6,   "midi": 71, "pc": 11, "type": "normal", "syl": "лин" },
+        { "i": 74, "t": 47.0, "d": 1.0, "beat": 918.6, "len": 4.4,   "midi": 69, "pc": 9,  "type": "normal", "syl": "ка моя" }
+      ]
+    }
+  ],
+  "source": {
+    "origin": "manual",
+    "generator": null,
+    "t0_ms": 0
+  },
+  "license": {
+    "music": "public domain",
+    "recording": "own",
+    "attribution": "huap team",
+    "url": null
+  }
+}

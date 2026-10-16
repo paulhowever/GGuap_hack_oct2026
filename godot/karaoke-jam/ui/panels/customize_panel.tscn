@@ -1,9 +1,9 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://b70lwk20j4jcb"]
 
-[ext_resource type="Script" path="res://ui/panels/customize_panel.gd" id="1_cust"]
-[ext_resource type="PackedScene" path="res://ui/components/character_preview.tscn" id="2_preview"]
+[ext_resource type="Script" uid="uid://bkpwl0n1qa2k0" path="res://ui/panels/customize_panel.gd" id="1_cust"]
+[ext_resource type="PackedScene" uid="uid://kvrgorm425vb" path="res://ui/components/character_preview.tscn" id="2_preview"]
 
-[node name="CustomizePanel" type="Control"]
+[node name="CustomizePanel" type="Control" unique_id=452295571]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -12,7 +12,7 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_cust")
 
-[node name="Dim" type="ColorRect" parent="."]
+[node name="Dim" type="ColorRect" parent="." unique_id=863748741]
 unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 15
@@ -22,7 +22,7 @@ grow_horizontal = 2
 grow_vertical = 2
 color = Color(0.07, 0.06, 0.09, 0.72)
 
-[node name="Layout" type="HBoxContainer" parent="."]
+[node name="Layout" type="HBoxContainer" parent="." unique_id=2098922546]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -31,35 +31,93 @@ offset_top = 40.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
-theme_override_constants/separation = 60
+theme_override_constants/separation = 32
 alignment = 1
 
-[node name="Preview" parent="Layout" instance=ExtResource("2_preview")]
+[node name="ProfileCard" type="PanelContainer" parent="Layout" unique_id=1169257018]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(800, 800)
+custom_minimum_size = Vector2(380, 0)
+layout_mode = 2
+size_flags_vertical = 4
+theme_type_variation = &"CardPanel"
+
+[node name="VBox" type="VBoxContainer" parent="Layout/ProfileCard" unique_id=1767095852]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Title" type="Label" parent="Layout/ProfileCard/VBox" unique_id=333743132]
+layout_mode = 2
+theme_type_variation = &"AccentLabel"
+text = "Профиль"
+
+[node name="NickCaption" type="Label" parent="Layout/ProfileCard/VBox" unique_id=1074860856]
+layout_mode = 2
+theme_type_variation = &"HintLabel"
+theme_override_font_sizes/font_size = 20
+text = "Ник"
+
+[node name="NickEdit" type="LineEdit" parent="Layout/ProfileCard/VBox" unique_id=221588258]
+unique_name_in_owner = true
+layout_mode = 2
+placeholder_text = "Гость"
+max_length = 24
+
+[node name="BioCaption" type="Label" parent="Layout/ProfileCard/VBox" unique_id=2091480660]
+layout_mode = 2
+theme_type_variation = &"HintLabel"
+theme_override_font_sizes/font_size = 20
+text = "О себе"
+
+[node name="BioEdit" type="TextEdit" parent="Layout/ProfileCard/VBox" unique_id=161100375]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 240)
+layout_mode = 2
+theme_override_font_sizes/font_size = 22
+placeholder_text = "Напиши что-нибудь пажожда..."
+wrap_mode = 1
+
+[node name="BioCounter" type="Label" parent="Layout/ProfileCard/VBox" unique_id=435763465]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"HintLabel"
+theme_override_font_sizes/font_size = 18
+text = "0 / 200"
+horizontal_alignment = 2
+
+[node name="ProfileHint" type="Label" parent="Layout/ProfileCard/VBox" unique_id=1977177344]
+custom_minimum_size = Vector2(320, 0)
+layout_mode = 2
+theme_type_variation = &"HintLabel"
+theme_override_font_sizes/font_size = 18
+text = "Ник и «О себе» видят другие игроки при прослушивании твоего кавера :)"
+autowrap_mode = 3
+
+[node name="Preview" parent="Layout" unique_id=428429345 instance=ExtResource("2_preview")]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(640, 640)
 layout_mode = 2
 size_flags_vertical = 4
 mouse_default_cursor_shape = 10
 auto_return = false
 
-[node name="Card" type="PanelContainer" parent="Layout"]
+[node name="Card" type="PanelContainer" parent="Layout" unique_id=1089585777]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 4
 theme_type_variation = &"CardPanel"
 
-[node name="VBox" type="VBoxContainer" parent="Layout/Card"]
+[node name="VBox" type="VBoxContainer" parent="Layout/Card" unique_id=597983806]
 layout_mode = 2
 theme_override_constants/separation = 24
 
-[node name="ItemGrid" type="GridContainer" parent="Layout/Card/VBox"]
+[node name="ItemGrid" type="GridContainer" parent="Layout/Card/VBox" unique_id=1899022961]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_constants/h_separation = 18
 theme_override_constants/v_separation = 18
 columns = 3
 
-[node name="BackButton" type="Button" parent="Layout/Card/VBox"]
+[node name="BackButton" type="Button" parent="Layout/Card/VBox" unique_id=504681481]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 4

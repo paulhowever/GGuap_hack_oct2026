@@ -1,5 +1,6 @@
 extends ModalPanel
-## Настройки: громкость музыки, задержка (калибровка + ±10 мс), ник, наушники.
+## Настройки: громкость музыки, задержка (калибровка + ±10 мс), наушники.
+## Ник и «О себе» меняются в гардеробе (CustomizePanel), не здесь.
 
 signal calibrate_requested
 
@@ -9,7 +10,6 @@ signal calibrate_requested
 @onready var _lag_minus: Button = %LagMinus
 @onready var _lag_plus: Button = %LagPlus
 @onready var _calibrate: Button = %CalibrateButton
-@onready var _nick: LineEdit = %NickEdit
 @onready var _headphones: CheckBox = %HeadphonesCheck
 @onready var _close: Button = %CloseButton
 
@@ -22,8 +22,6 @@ func _ready() -> void:
 	_calibrate.pressed.connect(func() -> void:
 		await close()
 		calibrate_requested.emit())
-	_nick.text_submitted.connect(func(_t: String) -> void: _apply_nick())
-	_nick.focus_exited.connect(_apply_nick)
 	_headphones.toggled.connect(func(on: bool) -> void:
 		Session.headphones_confirmed = on
 		Session.save_settings())
@@ -41,8 +39,8 @@ func _setup_focus_neighbors() -> void:
 	_calibrate.focus_neighbor_left = _calibrate.get_path_to(_lag_plus)
 	_volume.focus_neighbor_bottom = _volume.get_path_to(_lag_minus)
 	_lag_minus.focus_neighbor_top = _lag_minus.get_path_to(_volume)
-	_lag_minus.focus_neighbor_bottom = _lag_minus.get_path_to(_nick)
-	_nick.focus_neighbor_top = _nick.get_path_to(_lag_minus)
+	_lag_minus.focus_neighbor_bottom = _lag_minus.get_path_to(_headphones)
+	_headphones.focus_neighbor_top = _headphones.get_path_to(_lag_minus)
 
 
 func _on_opened() -> void:
@@ -50,7 +48,6 @@ func _on_opened() -> void:
 
 
 func _on_closing() -> void:
-	_apply_nick()
 	Session.save_settings()
 
 
@@ -58,7 +55,6 @@ func _refresh() -> void:
 	_volume.set_value_no_signal(Session.music_volume * 100.0)
 	_volume_value.text = "%d%%" % roundi(Session.music_volume * 100.0)
 	_lag_value.text = "%d мс%s" % [Session.lag_ms, "" if Session.is_calibrated else " (по умолч.)"]
-	_nick.text = Session.nickname
 	_headphones.set_pressed_no_signal(Session.headphones_confirmed)
 
 
@@ -70,10 +66,3 @@ func _on_volume(v: float) -> void:
 func _nudge(d: int) -> void:
 	Session.nudge_lag(d)
 	_refresh()
-
-
-func _apply_nick() -> void:
-	if _nick.text.strip_edges() != Session.nickname:
-		Session.nickname = _nick.text
-		Session.save_settings()
-		_nick.text = Session.nickname

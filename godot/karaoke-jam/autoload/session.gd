@@ -4,6 +4,8 @@ extends Node
 ## Изменения сложности/громкости/задержки VoiceBridge пересылает в JS (voice.configure).
 
 signal nickname_changed(nickname: String)
+## Изменился текст «О себе» (показывается в окне кавера у других игроков).
+signal bio_changed(bio: String)
 signal lag_changed(lag_ms: int)
 signal headphones_changed(confirmed: bool)
 signal music_volume_changed(value: float)
@@ -14,6 +16,9 @@ signal outfit_changed(slot: StringName, item_id: StringName)
 const SAVE_PATH := "user://settings.cfg"
 const LAST_RESULT_PATH := "user://last_result.json"
 const DEFAULT_NICKNAME := "Гость"
+const NICKNAME_MAX := 24
+## Лимит «О себе» (как BIO_MAX_LENGTH на бэкенде).
+const BIO_MAX := 200
 const LAG_MIN_MS := -100
 const LAG_MAX_MS := 500
 const DIFFICULTIES: Array[String] = ["easy", "normal", "hard"]
@@ -21,13 +26,22 @@ const DEFAULT_DIFFICULTY := "normal"
 
 var nickname: String = DEFAULT_NICKNAME:
 	set(value):
-		value = value.strip_edges().left(24)
+		value = value.strip_edges().left(NICKNAME_MAX)
 		if value.is_empty():
 			value = DEFAULT_NICKNAME
 		if value == nickname:
 			return
 		nickname = value
 		nickname_changed.emit(nickname)
+
+## «О себе»: до BIO_MAX символов, переносы строк сохраняются, пробелы по краям обрезаются.
+var bio: String = "":
+	set(value):
+		value = value.strip_edges().left(BIO_MAX).strip_edges()
+		if value == bio:
+			return
+		bio = value
+		bio_changed.emit(bio)
 
 ## Суммарная задержка «звук услышан → голос в микрофоне», мс.
 var lag_ms: int = 120:
@@ -51,8 +65,12 @@ var headphones_confirmed: bool = false:
 		headphones_confirmed = value
 		headphones_changed.emit(headphones_confirmed)
 
-## Громкость музыки 0..1 (линейная), применяется к шине Music и к минусу в JS.
-var music_volume: float = 0.8:
+## Громкость фоновой музыки меню при каждом запуске игры (из сохранения не читается).
+const DEFAULT_MUSIC_VOLUME := 0.1
+
+## Громкость фоновой музыки меню 0..1 (линейная), применяется только к шине Music.
+## Минус песни и прослушивание каверов в JS от неё не зависят.
+var music_volume: float = DEFAULT_MUSIC_VOLUME:
 	set(value):
 		music_volume = clampf(value, 0.0, 1.0)
 		_apply_music_volume()
@@ -181,11 +199,11 @@ func load_settings() -> void:
 	var cfg := ConfigFile.new()
 	if cfg.load(SAVE_PATH) == OK:
 		nickname = cfg.get_value("player", "nickname", DEFAULT_NICKNAME)
+		bio = str(cfg.get_value("player", "bio", ""))
 		lag_ms = cfg.get_value("audio", "lag_ms", lag_ms)
 		is_calibrated = cfg.get_value("audio", "is_calibrated", false)
 		lag_manual = cfg.get_value("audio", "lag_manual", false)
 		headphones_confirmed = cfg.get_value("audio", "headphones_confirmed", false)
-		music_volume = cfg.get_value("audio", "music_volume", music_volume)
 		difficulty = cfg.get_value("game", "difficulty", DEFAULT_DIFFICULTY)
 		first_run_done = cfg.get_value("app", "first_run_done", false)
 		outfit.clear()
@@ -199,6 +217,7 @@ func load_settings() -> void:
 func save_settings() -> void:
 	var cfg := ConfigFile.new()
 	cfg.set_value("player", "nickname", nickname)
+	cfg.set_value("player", "bio", bio)
 	cfg.set_value("audio", "lag_ms", lag_ms)
 	cfg.set_value("audio", "is_calibrated", is_calibrated)
 	cfg.set_value("audio", "lag_manual", lag_manual)

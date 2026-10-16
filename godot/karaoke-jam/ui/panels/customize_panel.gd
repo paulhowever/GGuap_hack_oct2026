@@ -1,7 +1,8 @@
 class_name CustomizePanel
 extends ModalPanel
 ## Гардероб: персонаж «перелетает» из логотипа стартового экрана в крупное превью
-## слева, справа выезжает карточка с предметами. При закрытии — всё обратно,
+## по центру, справа выезжает карточка с предметами, слева — карточка «Профиль»
+## (ник и «О себе», единственное место, где они меняются). При закрытии — всё обратно,
 ## персонаж по пути возвращается к исходному углу и бесшовно подменяется
 ## превью логотипа.
 ## Анимация построена на offset_transform_* (Godot 4.6+): это визуальное смещение
@@ -43,6 +44,10 @@ var _fly: float = 1.0:
 @onready var _preview: CharacterPreview = %Preview
 @onready var _grid: GridContainer = %ItemGrid
 @onready var _back: Button = %BackButton
+@onready var _profile: Control = %ProfileCard
+@onready var _nick: LineEdit = %NickEdit
+@onready var _bio: TextEdit = %BioEdit
+@onready var _bio_counter: Label = %BioCounter
 
 
 func _ready() -> void:
@@ -52,8 +57,16 @@ func _ready() -> void:
 	_build_items()
 	Session.outfit_changed.connect(func(_s: StringName, _i: StringName) -> void: _refresh_equipped())
 	_refresh_equipped()
-	for c: Control in [_preview, _card] + _items():
+	for c: Control in [_preview, _card, _profile] + _items():
 		c.offset_transform_enabled = true
+	_nick.max_length = Session.NICKNAME_MAX
+	_nick.text_submitted.connect(func(_t: String) -> void:
+		_apply_nick()
+		_nick.release_focus())
+	_nick.focus_exited.connect(_apply_nick)
+	_bio.text_changed.connect(_on_bio_changed)
+	_bio.focus_exited.connect(_apply_bio)
+	_load_profile()
 
 
 func open() -> void:
@@ -73,9 +86,12 @@ func open() -> void:
 		_dim.modulate.a = 0.0
 		_card.modulate.a = 0.0
 		_card.offset_transform_position = Vector2(CARD_SHIFT, 0.0)
+		_profile.modulate.a = 0.0
+		_profile.offset_transform_position = Vector2(-CARD_SHIFT, 0.0)
 		for b: ItemButton in _items():
 			b.offset_transform_position = Vector2(ITEM_SHIFT, 0.0)
 		_fly = 0.0
+	_load_profile()
 	_preview.cancel_return()
 	# сначала включаем, потом копируем кадр анимации (см. copy_state_from)
 	_preview.set_active(true)
@@ -92,6 +108,9 @@ func open() -> void:
 	_tween.tween_property(_card, ^"modulate:a", 1.0, 0.25).set_delay(0.15)
 	_tween.tween_property(_card, ^"offset_transform_position", Vector2.ZERO, 0.5) \
 		.set_delay(0.15).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_tween.tween_property(_profile, ^"modulate:a", 1.0, 0.25).set_delay(0.15)
+	_tween.tween_property(_profile, ^"offset_transform_position", Vector2.ZERO, 0.5) \
+		.set_delay(0.15).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	var i := 0
 	for b: ItemButton in _items():
 		_tween.tween_property(b, ^"offset_transform_position", Vector2.ZERO, 0.45) \
@@ -104,10 +123,13 @@ func open() -> void:
 
 
 func close() -> void:
+	%NickLabel.visible = true
 	if not is_open:
 		return
 	is_open = false
 	_kill_tween()
+	_apply_nick()
+	_apply_bio()
 	_on_closing()
 	closing.emit()
 	var focus := get_viewport().gui_get_focus_owner()
@@ -122,6 +144,9 @@ func close() -> void:
 	_tween.tween_property(_card, ^"modulate:a", 0.0, 0.25)
 	_tween.tween_property(_card, ^"offset_transform_position", Vector2(CARD_SHIFT, 0.0), 0.3) \
 		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
+	_tween.tween_property(_profile, ^"modulate:a", 0.0, 0.25)
+	_tween.tween_property(_profile, ^"offset_transform_position", Vector2(-CARD_SHIFT, 0.0), 0.3) \
+		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
 	_tween.tween_property(self, ^"_fly", 0.0, CLOSE_TIME) \
 		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
 	var tw := _tween
@@ -134,6 +159,15 @@ func close() -> void:
 		# сначала включаем, потом копируем кадр анимации (см. copy_state_from)
 		source_preview.set_active(true)
 		source_preview.copy_state_from(_preview)
+		# SubViewport логотипа был выключен с момента открытия и хранит старый кадр;
+		# новый он нарисует только на ближайшей отрисовке. Держим его прозрачным,
+		# пока кадр не готов, — иначе на кадр мелькает поза до открытия гардероба.
+		source_preview.modulate.a = 0.0
+		await RenderingServer.frame_post_draw
+		if is_open or tw != _tween:
+			source_preview.set_active(false)   # окно успели открыть заново
+			return
+		source_preview.modulate.a = 1.0
 	_preview.set_active(false)
 	_set_flight_resolution(false)
 	visible = false
@@ -158,9 +192,65 @@ func warm_up() -> void:
 	_warming = false
 
 
-## Клик по пустому месту окно не закрывает.
-func _on_dim_input(_event: InputEvent) -> void:
-	pass
+## Клик по пустому месту окно не закрывает, но снимает фокус с полей профиля
+## (так ник/«О себе» сохраняются, и Esc снова закрывает окно).
+func _on_dim_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.pressed:
+		var focus := get_viewport().gui_get_focus_owner()
+		if focus == _nick or focus == _bio:
+			focus.release_focus()
+
+
+# --- Профиль: ник и «О себе» ------------------------------------------------------
+
+func _load_profile() -> void:
+	_nick.text = Session.nickname
+	_bio.text = Session.bio
+	_update_bio_counter()
+
+
+## Ник из поля в Session (пустой → «Гость»); поле показывает итоговое значение.
+func _apply_nick() -> void:
+	if _nick.text.strip_edges() != Session.nickname:
+		Session.nickname = _nick.text
+		Session.save_settings()
+	if _nick.text != Session.nickname:
+		_nick.text = Session.nickname
+
+
+func _apply_bio() -> void:
+	if _bio.text.strip_edges() != Session.bio:
+		Session.bio = _bio.text
+		Session.save_settings()
+
+
+## У TextEdit нет max_length: лишнее обрезается сразу, курсор остаётся в конце вставки.
+func _on_bio_changed() -> void:
+	if _bio.text.length() > Session.BIO_MAX:
+		var line := _bio.get_caret_line()
+		var col := _bio.get_caret_column()
+		_bio.text = _bio.text.left(Session.BIO_MAX)
+		line = mini(line, _bio.get_line_count() - 1)
+		_bio.set_caret_line(line)
+		_bio.set_caret_column(mini(col, _bio.get_line(line).length()))
+	_update_bio_counter()
+
+
+func _update_bio_counter() -> void:
+	var n := _bio.text.length()
+	_bio_counter.text = "%d / %d" % [n, Session.BIO_MAX]
+	_bio_counter.modulate = Color(1.0, 0.6, 0.4) if n >= Session.BIO_MAX else Color.WHITE
+
+
+## Esc в поле профиля сначала снимает фокус (и сохраняет), а не закрывает окно.
+func _unhandled_input(event: InputEvent) -> void:
+	if is_open and event.is_action_pressed(&"ui_cancel"):
+		var focus := get_viewport().gui_get_focus_owner()
+		if focus == _nick or focus == _bio:
+			focus.release_focus()
+			get_viewport().set_input_as_handled()
+			return
+	super._unhandled_input(event)
 
 
 ## Кнопки предметов создаются по каталогу (res://items/catalog.tres).

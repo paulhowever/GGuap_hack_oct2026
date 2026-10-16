@@ -1,6 +1,7 @@
 extends Control
-## Стартовый экран: фон-студия, винил-логотип, меню (Петь / Настройки),
+## Стартовый экран: фон-студия, ник над персонажем, винил-логотип, меню (Петь / Настройки),
 ## верхняя и нижняя панели, модальные окна (первый запуск, калибровка, настройки).
+## Ник и «О себе» меняются в гардеробе (клик по персонажу), не в настройках.
 ## В вебе страница уже получила клик на оверлее shell.html, так что звук можно
 ## запускать сразу. Вне веба — тоже сразу.
 
@@ -42,6 +43,7 @@ func _ready() -> void:
 	_avatar_timer.timeout.connect(_register_player)
 	add_child(_avatar_timer)
 	Session.outfit_changed.connect(func(_s: StringName, _i: StringName) -> void: _avatar_timer.start())
+	Session.bio_changed.connect(func(_b: String) -> void: _avatar_timer.start())
 	_sing.pressed.connect(_on_sing)
 	_settings_btn.pressed.connect(_settings.open)
 	_gear.pressed.connect(_settings.open)
@@ -76,10 +78,10 @@ func _ready() -> void:
 		_focus_menu()
 
 
-## POST /players: ник и наряд привязываются к client_id движка (для таблицы
-## результатов). Ошибка сети не мешает играть — только предупреждение.
+## POST /players: ник, наряд и «О себе» привязываются к client_id движка (для таблицы
+## результатов и окна кавера). Ошибка сети не мешает играть — только предупреждение.
 func _register_player() -> void:
-	var r: Dictionary = await Api.register_player(Session.nickname, Session.get_avatar())
+	var r: Dictionary = await Api.register_player(Session.nickname, Session.get_avatar(), Session.bio)
 	if not r.ok and r.error != "no_client_id":
 		push_warning("Boot: не удалось зарегистрировать игрока (%s)" % r.error)
 

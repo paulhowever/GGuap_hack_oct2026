@@ -1,12 +1,33 @@
-[gd_scene format=3]
+[gd_scene format=4 uid="uid://bucc3jacmwjyv"]
 
-[ext_resource type="PackedScene" uid="uid://kvrgorm425vb" path="res://ui/components/character_preview.tscn" id="1_base"]
-[ext_resource type="Script" path="res://ui/components/producer_preview.gd" id="2_producer"]
+[ext_resource type="Script" uid="uid://cvjncgp7lw0nc" path="res://ui/components/producer_preview.gd" id="1_producer"]
+[ext_resource type="PackedScene" uid="uid://bhjy2btvjy1uy" path="res://assets/Ai_char_Gdot_export.glb" id="2_model"]
 
-[node name="ProducerPreview" instance=ExtResource("1_base")]
-script = ExtResource("2_producer")
+[node name="ProducerPreview" type="SubViewportContainer" unique_id=1150358282 node_paths=PackedStringArray("model", "anim_player")]
+size_flags_vertical = 3
+focus_mode = 0
+mouse_filter = 2
+stretch = true
+script = ExtResource("1_producer")
 rest_yaw = -0.43633232
 interactive = false
+model = NodePath("SubViewport/Producer")
+anim_player = NodePath("SubViewport/Producer/AnimationPlayer")
 
-[node name="Outfit" parent="SubViewport/GV_Anim_Pack_1"]
-follow_session = false
+[node name="SubViewport" type="SubViewport" parent="." unique_id=687642869]
+own_world_3d = true
+transparent_bg = true
+handle_input_locally = false
+size = Vector2i(2, 2)
+render_target_update_mode = 4
+
+[node name="Producer" parent="SubViewport" unique_id=676438867 instance=ExtResource("2_model")]
+
+[node name="Camera3D" type="Camera3D" parent="SubViewport" unique_id=1689076808]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.92, 3)
+projection = 1
+size = 2.0
+
+[node name="OmniLight3D" type="OmniLight3D" parent="SubViewport" unique_id=174749888]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.8, 1.5)
+omni_range = 6.0

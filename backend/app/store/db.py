@@ -24,12 +24,23 @@ def missing_take_columns(conn) -> list[str]:
     return sorted(TAKE_COLUMNS - {column["name"] for column in inspector.get_columns("takes")})
 
 
+def player_has_bio(conn) -> bool:
+    inspector = inspect(conn)
+    return not inspector.has_table("players") or "bio" in {
+        c["name"] for c in inspector.get_columns("players")
+    }
+
+
 async def init_db(engine: AsyncEngine) -> None:
     async with engine.begin() as conn:
         missing = await conn.run_sync(missing_take_columns)
         if missing:
             log.warning("schema_reset", extra={"fields": {"missing": missing}})
             await conn.run_sync(Base.metadata.drop_all)
+        # профили старой схемы не сбрасываем: «О себе» добавляется пустой колонкой
+        if not await conn.run_sync(player_has_bio):
+            log.info("players_add_bio")
+            await conn.execute(text("alter table players add column bio text not null default ''"))
         await conn.run_sync(Base.metadata.create_all)
 
 
@@ -38,12 +49,15 @@ async def ping(engine: AsyncEngine) -> str:
         return str((await conn.execute(text("select sqlite_version()"))).scalar_one())
 
 
-async def upsert_player(sessions: async_sessionmaker, client_id: str, nickname: str, avatar: str) -> Player:
-    stmt = insert(Player).values(client_id=client_id, nickname=nickname, avatar=avatar)
-    stmt = stmt.on_conflict_do_update(
-        index_elements=[Player.client_id],
-        set_={"nickname": nickname, "avatar": avatar, "updated_at": datetime.now(UTC)},
-    )
+async def upsert_player(
+    sessions: async_sessionmaker, client_id: str, nickname: str, avatar: str, bio: str | None = None
+) -> Player:
+    """bio=None — «О себе» не меняется (старые клиенты поле не шлют)."""
+    stmt = insert(Player).values(client_id=client_id, nickname=nickname, avatar=avatar, bio=bio or "")
+    changes = {"nickname": nickname, "avatar": avatar, "updated_at": datetime.now(UTC)}
+    if bio is not None:
+        changes["bio"] = bio
+    stmt = stmt.on_conflict_do_update(index_elements=[Player.client_id], set_=changes)
     async with sessions() as session, session.begin():
         await session.execute(stmt)
     async with sessions() as session:

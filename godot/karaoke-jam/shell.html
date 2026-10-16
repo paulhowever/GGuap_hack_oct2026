@@ -87,8 +87,13 @@ const engine = new Engine(GODOT_CONFIG);
     return v;
   }
 
-  // Контракт для autoload WebShell (Godot): kjGetNickname / kjEditNickname / kjOnNicknameChanged
+  // Контракт для autoload WebShell (Godot): kjGetNickname / kjSetNickname / kjEditNickname / kjOnNicknameChanged
   window.kjGetNickname = () => (nick.value || '').trim();
+  // ник сменили в игре (гардероб) — запоминаем, чтобы оверлей при следующем запуске не вернул старый
+  window.kjSetNickname = v => {
+    v = saveNick(v);
+    if (v) nick.value = v;
+  };
   window.kjEditNickname = () => {
     $('kj-nick-edit').value = window.kjGetNickname();
     $('kj-nick-layer').style.display = 'flex';

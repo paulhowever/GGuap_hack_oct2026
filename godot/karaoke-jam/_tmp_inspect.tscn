@@ -1,0 +1,10 @@
+[gd_scene format=3 uid="uid://bg80jjgehmnvr"]
+
+[ext_resource type="PackedScene" uid="uid://bhjy2btvjy1uy" path="res://assets/Ai_char_Gdot_export.glb" id="1_2er8l"]
+[ext_resource type="PackedScene" uid="uid://nn0h7dw4hq0" path="res://assets/GV_Anim_Pack_1.fbx" id="2_21uet"]
+
+[node name="Tmp" type="Node3D" unique_id=76364111]
+
+[node name="Char" parent="." unique_id=676438867 instance=ExtResource("1_2er8l")]
+
+[node name="Gv" parent="." unique_id=579713150 instance=ExtResource("2_21uet")]

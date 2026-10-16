@@ -84,6 +84,33 @@ def test_old_takes_schema_is_reset(settings, caplog):
     assert resets[0].fields == {"missing": ["audio_sha256", "integrity_status"]}
 
 
+OLD_PLAYERS = (
+    "create table players (client_id varchar(36) primary key, nickname varchar(24), avatar text, "
+    "created_at datetime, updated_at datetime)"
+)
+
+
+def test_old_players_get_bio_without_reset(settings, seed, client, caplog):
+    """Колонка bio добавляется к существующей таблице players, профили и дубли остаются."""
+    seed("tk_1", 9000, published=True)
+    cid = "11111111-1111-4111-8111-111111111111"
+    with sqlite3.connect(settings.data_dir / "app.db") as db:
+        db.execute("drop table players")
+        db.execute(OLD_PLAYERS)
+        db.execute(f"insert into players values ('{cid}', 'Старый', '{{}}', '2026-10-14', '2026-10-14')")
+    with TestClient(create_app(settings)) as again:
+        assert again.get(f"/api/v1/players/{cid}").json() == {
+            "client_id": cid,
+            "nickname": "Старый",
+            "avatar": {},
+            "bio": "",
+        }
+        assert [i["take_id"] for i in again.get("/api/v1/leaderboard/demo").json()["items"]] == ["tk_1"]
+        r = again.post("/api/v1/players", json={"client_id": cid, "nickname": "Старый", "bio": "Привет"})
+        assert r.json()["bio"] == "Привет"
+    assert not [r for r in caplog.records if r.getMessage() == "schema_reset"]
+
+
 def test_current_schema_is_kept(settings, seed, client, caplog):
     seed("tk_1", 9000, published=True)
     with TestClient(create_app(settings)) as again:

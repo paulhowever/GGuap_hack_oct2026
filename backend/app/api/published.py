@@ -6,7 +6,7 @@ from fastapi import APIRouter, Body, HTTPException, Query, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from app.board import avatar_of, display_name, iso
+from app.board import avatar_of, bio_of, display_name, iso
 from app.ids import CLIENT_ID_PATTERN, Difficulty
 from app.store.db import get_take, players_by_id
 from app.store.models import PublishedTake, Take
@@ -65,6 +65,7 @@ async def items_of(request: Request, rows: list[tuple[PublishedTake, Take]]) -> 
                 "difficulty": take.difficulty,
                 "player": display_name(profile, take.player),
                 "avatar": avatar_of(profile),
+                "bio": bio_of(profile),
                 "total": take.total,
                 "grade": take.grade,
                 "at": iso(take.created_at),

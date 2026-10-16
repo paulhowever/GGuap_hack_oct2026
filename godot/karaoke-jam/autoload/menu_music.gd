@@ -30,10 +30,22 @@ func _ready() -> void:
 		push_error("MenuMusic: autoload Conductor не найден — включите аддон conductor")
 		return
 	_conductor.bus = &"Music"
+	# В вебе (без потоков) Stream-режим микширует звук в главном потоке: пока
+	# change_scene_to_file грузит сцену, буфер пустеет и музыка прерывается.
+	# Sample играет сам браузер (WebAudio) — смена сцены его не останавливает.
+	# Цена: эффекты шины Music (SpectrumAnalyzer для EqBars) к нему не применяются.
+	if uses_sample_playback():
+		_conductor.playback_type = AudioServer.PLAYBACK_TYPE_SAMPLE
 	_conductor.beat.connect(func(i: int) -> void: beat.emit(i))
 	_conductor.measure.connect(func(i: int) -> void: measure.emit(i))
 	if ResourceLoader.exists(DEFAULT_TRACK):
 		track = load(DEFAULT_TRACK)
+
+
+## Музыка меню играет как Sample (только веб): эффекты шины к ней не применяются,
+## поэтому спектра на шине Music нет.
+static func uses_sample_playback() -> bool:
+	return OS.has_feature("web")
 
 
 ## Запускает музыку меню (вызывать после пользовательского жеста — правило браузеров).

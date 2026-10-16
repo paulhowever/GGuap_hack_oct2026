@@ -176,7 +176,8 @@ async def post_take(
             result, timings, signal = await asyncio.to_thread(evaluate, state, ref, samples, sr, m)
         except ValueError:
             raise HTTPException(status_code=422, detail="bad_audio") from None
-    integrity = integrity_of(flags + signal.flags)
+    signal_flags = signal.flags if state.settings.anticheat_signal_flags else []
+    integrity = integrity_of(flags + signal_flags)
     take_id = f"tk_{secrets.token_hex(4)}"
     takes_dir = state.settings.data_dir / "takes"
     takes_dir.mkdir(parents=True, exist_ok=True)

@@ -13,6 +13,8 @@ const BOOT_SCENE := "res://scenes/boot/boot.tscn"
 const GAME_SCENE := "res://scenes/game/game.tscn"
 const RESULT_SCENE := "res://scenes/result/result.tscn"
 const COVER_SCENE := preload("res://scenes/cover/cover_dialog.tscn")
+const ICON_STAR := preload("res://ui/icons/star.svg")
+const ICON_NOTE := preload("res://ui/icons/note_single.svg")
 const GRADE_COLORS: Dictionary = preload("res://scenes/result/result.gd").GRADE_COLORS
 const C_ACCENT := Color(1.0, 0.478, 0.239)
 const C_TEAL := Color(0.373, 0.827, 0.737)
@@ -20,9 +22,12 @@ const C_ROW := Color(0.227, 0.192, 0.251, 0.55)
 const GAP := 40.0
 const SLIDE_SEC := 0.4
 ## Ширины колонок таблицы: место, очки, ранг (ник занимает остальное).
-const COL_RANK := 64.0
-const COL_TOTAL := 150.0
-const COL_GRADE := 70.0
+const COL_RANK := 52.0
+const COL_TOTAL := 110.0
+const COL_GRADE := 60.0
+## Кегль ячеек таблицы и заголовка: ник до 24 символов должен влезать целиком.
+const CELL_FONT := 21
+const HEADER_FONT := 18
 ## Внутренние поля строки таблицы слева/справа.
 const ROW_PAD_L := 8.0
 const ROW_PAD_R := 12.0
@@ -75,6 +80,7 @@ func _ready() -> void:
 	_cover = COVER_SCENE.instantiate()
 	add_child(_cover)
 	move_child(_cover, %Fade.get_index())   # под затемнением перехода
+	_cover.warm_up()   # пока экран под затемнением: шейдеры персонажа автора компилируются заранее
 	_cover.unpublished.connect(func(_id: String) -> void: _load_board())
 	_cover.closed.connect(func() -> void:
 		if is_instance_valid(_cover_from) and _cover_from.is_inside_tree() and not _leaving:
@@ -122,7 +128,9 @@ func _show_board(open: bool) -> void:
 	if open == _board_open:
 		return
 	_board_open = open
-	_pick_hint.visible = not open
+	# подсказку гасим прозрачностью, а не visible: иначе карточка списка теряет
+	# строку по высоте и при выборе песни прыгает вверх
+	_pick_hint.modulate.a = 0.0 if open else 1.0
 	if _slide and _slide.is_valid():
 		_slide.kill()
 	_song_card.reset_size()
@@ -192,7 +200,7 @@ func _make_song_button(song: Dictionary) -> Button:
 	b.set_meta(&"song", song)
 	_style_selected(b)
 	var dur := int(float(song.get("duration", 0.0)))
-	var stars := "★".repeat(clampi(int(song.get("difficulty", 1)), 1, 5))
+	var stars := clampi(int(song.get("difficulty", 1)), 1, 5)
 
 	var box := VBoxContainer.new()
 	box.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -209,21 +217,37 @@ func _make_song_button(song: Dictionary) -> Button:
 	title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
+	# «Артист · 3:25 · ★★★»: звёзды — значки (в Nunito нет ★, в вебе он не рисуется)
+	var sub_row := HBoxContainer.new()
+	sub_row.add_theme_constant_override(&"separation", 4)
+	sub_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var sub := Label.new()
 	sub.theme_type_variation = &"HintLabel"
 	sub.add_theme_font_size_override(&"font_size", 20)
-	sub.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	# без clip_text: иначе минимальная ширина метки 0 и HBox сжимает её в точку
+	sub.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	sub.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var parts: PackedStringArray = []
 	if str(song.get("artist", "")) != "":
 		parts.append(str(song.artist))
 	@warning_ignore("integer_division")
 	parts.append("%d:%02d" % [dur / 60, dur % 60])
-	parts.append(stars)
-	sub.text = "  ·  ".join(parts)
+	sub.text = "  ·  ".join(parts) + "  ·  "
+	sub_row.add_child(sub)
+	var star_color := sub.get_theme_color(&"font_color")
+	for i in stars:
+		var star := TextureRect.new()
+		star.texture = ICON_STAR
+		star.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		star.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		star.custom_minimum_size = Vector2(18, 18)
+		star.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		star.self_modulate = star_color
+		star.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		sub_row.add_child(star)
 
 	box.add_child(title)
-	box.add_child(sub)
+	box.add_child(sub_row)
 	b.add_child(box)
 	# группа шлёт toggled и снятой, и новой карточке в произвольном порядке —
 	# итог читаем один раз, когда она закончит
@@ -414,7 +438,22 @@ func _make_row(row: Dictionary) -> Control:
 	if rank <= 3:
 		rank_cell.add_theme_color_override(&"font_color", [GRADE_COLORS.S, Color(0.82, 0.84, 0.88), Color(0.86, 0.6, 0.4)][rank - 1])
 	h.add_child(rank_cell)
-	var name_cell := _cell("♪  " + str(row.get("player", "?")) + ("  (вы)" if me else ""), 0.0, HORIZONTAL_ALIGNMENT_LEFT)
+	var player := str(row.get("player", "?"))
+	# значок ноты — картинкой: символа ♪ в Nunito нет, в вебе он не рисуется
+	var note := TextureRect.new()
+	note.texture = ICON_NOTE
+	note.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	note.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	note.custom_minimum_size = Vector2(22, 22)
+	note.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	h.add_child(note)
+	var name_cell := _cell(player + ("  (вы)" if me else ""), 0.0, HORIZONTAL_ALIGNMENT_LEFT)
+	note.self_modulate = name_cell.get_theme_color(&"font_color")
+	# ник показываем целиком: если не влез (широкие буквы), строка переносится, а не режется «…»
+	name_cell.text_overrun_behavior = TextServer.OVERRUN_NO_TRIMMING
+	name_cell.clip_text = false
+	name_cell.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	panel.tooltip_text = "%s — послушать кавер" % player
 	h.add_child(name_cell)
 	h.add_child(_cell(str(int(row.get("total", 0))), COL_TOTAL, HORIZONTAL_ALIGNMENT_RIGHT))
 	var grade := str(row.get("grade", "—"))
@@ -448,9 +487,9 @@ func _cell(text: String, width: float, align: HorizontalAlignment, hint: bool = 
 	l.clip_text = true
 	if hint:
 		l.theme_type_variation = &"HintLabel"
-		l.add_theme_font_size_override(&"font_size", 20)
+		l.add_theme_font_size_override(&"font_size", HEADER_FONT)
 	else:
-		l.add_theme_font_size_override(&"font_size", 26)
+		l.add_theme_font_size_override(&"font_size", CELL_FONT)
 	if width > 0.0:
 		l.custom_minimum_size = Vector2(width, 0)
 	else:

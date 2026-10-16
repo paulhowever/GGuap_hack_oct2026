@@ -3,12 +3,13 @@ extends Node
 ## Микрофон, минус, питч и запись дубля — в web/voice.js; здесь только:
 ## - статус микрофона для UI (MicState) по событиям моста и уровню из poll();
 ## - калибровка задержки: Godot лишь анимирует щелчки по таймеру (та же сетка, что в
-##   web/lib/calibration.js: 8 щелчков, шаг 0.5 с, первый через 0.6 с), а итог
-##   (lag_ms, hits) возвращает JS. Успех — hits ≥ 5.
+##   web/lib/calibration.js, режим «headphones»: 2 вводных + 8 измеряемых щелчков,
+##   шаг 0.8 с, первый через 0.6 с), а итог (lag_ms, hits) возвращает JS. Успех — hits ≥ 5.
 ## Нативный микрофон Godot (AudioStreamMicrophone) больше не используется.
 
 signal mic_state_changed(state: MicState)
 signal level_changed(rms: float, peak: float)
+## index — 1..CAL_TOTAL по всем щелчкам; первые CAL_LEAD_IN — вводные (не измеряются).
 signal calibration_click(index: int, total: int)
 signal calibration_finished(success: bool, lag_ms: int, hits: int)
 
@@ -16,6 +17,8 @@ enum MicState { OFF, STARTING, ACTIVE, SILENT, ERROR }
 
 const _Bridge = preload("res://autoload/voice_bridge.gd")
 const CAL_CLICKS := _Bridge.CAL_CLICKS
+const CAL_LEAD_IN := _Bridge.CAL_LEAD_IN
+const CAL_TOTAL := CAL_LEAD_IN + CAL_CLICKS
 const CAL_LEAD_SEC := _Bridge.CAL_LEAD
 const CAL_GAP_SEC := _Bridge.CAL_GAP
 const CAL_MIN_HITS := _Bridge.CAL_MIN_HITS
@@ -110,8 +113,8 @@ func _on_polled() -> void:
 # --- Калибровка -------------------------------------------------------------
 
 func start_calibration() -> void:
-	if is_calibrating:
-		return
+	if is_calibrating or VoiceBridge.is_calibrating:
+		return   # JS игнорирует повторный calibrate(), а таймер Godot шёл бы второй раз
 	is_calibrating = true
 	_cal_elapsed = 0.0
 	_cal_index = 0
@@ -131,9 +134,9 @@ func _process(delta: float) -> void:
 	if not is_calibrating:
 		return
 	_cal_elapsed += delta
-	while _cal_index < CAL_CLICKS and _cal_elapsed >= CAL_LEAD_SEC + _cal_index * CAL_GAP_SEC:
+	while _cal_index < CAL_TOTAL and _cal_elapsed >= CAL_LEAD_SEC + _cal_index * CAL_GAP_SEC:
 		_cal_index += 1
-		calibration_click.emit(_cal_index, CAL_CLICKS)
+		calibration_click.emit(_cal_index, CAL_TOTAL)
 
 
 func _on_calibrated(lag_ms: int, hits: int) -> void:
@@ -142,9 +145,9 @@ func _on_calibrated(lag_ms: int, hits: int) -> void:
 	is_calibrating = false
 	MenuMusic.duck(false)
 	# дорисовать оставшиеся щелчки, если JS ответил раньше таймера
-	while _cal_index < CAL_CLICKS:
+	while _cal_index < CAL_TOTAL:
 		_cal_index += 1
-		calibration_click.emit(_cal_index, CAL_CLICKS)
+		calibration_click.emit(_cal_index, CAL_TOTAL)
 	var ok := hits >= CAL_MIN_HITS
 	if ok:
 		Session.set_calibrated_lag(lag_ms)

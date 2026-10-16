@@ -54,7 +54,7 @@ func get_song(id: String) -> Dictionary:
 
 
 ## GET /leaderboard/{song_id}?difficulty=&limit=&client_id= → data: Array строк
-## {rank, player, avatar, total, grade, take_id, at, attempts, me}. В таблице только
+## {rank, player, avatar, bio, total, grade, take_id, at, attempts, me}. В таблице только
 ## опубликованные каверы, по одному на игрока (ADR-024) — у каждой строки можно послушать take_id.
 ## client_id передаём, чтобы сервер отметил строку игрока (me: true); ответ — data без обёртки items.
 ## В моке без бэкенда — res://mock/leaderboard.json (mock: true).
@@ -96,14 +96,16 @@ func get_take(take_id: String) -> Dictionary:
 	return r
 
 
-## POST /players — регистрирует/обновляет ник и аватар (JSON-объект ≤ 4 КБ,
-## сейчас {outfit: {slot: item_id}}) для client_id.
-func register_player(nickname: String, avatar: Dictionary = {}) -> Dictionary:
+## POST /players — регистрирует/обновляет ник, аватар (JSON-объект ≤ 4 КБ,
+## сейчас {outfit: {slot: item_id}}) и «О себе» (≤ 200 символов) для client_id.
+func register_player(nickname: String, avatar: Dictionary = {}, bio: String = "") -> Dictionary:
 	var cid := VoiceBridge.client_id()
 	if cid.is_empty() or cid == VoiceBridge.STUB_CLIENT_ID:
 		return {"ok": false, "status": 0, "data": null, "error": "no_client_id"}
-	var r := await _request(HTTPClient.METHOD_POST, "/players",
-		{"client_id": cid, "nickname": nickname.strip_edges().left(24), "avatar": avatar})
+	var r := await _request(HTTPClient.METHOD_POST, "/players", {
+		"client_id": cid, "nickname": nickname.strip_edges().left(Session.NICKNAME_MAX),
+		"avatar": avatar, "bio": bio.strip_edges().left(Session.BIO_MAX).strip_edges(),
+	})
 	player_registered = r.ok
 	return r
 

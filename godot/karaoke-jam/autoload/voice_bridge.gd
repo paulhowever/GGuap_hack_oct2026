@@ -29,9 +29,12 @@ const MOCK_DIR := "res://mock/"
 const STUB_HOP := 512.0 / 48000.0
 const STUB_START_DELAY := 0.15
 const STUB_SUBMIT_DELAY := 0.5
-## Как в web/lib/calibration.js: первый щелчок через 0.6 с, 8 щелчков через 0.5 с.
+## Как в web/lib/calibration.js, режим «headphones» (ADR-020): первый щелчок через 0.6 с,
+## шаг 0.8 с; сначала CAL_LEAD_IN вводных (поймать ритм, не считаются), затем CAL_CLICKS измеряемых.
+const CAL_MODE := "headphones"
 const CAL_LEAD := 0.6
-const CAL_GAP := 0.5
+const CAL_GAP := 0.8
+const CAL_LEAD_IN := 2
 const CAL_CLICKS := 8
 const CAL_MIN_HITS := 5
 const STUB_CLIENT_ID := "00000000-0000-4000-8000-000000000000"
@@ -74,7 +77,6 @@ func _ready() -> void:
 		_emit_deferred.call_deferred("on_unlocked",
 			JSON.stringify({"sr": 48000, "noise_db": -62, "lag_ms": Session.lag_ms, "bt_suspect": false}))
 	Session.difficulty_changed.connect(func(_d: String) -> void: configure_from_session())
-	Session.music_volume_changed.connect(func(_v: float) -> void: configure_from_session())
 	Session.lag_changed.connect(func(_v: int) -> void:
 		if Session.is_calibrated or Session.lag_manual:
 			configure_from_session())
@@ -112,9 +114,10 @@ func configure(options: Dictionary) -> void:
 		_js.configure(JSON.stringify(options))
 
 
-## Отправить в JS сложность, громкость и (если известна) задержку из Session.
+## Отправить в JS сложность и (если известна) задержку из Session.
+## Громкость музыки меню не передаём: минус песни всегда играет на полной громкости.
 func configure_from_session() -> void:
-	var o := {"difficulty": Session.difficulty, "music_volume": Session.music_volume}
+	var o := {"difficulty": Session.difficulty}
 	if Session.is_calibrated or Session.lag_manual:
 		o["lag_ms"] = Session.lag_ms
 	configure(o)
@@ -154,9 +157,9 @@ func calibrate() -> void:
 		return
 	is_calibrating = true
 	if _js:
-		_js.calibrate()
+		_js.calibrate(CAL_MODE)
 	else:
-		get_tree().create_timer(CAL_LEAD + CAL_GAP * (CAL_CLICKS - 1) + 0.6).timeout.connect(func() -> void:
+		get_tree().create_timer(CAL_LEAD + CAL_GAP * (CAL_LEAD_IN + CAL_CLICKS - 1) + 0.9).timeout.connect(func() -> void:
 			_dispatch("on_calibrated", JSON.stringify({"lag_ms": Session.lag_ms, "hits": CAL_CLICKS})))
 
 
