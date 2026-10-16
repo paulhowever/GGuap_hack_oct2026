@@ -1,7 +1,9 @@
 import asyncio
 import logging
+import os
 import secrets
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
@@ -29,6 +31,23 @@ class NoCacheStaticFiles(StaticFiles):
         return response
 
 
+def load_secret(data_dir: Path) -> str:
+    path = data_dir / "secret.key"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.exists():
+        stored = path.read_text(encoding="utf-8").strip()
+        if stored:
+            log_event(log, "secret_loaded", path=str(path))
+            return stored
+        path.unlink()
+    secret = secrets.token_hex(32)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        f.write(secret)
+    log.warning("secret_generated", extra={"fields": {"hint": "set KARAOKE_SECRET", "path": str(path)}})
+    return secret
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     s: Settings = app.state.settings
@@ -41,9 +60,7 @@ async def lifespan(app: FastAPI):
     app.state.sessions = async_sessionmaker(app.state.db, expire_on_commit=False)
     app.state.songs = SongRepo(s.songs_dir)
     app.state.score_sem = asyncio.Semaphore(s.score_concurrency)
-    app.state.secret = s.secret or secrets.token_hex(32)
-    if not s.secret:
-        log.warning("secret_generated", extra={"fields": {"hint": "set KARAOKE_SECRET"}})
+    app.state.secret = s.secret or load_secret(s.data_dir)
     log_event(
         log,
         "startup",
@@ -73,7 +90,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(challenges.short)
     app.include_router(sessions.router)
     if settings.songs_dir.is_dir():
-        app.mount("/media", StaticFiles(directory=settings.songs_dir), name="media")
+        app.mount("/media", NoCacheStaticFiles(directory=settings.songs_dir), name="media")
     if settings.web_dir is not None and settings.web_dir.is_dir():
         app.mount("/", NoCacheStaticFiles(directory=settings.web_dir, html=True), name="web")
     return app

@@ -16,13 +16,13 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 from app.anticheat.integrity import completion_of, integrity_of
 from app.anticheat.session import session_flags
 from app.anticheat.signal import SignalCheck, check_signal, skipped_check
-from app.api.players import CLIENT_ID
 from app.board import display_names, placement
 from app.core.logging import log_event
 from app.duel import compare
 from app.f0.frames import FramesEngine
+from app.ids import CLIENT_ID_PATTERN, SONG_ID_PATTERN, Difficulty
 from app.scoring.core import score_take
-from app.store.db import add_row, get_challenge, get_take, save_take, set_result_json, sha_seen
+from app.store.db import add_row, get_challenge, get_take, set_result_json, sha_seen
 from app.store.models import Rival, Take
 
 router = APIRouter(prefix="/api/v1")
@@ -41,10 +41,10 @@ class Frame(BaseModel):
 class TakeMeta(BaseModel):
     model_config = ConfigDict(allow_inf_nan=False)
 
-    song_id: str = Field(pattern=r"^[a-z0-9_-]{1,64}$")
-    client_id: str | None = Field(default=None, pattern=CLIENT_ID)
+    song_id: str = Field(pattern=SONG_ID_PATTERN)
+    client_id: str | None = Field(default=None, pattern=CLIENT_ID_PATTERN)
     player: str = Field(min_length=1, max_length=24)
-    difficulty: Literal["easy", "normal", "hard"] = "normal"
+    difficulty: Difficulty = "normal"
     challenge_id: str | None = None
     session_token: str | None = Field(default=None, max_length=256)
     wav_t0: float
@@ -53,6 +53,26 @@ class TakeMeta(BaseModel):
     lag_source: Literal["calibrated", "config", "estimated", "auto"] | None = None
     frames: list[Frame] = Field(default_factory=list)
     client: dict[str, Any] = Field(default_factory=dict)
+
+
+WAV_FORMATS = frozenset({"WAV", "WAVEX"})
+MAX_CHANNELS = 2
+
+
+def probe_wav(raw: bytes, max_take_s: float) -> None:
+    try:
+        info = sf.info(io.BytesIO(raw))
+    except (sf.LibsndfileError, RuntimeError, ValueError):
+        raise HTTPException(status_code=422, detail="bad_audio") from None
+    if info.format not in WAV_FORMATS or info.channels > MAX_CHANNELS or info.samplerate < 1:
+        raise HTTPException(status_code=422, detail="bad_audio")
+    if info.frames / info.samplerate > max_take_s:
+        raise HTTPException(status_code=413, detail="take_too_long")
+
+
+def audio_sha(samples: np.ndarray, sr: int) -> str:
+    pcm = np.round(np.clip(samples, -1, 1) * 32767).astype("<i2")
+    return hashlib.sha256(sr.to_bytes(4, "little") + pcm.tobytes()).hexdigest()
 
 
 def decode_wav(raw: bytes) -> tuple[np.ndarray, int]:
@@ -129,6 +149,7 @@ async def post_take(
     if audio.size is not None and audio.size > int(state.settings.max_take_s * 48000 * 4) + 65536:
         raise HTTPException(status_code=413, detail="take_too_long")
     raw = await audio.read()
+    probe_wav(raw, state.settings.max_take_s)
     try:
         samples, sr = await asyncio.to_thread(decode_wav, raw)
     except (sf.LibsndfileError, RuntimeError, ValueError):
@@ -139,7 +160,7 @@ async def post_take(
         raise HTTPException(status_code=413, detail="take_too_long")
     if not np.isfinite(samples).all():
         raise HTTPException(status_code=422, detail="bad_audio")
-    sha = hashlib.sha256(raw).hexdigest()
+    sha = audio_sha(samples, sr)
     duration = float(ref["audio"]["duration"])
     covered_end = m.wav_t0 + samples.size / sr
     covered_s = max(0.0, min(duration, covered_end))
@@ -185,7 +206,7 @@ async def post_take(
         audio_sha256=sha,
         result_json=json.dumps(body, ensure_ascii=False),
     )
-    await save_take(state.sessions, take)
+    await add_row(state.sessions, take)
     if duel:
         await add_row(state.sessions, Rival(challenge_id=duel[0], take_id=take_id))
     if take.integrity_status == "ok":

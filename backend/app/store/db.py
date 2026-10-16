@@ -38,11 +38,6 @@ async def ping(engine: AsyncEngine) -> str:
         return str((await conn.execute(text("select sqlite_version()"))).scalar_one())
 
 
-async def save_take(sessions: async_sessionmaker, take: Take) -> None:
-    async with sessions() as session, session.begin():
-        session.add(take)
-
-
 async def upsert_player(sessions: async_sessionmaker, client_id: str, nickname: str, avatar: str) -> Player:
     stmt = insert(Player).values(client_id=client_id, nickname=nickname, avatar=avatar)
     stmt = stmt.on_conflict_do_update(
@@ -55,14 +50,17 @@ async def upsert_player(sessions: async_sessionmaker, client_id: str, nickname: 
         return await session.get(Player, client_id)
 
 
-async def get_player(sessions: async_sessionmaker, client_id: str) -> Player | None:
+async def get_row[Row: Base](sessions: async_sessionmaker, model: type[Row], pk: str) -> Row | None:
     async with sessions() as session:
-        return await session.get(Player, client_id)
+        return await session.get(model, pk)
+
+
+async def get_player(sessions: async_sessionmaker, client_id: str) -> Player | None:
+    return await get_row(sessions, Player, client_id)
 
 
 async def get_take(sessions: async_sessionmaker, take_id: str) -> Take | None:
-    async with sessions() as session:
-        return await session.get(Take, take_id)
+    return await get_row(sessions, Take, take_id)
 
 
 async def set_result_json(sessions: async_sessionmaker, take_id: str, result_json: str) -> None:
@@ -84,8 +82,7 @@ async def add_row(sessions: async_sessionmaker, row: Base) -> None:
 
 
 async def get_challenge(sessions: async_sessionmaker, challenge_id: str) -> Challenge | None:
-    async with sessions() as session:
-        return await session.get(Challenge, challenge_id)
+    return await get_row(sessions, Challenge, challenge_id)
 
 
 async def challenge_for_take(sessions: async_sessionmaker, take_id: str) -> Challenge | None:
