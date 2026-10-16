@@ -1,6 +1,8 @@
 import { median } from './num.js'
+import { HOP } from './timing.js'
 
 export const CLICKS = 8
+export const MIN_HITS = 5
 export const LEAD_IN = 2
 export const CLICK_GAP = 0.5
 export const CLICK_LEAD = 0.6
@@ -16,7 +18,7 @@ export function onsetThreshold(floor) {
   return Math.max(0.01, 4 * floor)
 }
 
-export function detectOnsets(frames, { sr, threshold, hop = 512, refractory = 0.25 }) {
+export function detectOnsets(frames, { sr, threshold, hop = HOP, refractory = 0.25 }) {
   const out = []
   let above = false
   let last = -Infinity
@@ -32,7 +34,7 @@ export function detectOnsets(frames, { sr, threshold, hop = 512, refractory = 0.
   return out
 }
 
-export function estimateLag(clicks, onsets, { early = 0.1, late = SPEAKERS.late, outlier = 0.06, minHits = 5, range = SPEAKERS.range } = {}) {
+export function estimateLag(clicks, onsets, { early = 0.1, late = SPEAKERS.late, outlier = 0.06, minHits = MIN_HITS, range = SPEAKERS.range } = {}) {
   const diffs = []
   for (const c of clicks) {
     const o = onsets.find(t => t >= c - early && t < c + late)

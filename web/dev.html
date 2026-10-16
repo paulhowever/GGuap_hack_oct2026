@@ -71,21 +71,21 @@
 <script type="module">
 import { hzToMidi, foldToNote, isHit } from './lib/pitch.js'
 import { parseWavHeader } from './lib/wav.js'
+import { CLICKS, MIN_HITS } from './lib/calibration.js'
+import { getJson } from './lib/http.js'
 
 const voice = window.voice
 const $ = id => document.getElementById(id)
-const CALIB_MIN_HITS = 5
-const CALIB_CLICKS = 8
 const CALIB_MODES = {
   speakers: {
     label: 'динамики',
     before: 'Сними наушники, сделай погромче и посиди тихо — 8 щелчков.',
-    failed: hits => `Калибровка (динамики) не удалась: микрофон не услышал щелчки (${hits} из ${CALIB_CLICKS}). Сними наушники — калибровка идёт через динамики, сделай громче, проверь, что звук не идёт через Bluetooth, и выключи подавление шума и эха в настройках микрофона Windows/macOS. В наушниках выбери «Калибровка: наушники».`
+    failed: hits => `Калибровка (динамики) не удалась: микрофон не услышал щелчки (${hits} из ${CLICKS}). Сними наушники — калибровка идёт через динамики, сделай громче, проверь, что звук не идёт через Bluetooth, и выключи подавление шума и эха в настройках микрофона Windows/macOS. В наушниках выбери «Калибровка: наушники».`
   },
   headphones: {
     label: 'наушники',
     before: 'Надень наушники. Услышишь 10 щелчков: на первых двух поймай ритм, дальше хлопай в такт тому, что слышишь.',
-    failed: hits => `Калибровка (наушники) не удалась: микрофон не услышал хлопки (${hits} из ${CALIB_CLICKS}). Хлопай громче и ровно в такт щелчкам, держи микрофон ближе и выключи подавление шума в настройках микрофона Windows/macOS.`
+    failed: hits => `Калибровка (наушники) не удалась: микрофон не услышал хлопки (${hits} из ${CLICKS}). Хлопай громче и ровно в такт щелчкам, держи микрофон ближе и выключи подавление шума в настройках микрофона Windows/macOS.`
   }
 }
 const UNLOCK_ERRORS = ['insecure_context', 'mic_denied', 'mic_not_found', 'audio_locked', 'worklet_failed']
@@ -106,11 +106,11 @@ function log(name, data) {
 function showCalibration(data) {
   const hint = $('calibHint')
   const mode = CALIB_MODES[data.mode] || CALIB_MODES.speakers
-  const failed = data.hits < CALIB_MIN_HITS
+  const failed = data.hits < MIN_HITS
   hint.classList.toggle('fail', failed)
   hint.textContent = failed
     ? mode.failed(data.hits)
-    : `Калибровка готова (${mode.label}): задержка ${data.lag_ms} мс (${data.hits} из ${CALIB_CLICKS} щелчков).`
+    : `Калибровка готова (${mode.label}): задержка ${data.lag_ms} мс (${data.hits} из ${CLICKS} щелчков).`
 }
 
 function calibrate(mode) {
@@ -203,11 +203,8 @@ $('unlock').onclick = () => {
 }
 
 async function loadSongs() {
-  let list = []
-  try {
-    const r = await fetch('/api/v1/songs')
-    if (r.ok) list = await r.json()
-  } catch {}
+  const got = await getJson(window, `${window.VOICE_CONFIG?.api || ''}/api/v1/songs`)
+  const list = Array.isArray(got) ? got : []
   if (!list.some(s => s.id === 'demo')) list.push({ id: 'demo', title: 'demo' })
   for (const s of list) $('song').add(new Option(`${s.title} (${s.id})`, s.id))
 }
@@ -277,7 +274,7 @@ $('submit').onclick = () => {
   voice.submit($('player').value, new URLSearchParams(location.search).get('challenge') || '')
 }
 $('downloadWav').onclick = () => downloadTake('take.wav', 'audio/wav', take => take.wav)
-$('downloadMeta').onclick = () => downloadTake('take.meta.json', 'application/json', take => JSON.stringify(take.meta))
+$('downloadMeta').onclick = () => downloadTake('take.meta.json', 'application/json', take => JSON.stringify({ ...take.meta, client_id: null, session_token: null }))
 
 const lane = $('lane')
 const g = lane.getContext('2d')
