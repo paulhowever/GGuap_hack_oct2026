@@ -1,0 +1,10 @@
+{"items":[
+ {"rank":1,"player":"Соловей","avatar":null,"total":9710,"grade":"S","take_id":"tk_m1","at":"2026-10-15T18:02:11+00:00","attempts":4,"me":false},
+ {"rank":2,"player":"Мок","avatar":null,"total":9420,"grade":"S","take_id":"tk_demo","at":"2026-10-16T09:12:40+00:00","attempts":2,"me":true},
+ {"rank":3,"player":"Карина","avatar":null,"total":8870,"grade":"A","take_id":"tk_m3","at":"2026-10-15T20:41:05+00:00","attempts":3,"me":false},
+ {"rank":4,"player":"Дима_бас","avatar":null,"total":8125,"grade":"A","take_id":"tk_m4","at":"2026-10-14T12:00:00+00:00","attempts":1,"me":false},
+ {"rank":5,"player":"Лена","avatar":null,"total":7340,"grade":"B","take_id":"tk_m5","at":"2026-10-14T13:30:00+00:00","attempts":5,"me":false},
+ {"rank":6,"player":"Гость","avatar":null,"total":6610,"grade":"B","take_id":"tk_m6","at":"2026-10-13T16:20:00+00:00","attempts":1,"me":false},
+ {"rank":7,"player":"Тихоня","avatar":null,"total":5200,"grade":"C","take_id":"tk_m7","at":"2026-10-13T17:45:00+00:00","attempts":2,"me":false},
+ {"rank":8,"player":"Вокалист_с_очень_длинным_ником","avatar":null,"total":3980,"grade":"D","take_id":"tk_m8","at":"2026-10-12T10:10:00+00:00","attempts":1,"me":false}
+]}

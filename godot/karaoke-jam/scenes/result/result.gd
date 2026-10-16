@@ -30,16 +30,104 @@ const GRADE_COLORS := {
 @onready var _board: Label = %BoardLabel
 @onready var _warn: Label = %WarnLabel
 
+@onready var _player: Control = %Player
+@onready var _play: Button = %PlayButton
+@onready var _seek: HSlider = %Seek
+@onready var _time: Label = %TimeLabel
+@onready var _player_hint: Label = %PlayerHint
+
 var _leaving: bool = false
+## Дубль этого результата ещё в памяти страницы — можно послушать.
+var _can_review: bool = false
+var _review_state: String = "idle"
+var _seeking: bool = false
 
 
 func _ready() -> void:
 	%AgainButton.pressed.connect(_go.bind(GAME_SCENE))
 	%SelectButton.pressed.connect(_go.bind(SELECT_SCENE))
 	%AgainButton.grab_focus.call_deferred()
+	if Session.result_review:
+		var song := str(Session.song_info.get("title", Session.last_result.get("song_id", "")))
+		%Title.text = "Мой последний результат" + (" — %s" % song if not song.is_empty() else "")
+		%AgainButton.text = "Спеть эту песню"
 	MenuMusic.start()   # музыка меню задаёт бит для ударов ранга
 	create_tween().tween_property(%Fade, "modulate:a", 0.0, 0.35)
 	_fill(Session.last_result)
+	_setup_review()
+
+
+func _exit_tree() -> void:
+	if _can_review:
+		VoiceBridge.review_stop()
+		if _review_state == "playing":
+			MenuMusic.duck(false)
+
+
+# --- Прослушивание своего дубля (голос + минус) ----------------------------------
+
+func _setup_review() -> void:
+	var st := VoiceBridge.review_state()
+	var take_id = Session.last_result.get("take_id")
+	# дубль в JS — от последнего пения; сверяем, что он от этого же результата
+	_can_review = bool(st.get("available", false)) and (st.get("take_id") == null or take_id == null
+		or str(st.get("take_id")) == str(take_id))
+	_player.visible = true
+	_player_hint.visible = not _can_review
+	if not _can_review:
+		_player.modulate.a = 0.45
+		_play.disabled = true
+		_seek.editable = false
+		_player_hint.text = "Запись хранится только до перезагрузки страницы — спойте ещё раз, чтобы послушать себя."
+		return
+	_seek.max_value = maxf(float(st.get("duration", 0.0)), 0.01)
+	_play.pressed.connect(_toggle_play)
+	_seek.drag_started.connect(func() -> void: _seeking = true)
+	_seek.drag_ended.connect(func(_changed: bool) -> void:
+		_seeking = false
+		VoiceBridge.review_seek(_seek.value))
+	# клик по полосе без перетаскивания тоже перематывает
+	_seek.value_changed.connect(func(v: float) -> void:
+		if not _seeking and absf(v - float(VoiceBridge.review_state().get("t", 0.0))) > 0.25:
+			VoiceBridge.review_seek(v))
+	_update_player(st)
+
+
+func _toggle_play() -> void:
+	if _review_state == "playing":
+		VoiceBridge.review_pause()
+		MenuMusic.duck(false)
+		_grade_beat.enabled = true
+	else:
+		MenuMusic.duck(true)   # музыка меню не мешает слушать
+		_grade_beat.enabled = false
+		VoiceBridge.review_play()
+	_update_player(VoiceBridge.review_state())
+
+
+func _process(_delta: float) -> void:
+	if _can_review:
+		_update_player(VoiceBridge.review_state())
+
+
+func _update_player(st: Dictionary) -> void:
+	var t := float(st.get("t", 0.0))
+	var dur := float(st.get("duration", 0.0))
+	var state := str(st.get("state", "idle"))
+	if state != _review_state:
+		if _review_state == "playing" and state == "ended":
+			MenuMusic.duck(false)
+		_review_state = state
+		_play.text = "❚❚  Пауза" if state == "playing" else "▶  Послушать"
+	if not _seeking:
+		_seek.set_value_no_signal(t)
+	_time.text = "%s / %s" % [_fmt(_seek.value if _seeking else t), _fmt(dur)]
+
+
+func _fmt(sec: float) -> String:
+	var s := maxi(0, int(sec))
+	@warning_ignore("integer_division")
+	return "%d:%02d" % [s / 60, s % 60]
 
 
 func _fill(r: Dictionary) -> void:
@@ -133,7 +221,7 @@ func _pop_grade() -> void:
 	tw.tween_property(_grade, "modulate:a", 1.0, 0.2)
 	tw.tween_property(_grade, "scale", Vector2.ONE, 0.35) \
 		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	tw.chain().tween_callback(func() -> void: _grade_beat.enabled = true)
+	tw.chain().tween_callback(func() -> void: _grade_beat.enabled = _review_state != "playing")
 
 
 func _go(scene: String) -> void:

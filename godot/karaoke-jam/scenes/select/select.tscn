@@ -17,30 +17,33 @@ script = ExtResource("1_sel")
 [node name="StudioBackground" parent="." unique_id=379877059 instance=ExtResource("2_bg")]
 layout_mode = 1
 
-[node name="Center" type="CenterContainer" parent="." unique_id=727913362]
+[node name="Stage" type="Control" parent="." unique_id=727913362]
+unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+mouse_filter = 2
 
-[node name="Card" type="PanelContainer" parent="Center" unique_id=1473557801]
+[node name="SongCard" type="PanelContainer" parent="Stage" unique_id=1473557801]
+unique_name_in_owner = true
 custom_minimum_size = Vector2(960, 0)
-layout_mode = 2
+layout_mode = 0
 theme_type_variation = &"CardPanel"
 
-[node name="VBox" type="VBoxContainer" parent="Center/Card" unique_id=763377724]
+[node name="VBox" type="VBoxContainer" parent="Stage/SongCard" unique_id=763377724]
 layout_mode = 2
 theme_override_constants/separation = 28
 
-[node name="Title" type="Label" parent="Center/Card/VBox" unique_id=600588292]
+[node name="Title" type="Label" parent="Stage/SongCard/VBox" unique_id=600588292]
 layout_mode = 2
 theme_type_variation = &"HeadingLabel"
 text = "Выбор песни"
 horizontal_alignment = 1
 
-[node name="Status" type="Label" parent="Center/Card/VBox" unique_id=823016624]
+[node name="Status" type="Label" parent="Stage/SongCard/VBox" unique_id=823016624]
 unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"HintLabel"
@@ -49,66 +52,129 @@ text = "Загружаем песни…"
 horizontal_alignment = 1
 autowrap_mode = 3
 
-[node name="Scroll" type="ScrollContainer" parent="Center/Card/VBox" unique_id=1610000001]
-custom_minimum_size = Vector2(0, 380)
+[node name="Scroll" type="ScrollContainer" parent="Stage/SongCard/VBox" unique_id=1610000001]
+custom_minimum_size = Vector2(0, 460)
 layout_mode = 2
 horizontal_scroll_mode = 0
 
-[node name="SongList" type="VBoxContainer" parent="Center/Card/VBox/Scroll" unique_id=1610000002]
+[node name="SongList" type="VBoxContainer" parent="Stage/SongCard/VBox/Scroll" unique_id=1610000002]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 12
 
-[node name="DiffRow" type="HBoxContainer" parent="Center/Card/VBox" unique_id=1610000003]
-layout_mode = 2
-theme_override_constants/separation = 16
-alignment = 1
-
-[node name="DiffCaption" type="Label" parent="Center/Card/VBox/DiffRow" unique_id=1610000004]
+[node name="PickHint" type="Label" parent="Stage/SongCard/VBox" unique_id=1610000010]
+unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"HintLabel"
-text = "Сложность"
+theme_override_font_sizes/font_size = 22
+text = "Выберите песню, чтобы увидеть таблицу лидеров"
+horizontal_alignment = 1
 
-[node name="EasyButton" type="Button" parent="Center/Card/VBox/DiffRow" unique_id=1610000005]
-unique_name_in_owner = true
-layout_mode = 2
-theme_type_variation = &"DiffButton"
-toggle_mode = true
-text = "Легко"
-
-[node name="NormalButton" type="Button" parent="Center/Card/VBox/DiffRow" unique_id=1610000006]
-unique_name_in_owner = true
-layout_mode = 2
-theme_type_variation = &"DiffButton"
-toggle_mode = true
-text = "Нормально"
-
-[node name="HardButton" type="Button" parent="Center/Card/VBox/DiffRow" unique_id=1610000007]
-unique_name_in_owner = true
-layout_mode = 2
-theme_type_variation = &"DiffButton"
-toggle_mode = true
-text = "Сложно"
-
-[node name="Buttons" type="HBoxContainer" parent="Center/Card/VBox" unique_id=1610000008]
+[node name="Buttons" type="HBoxContainer" parent="Stage/SongCard/VBox" unique_id=1610000008]
 layout_mode = 2
 theme_override_constants/separation = 24
 alignment = 1
 
-[node name="BackButton" type="Button" parent="Center/Card/VBox/Buttons" unique_id=1125648411]
+[node name="BackButton" type="Button" parent="Stage/SongCard/VBox/Buttons" unique_id=1125648411]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 4
 theme_type_variation = &"GhostButton"
 text = "← Назад"
 
-[node name="RetryButton" type="Button" parent="Center/Card/VBox/Buttons" unique_id=1610000009]
+[node name="LastResultButton" type="Button" parent="Stage/SongCard/VBox/Buttons" unique_id=1610000011]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_type_variation = &"GhostButton"
+text = "Мой последний результат"
+
+[node name="RetryButton" type="Button" parent="Stage/SongCard/VBox/Buttons" unique_id=1610000009]
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
 theme_type_variation = &"GhostButton"
 text = "Обновить"
+
+[node name="BoardCard" type="PanelContainer" parent="Stage" unique_id=1610000012]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(780, 0)
+layout_mode = 0
+theme_type_variation = &"CardPanel"
+
+[node name="VBox" type="VBoxContainer" parent="Stage/BoardCard" unique_id=1610000013]
+layout_mode = 2
+theme_override_constants/separation = 18
+
+[node name="BoardTitle" type="Label" parent="Stage/BoardCard/VBox" unique_id=1610000014]
+layout_mode = 2
+theme_type_variation = &"HeadingLabel"
+text = "Таблица лидеров"
+horizontal_alignment = 1
+
+[node name="BoardSong" type="Label" parent="Stage/BoardCard/VBox" unique_id=1610000015]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"AccentLabel"
+horizontal_alignment = 1
+text_overrun_behavior = 3
+
+[node name="DiffRow" type="HBoxContainer" parent="Stage/BoardCard/VBox" unique_id=1610000003]
+layout_mode = 2
+theme_override_constants/separation = 16
+alignment = 1
+
+[node name="DiffCaption" type="Label" parent="Stage/BoardCard/VBox/DiffRow" unique_id=1610000004]
+layout_mode = 2
+theme_type_variation = &"HintLabel"
+text = "Сложность"
+
+[node name="EasyButton" type="Button" parent="Stage/BoardCard/VBox/DiffRow" unique_id=1610000005]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"DiffButton"
+toggle_mode = true
+text = "Легко"
+
+[node name="NormalButton" type="Button" parent="Stage/BoardCard/VBox/DiffRow" unique_id=1610000006]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"DiffButton"
+toggle_mode = true
+text = "Нормально"
+
+[node name="HardButton" type="Button" parent="Stage/BoardCard/VBox/DiffRow" unique_id=1610000007]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"DiffButton"
+toggle_mode = true
+text = "Сложно"
+
+[node name="BoardHeader" type="HBoxContainer" parent="Stage/BoardCard/VBox" unique_id=1610000016]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="BoardScroll" type="ScrollContainer" parent="Stage/BoardCard/VBox" unique_id=1610000017]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 420)
+layout_mode = 2
+horizontal_scroll_mode = 0
+
+[node name="BoardList" type="VBoxContainer" parent="Stage/BoardCard/VBox/BoardScroll" unique_id=1610000018]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 6
+
+[node name="StartButton" type="Button" parent="Stage/BoardCard/VBox" unique_id=1610000019]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 4
+theme_type_variation = &"PrimaryButton"
+text = "Начать"
 
 [node name="Fade" type="ColorRect" parent="." unique_id=93252359]
 unique_name_in_owner = true

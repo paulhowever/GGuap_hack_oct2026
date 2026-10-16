@@ -29,6 +29,8 @@ const RESUME_TIMEOUT_MS = 1000
 const SESSION_TIMEOUT_MS = 2000
 const AUTO_OUTLIER_MS = 150
 const ESTIMATED_SLACK_S = 0.15
+const REVIEW_LEAD = 0.05
+const VOICE_GAIN = 1.4
 
 export function createVoice(cfg = {}, env = globalThis) {
   const bus = createBus({ sticky: ['on_unlocked'] })
@@ -43,6 +45,7 @@ export function createVoice(cfg = {}, env = globalThis) {
     ref: null, buffer: null, state: 'idle', t0: 0, loadSeq: 0, judge: null,
     rec: null, flushRec: null, takeFrames: [], take: null, takeJob: null, recDone: null,
     tokenJob: null, identity: null, tokenState: 'none',
+    review: null, reviewNodes: [],
     listeners: new Set()
   }
 
@@ -296,6 +299,7 @@ export function createVoice(cfg = {}, env = globalThis) {
   function start() {
     if (!s.buffer || !s.tap) return fail(ERR.LOCKED, 'start before load_song')
     if (s.state === 'playing') return true
+    reviewHalt()
     const ctx = s.ctx
     if (ctx.state !== 'running') ctx.resume().catch(() => {})
     const src = ctx.createBufferSource()
@@ -358,6 +362,8 @@ export function createVoice(cfg = {}, env = globalThis) {
     const { data, rate, resampler } = await resample16k(pcm, rec.sr)
     return {
       ...info,
+      pcm,
+      pcm_sr: rec.sr,
       wav: encodeWav(data, rate),
       wav_sr: rate,
       wav_t0: rec.firstFrame === null ? 0 : rec.firstFrame / rec.sr - info.t0,
@@ -388,12 +394,16 @@ export function createVoice(cfg = {}, env = globalThis) {
     const tokenJob = s.tokenJob
     const { songId, clientId: takeClientId, difficulty } = s.identity
     const info = { t0: s.t0, frames: s.takeFrames, lag_ms: s.lag, lag_source: s.lagSource, difficulty, song_id: songId, client_id: takeClientId }
+    const minus = s.buffer
     refreshLag()
     const job = flushed
       .then(() => buildTake(rec, info))
       .then(async take => {
         const t = { ...take, session_token: await tokenJob }
-        if (s.takeJob === job) s.take = t
+        if (s.takeJob === job) {
+          s.take = t
+          setReview(t, minus)
+        }
         return t
       })
       .catch(e => {
@@ -429,6 +439,7 @@ export function createVoice(cfg = {}, env = globalThis) {
       const meta = metaFor(take, player, challengeId)
       take.token_spent = true
       const result = await postTake({ env, url: url('/api/v1/takes'), wav: take.wav, meta, timeoutMs: UPLOAD_TIMEOUT_MS })
+      if (s.review && s.review.pcm === take.pcm) s.review.takeId = result?.take_id ?? null
       autoLag(result?.latency)
       bus.emit('on_result', result)
       return true
@@ -465,6 +476,125 @@ export function createVoice(cfg = {}, env = globalThis) {
     return r.lag_ms !== null
   }
 
+  // --- Прослушивание последнего дубля: голос + минус, пауза и перемотка ---
+  // Голос записан с задержкой lag относительно минуса, поэтому сдвигаем его на lag раньше.
+
+  function setReview(take, minus) {
+    reviewHalt()
+    if (!take?.pcm?.length) return
+    s.review = {
+      pcm: take.pcm, sr: take.pcm_sr, t0: take.wav_t0 - take.lag_ms / 1000, buffer: minus,
+      songId: take.song_id, takeId: null, voice: null, pos: 0, playing: false, startCtx: 0, startPos: 0
+    }
+  }
+
+  function reviewDuration(r) {
+    return Math.max(r.buffer?.duration ?? 0, r.t0 + r.pcm.length / r.sr)
+  }
+
+  function reviewStopNodes() {
+    for (const n of s.reviewNodes) {
+      try {
+        n.stop?.()
+      } catch {}
+      try {
+        n.disconnect?.()
+      } catch {}
+    }
+    s.reviewNodes = []
+  }
+
+  function reviewPos(r) {
+    if (!r.playing) return r.pos
+    return clamp(r.startPos + Math.max(0, s.ctx.currentTime - r.startCtx), 0, reviewDuration(r))
+  }
+
+  function reviewHalt() {
+    const r = s.review
+    if (r?.playing) {
+      r.pos = reviewPos(r)
+      r.playing = false
+    }
+    reviewStopNodes()
+  }
+
+  function review_play(from) {
+    const r = s.review
+    if (!r) return fail(ERR.LOCKED, 'no take to review')
+    if (!s.ctx || s.state === 'playing') return fail(ERR.LOCKED, 'review needs unlock and no song playing')
+    const ctx = s.ctx
+    if (ctx.state !== 'running') ctx.resume().catch(() => {})
+    const dur = reviewDuration(r)
+    const at = Number(from)
+    let pos = clamp(Number.isFinite(at) && at >= 0 ? at : reviewPos(r), 0, dur)
+    if (pos >= dur - 0.05) pos = 0
+    reviewStopNodes()
+    if (!r.voice) {
+      r.voice = ctx.createBuffer(1, r.pcm.length, r.sr)
+      r.voice.copyToChannel(r.pcm, 0)
+    }
+    const when = ctx.currentTime + REVIEW_LEAD
+    const nodes = []
+    if (r.buffer && pos < r.buffer.duration) {
+      const m = ctx.createBufferSource()
+      m.buffer = r.buffer
+      m.connect(s.music)
+      m.start(when, pos)
+      nodes.push(m)
+    }
+    const vOff = pos - r.t0
+    if (vOff < r.pcm.length / r.sr) {
+      const v = ctx.createBufferSource()
+      v.buffer = r.voice
+      const g = ctx.createGain()
+      g.gain.value = VOICE_GAIN
+      v.connect(g)
+      g.connect(ctx.destination)
+      if (vOff >= 0) v.start(when, vOff)
+      else v.start(when - vOff, 0)
+      nodes.push(v, g)
+    }
+    s.reviewNodes = nodes
+    r.startCtx = when
+    r.startPos = pos
+    r.pos = pos
+    r.playing = true
+    return true
+  }
+
+  function review_pause() {
+    reviewHalt()
+    return true
+  }
+
+  function review_seek(t) {
+    const r = s.review
+    if (!r) return false
+    const pos = clamp(Number(t) || 0, 0, reviewDuration(r))
+    if (r.playing) return review_play(pos)
+    r.pos = pos
+    return true
+  }
+
+  function review_stop() {
+    reviewHalt()
+    if (s.review) s.review.pos = 0
+    return true
+  }
+
+  function review_state() {
+    const r = s.review
+    if (!r) return JSON.stringify({ available: false, state: 'idle', t: 0, duration: 0, song_id: null, take_id: null })
+    const dur = reviewDuration(r)
+    if (r.playing && reviewPos(r) >= dur) {
+      reviewHalt()
+      r.pos = dur
+    }
+    const t = reviewPos(r)
+    const state = r.playing ? 'playing' : t >= dur ? 'ended' : 'paused'
+    return JSON.stringify({ available: true, state, t: round(t, 3), duration: round(dur, 3), song_id: r.songId, take_id: r.takeId })
+  }
+
   function poll() {
     return JSON.stringify({ t_now: s.state === 'idle' ? 0 : round(songNow(), 3), state: s.state, level: round(s.level, 4), frames: queue.drain() })
   }
@@ -480,6 +610,11 @@ export function createVoice(cfg = {}, env = globalThis) {
     poll,
     submit,
     calibrate,
+    review_play,
+    review_pause,
+    review_seek,
+    review_stop,
+    review_state,
     client_id() {
       return clientId(env)
     },

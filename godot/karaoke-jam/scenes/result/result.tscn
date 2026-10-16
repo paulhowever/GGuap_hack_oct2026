@@ -41,6 +41,7 @@ layout_mode = 2
 theme_override_constants/separation = 18
 
 [node name="Title" type="Label" parent="Center/Card/VBox" unique_id=1631434778]
+unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"HeadingLabel"
 text = "Результат"
@@ -128,7 +129,7 @@ horizontal_alignment = 1
 autowrap_mode = 3
 
 [node name="Scroll" type="ScrollContainer" parent="Center/Card/VBox" unique_id=550773529]
-custom_minimum_size = Vector2(0, 220)
+custom_minimum_size = Vector2(0, 160)
 layout_mode = 2
 horizontal_scroll_mode = 0
 
@@ -137,6 +138,45 @@ unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 10
+
+[node name="Player" type="HBoxContainer" parent="Center/Card/VBox" unique_id=1700000001]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 20
+alignment = 1
+
+[node name="PlayButton" type="Button" parent="Center/Card/VBox/Player" unique_id=1700000002]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(240, 0)
+layout_mode = 2
+theme_type_variation = &"GhostButton"
+text = "▶  Послушать"
+
+[node name="Seek" type="HSlider" parent="Center/Card/VBox/Player" unique_id=1700000003]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+max_value = 1.0
+step = 0.01
+
+[node name="TimeLabel" type="Label" parent="Center/Card/VBox/Player" unique_id=1700000004]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(150, 0)
+layout_mode = 2
+theme_type_variation = &"HintLabel"
+text = "0:00 / 0:00"
+horizontal_alignment = 2
+
+[node name="PlayerHint" type="Label" parent="Center/Card/VBox" unique_id=1700000005]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_type_variation = &"HintLabel"
+theme_override_font_sizes/font_size = 20
+horizontal_alignment = 1
+autowrap_mode = 3
 
 [node name="Buttons" type="HBoxContainer" parent="Center/Card/VBox" unique_id=485807034]
 layout_mode = 2

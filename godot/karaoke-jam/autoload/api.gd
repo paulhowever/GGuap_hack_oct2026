@@ -10,6 +10,8 @@ const PREFIX := "/api/v1"
 const TIMEOUT_SEC := 10.0
 const MOCK_TIMEOUT_SEC := 2.0
 const MOCK_SONG := "res://mock/demo.reference.json"
+const MOCK_LEADERBOARD := "res://mock/leaderboard.json"
+const LEADERBOARD_LIMIT := 20
 
 var base_url: String = DESKTOP_BASE
 var player_registered: bool = false
@@ -48,6 +50,30 @@ func get_songs() -> Dictionary:
 
 func get_song(id: String) -> Dictionary:
 	return await _request(HTTPClient.METHOD_GET, "/songs/%s" % id.uri_encode())
+
+
+## GET /leaderboard/{song_id}?difficulty=&limit=&client_id= → data: Array строк
+## {rank, player, avatar, total, grade, take_id, at, attempts, me}.
+## client_id передаём, чтобы сервер отметил строку игрока (me: true); ответ — data без обёртки items.
+## В моке без бэкенда — res://mock/leaderboard.json (mock: true).
+func get_leaderboard(song_id: String, difficulty: String, limit: int = LEADERBOARD_LIMIT) -> Dictionary:
+	var query := "?difficulty=%s&limit=%d" % [difficulty.uri_encode(), clampi(limit, 1, 100)]
+	var cid := VoiceBridge.client_id()
+	if not cid.is_empty() and cid != VoiceBridge.STUB_CLIENT_ID:
+		query += "&client_id=%s" % cid.uri_encode()
+	var timeout := MOCK_TIMEOUT_SEC if VoiceBridge.is_mock() else TIMEOUT_SEC
+	var r := await _request(HTTPClient.METHOD_GET, "/leaderboard/%s%s" % [song_id.uri_encode(), query], null, timeout)
+	if r.ok and r.data is Dictionary and r.data.get("items") is Array:
+		r.data = r.data.items
+		return r
+	if VoiceBridge.is_mock() and FileAccess.file_exists(MOCK_LEADERBOARD):
+		var m = JSON.parse_string(FileAccess.get_file_as_string(MOCK_LEADERBOARD))
+		if m is Dictionary and m.get("items") is Array:
+			return {"ok": true, "status": 200, "data": (m.items as Array).slice(0, limit), "error": "", "mock": true}
+	if r.ok:
+		r.ok = false
+		r.error = "bad_payload"
+	return r
 
 
 ## POST /players — регистрирует/обновляет ник и аватар (JSON-объект ≤ 4 КБ,

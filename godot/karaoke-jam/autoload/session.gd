@@ -12,6 +12,7 @@ signal difficulty_changed(difficulty: String)
 signal outfit_changed(slot: StringName, item_id: StringName)
 
 const SAVE_PATH := "user://settings.cfg"
+const LAST_RESULT_PATH := "user://last_result.json"
 const DEFAULT_NICKNAME := "Гость"
 const LAG_MIN_MS := -100
 const LAG_MAX_MS := 500
@@ -81,10 +82,52 @@ var song_info: Dictionary = {}
 var challenge_id: String = ""
 ## Последний результат on_result (контракт TakeResult).
 var last_result: Dictionary = {}
+## Экран результата открыт кнопкой «Мой последний результат» (просмотр, а не сразу после пения).
+var result_review: bool = false
+
+## Мой последний результат, переживает перезапуск (user://last_result.json).
+## {result: TakeResult, song_info: элемент /songs}. Пусто — ещё ни разу не пел.
+var saved_result: Dictionary = {}
 
 
 func _ready() -> void:
 	load_settings()
+	_load_saved_result()
+
+
+## Результат только что спетого дубля: показываем и сохраняем на диск как «последний».
+func set_last_result(result: Dictionary) -> void:
+	last_result = result
+	result_review = false
+	saved_result = {"result": result, "song_info": song_info}
+	var f := FileAccess.open(LAST_RESULT_PATH, FileAccess.WRITE)
+	if f == null:
+		push_warning("Session: не удалось сохранить результат (%s)" % error_string(FileAccess.get_open_error()))
+		return
+	f.store_string(JSON.stringify(saved_result))
+
+
+func has_saved_result() -> bool:
+	return saved_result.get("result") is Dictionary and not (saved_result.result as Dictionary).is_empty()
+
+
+## Открыть сохранённый результат на экране результата (режим просмотра).
+func open_saved_result() -> bool:
+	if not has_saved_result():
+		return false
+	last_result = saved_result.result
+	result_review = true
+	var info = saved_result.get("song_info")
+	song_info = info if info is Dictionary else {}
+	song_id = str(last_result.get("song_id", song_info.get("id", "")))
+	return true
+
+
+func _load_saved_result() -> void:
+	if not FileAccess.file_exists(LAST_RESULT_PATH):
+		return
+	var data = JSON.parse_string(FileAccess.get_file_as_string(LAST_RESULT_PATH))
+	saved_result = data if data is Dictionary else {}
 
 
 func is_first_run() -> bool:
@@ -172,6 +215,8 @@ func save_settings() -> void:
 ## Сброс к «первому запуску» — удобно для отладки.
 func reset_settings() -> void:
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(SAVE_PATH))
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(LAST_RESULT_PATH))
+	saved_result = {}
 	first_run_done = false
 	is_calibrated = false
 	lag_manual = false

@@ -158,6 +158,62 @@ func client_id() -> String:
 	return "" if v == null else str(v)
 
 
+# --- Прослушивание последнего дубля (голос + минус) ---------------------------
+# Дубль живёт только в памяти страницы: после перезагрузки его нет (available=false).
+
+## Играть с позиции from_sec (< 0 — продолжить с текущей, после конца — с начала).
+func review_play(from_sec: float = -1.0) -> void:
+	if _js:
+		_js.review_play(from_sec)
+	else:
+		_stub_review_play(from_sec)
+
+
+func review_pause() -> void:
+	if _js:
+		_js.review_pause()
+	elif _stub_review_is_playing():
+		_stub.review.pos = _stub_review_pos()
+		_stub.review.playing = false
+
+
+func review_seek(t_sec: float) -> void:
+	if _js:
+		_js.review_seek(t_sec)
+	elif _stub.has("review"):
+		var r: Dictionary = _stub.review
+		r.pos = clampf(t_sec, 0.0, float(r.dur))
+		r.start_ms = Time.get_ticks_msec()
+		r.start_pos = r.pos
+
+
+func review_stop() -> void:
+	if _js:
+		_js.review_stop()
+	elif _stub.has("review"):
+		_stub.review.playing = false
+		_stub.review.pos = 0.0
+
+
+## {available, state: idle|playing|paused|ended, t, duration, song_id, take_id}
+func review_state() -> Dictionary:
+	var empty := {"available": false, "state": "idle", "t": 0.0, "duration": 0.0, "song_id": null, "take_id": null}
+	if _js:
+		var raw = _js.review_state()
+		var p = JSON.parse_string(str(raw)) if raw != null else null
+		return p if p is Dictionary else empty
+	if not _stub.has("review"):
+		return empty
+	var r: Dictionary = _stub.review
+	var t := _stub_review_pos()
+	if bool(r.playing) and t >= float(r.dur):
+		r.playing = false
+		r.pos = float(r.dur)
+	var st := "playing" if bool(r.playing) else ("ended" if t >= float(r.dur) else "paused")
+	return {"available": true, "state": st, "t": t, "duration": float(r.dur),
+		"song_id": r.song_id, "take_id": r.take_id}
+
+
 # --- Опрос ------------------------------------------------------------------
 
 func _process(_delta: float) -> void:
@@ -323,4 +379,33 @@ func _stub_submit(player: String) -> void:
 	if not player.is_empty():
 		r["player"] = player
 	r["client_id"] = STUB_CLIENT_ID
+	# заглушка «записала» дубль: прослушивание без звука, только таймлайн
+	_stub["review"] = {"dur": float(_stub.ref.get("audio", {}).get("duration", 10.0)),
+		"song_id": str(_stub.ref.get("id", "demo")), "take_id": r.get("take_id"),
+		"pos": 0.0, "playing": false, "start_ms": 0, "start_pos": 0.0}
 	_dispatch("on_result", JSON.stringify(r))
+
+
+func _stub_review_is_playing() -> bool:
+	return _stub.has("review") and bool(_stub.review.playing)
+
+
+func _stub_review_pos() -> float:
+	var r: Dictionary = _stub.review
+	if not bool(r.playing):
+		return float(r.pos)
+	return minf(float(r.dur), float(r.start_pos) + (Time.get_ticks_msec() - int(r.start_ms)) / 1000.0)
+
+
+func _stub_review_play(from_sec: float) -> void:
+	if not _stub.has("review") or _stub.state == "playing":
+		return
+	var r: Dictionary = _stub.review
+	var pos := from_sec if from_sec >= 0.0 else _stub_review_pos()
+	pos = clampf(pos, 0.0, float(r.dur))
+	if pos >= float(r.dur) - 0.05:
+		pos = 0.0
+	r.pos = pos
+	r.start_pos = pos
+	r.start_ms = Time.get_ticks_msec()
+	r.playing = true

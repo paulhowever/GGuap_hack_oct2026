@@ -107,7 +107,7 @@ func _on_song_ended(_t: float) -> void:
 func _on_result(result: Dictionary) -> void:
 	if _phase != Phase.SUBMITTING:
 		return
-	Session.last_result = result
+	Session.set_last_result(result)   # и сохраняем для «Мой последний результат»
 	_leave(RESULT_SCENE)
 
 

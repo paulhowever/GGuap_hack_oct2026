@@ -40,7 +40,16 @@ export function createMockVoice(mode, cfg = {}, env = globalThis) {
   const rand = rng(7)
   const api = cfg.api || ''
   const base = cfg.mock_base || BASE
-  const s = { ref: null, state: 'idle', startAt: 0, lastT: 0, timer: null, level: 0, difficulty: cfg.difficulty || 'normal', lag: toMs(cfg.lag_ms) ?? 40, player: null, loadSeq: 0 }
+  const s = { ref: null, state: 'idle', startAt: 0, lastT: 0, timer: null, level: 0, difficulty: cfg.difficulty || 'normal', lag: toMs(cfg.lag_ms) ?? 40, player: null, loadSeq: 0, review: null }
+  // Прослушивание в моке: звука нет, только таймлайн длиной в песню (для UI).
+  const reviewPos = r => (r.playing ? Math.min(r.dur, r.startPos + (env.performance.now() - r.startAt) / 1000) : r.pos)
+  const reviewHalt = () => {
+    const r = s.review
+    if (r?.playing) {
+      r.pos = reviewPos(r)
+      r.playing = false
+    }
+  }
 
   const tNow = () => (s.state === 'idle' ? 0 : (env.performance.now() - s.startAt) / 1000)
   const tolTable = cfg.tol_cents || DEFAULT_TOL
@@ -61,6 +70,7 @@ export function createMockVoice(mode, cfg = {}, env = globalThis) {
   function finish() {
     if (s.state !== 'playing') return
     s.state = 'ended'
+    s.review = { dur: s.ref.audio.duration, songId: s.ref.id, takeId: null, pos: 0, playing: false, startAt: 0, startPos: 0 }
     for (const j of s.judge?.flush() ?? []) bus.emit('on_note_judged', j)
     bus.emit('on_song_end', { t: round(tNow(), 3) })
   }
@@ -94,6 +104,7 @@ export function createMockVoice(mode, cfg = {}, env = globalThis) {
     start() {
       if (!s.ref) return fail(ERR.LOCKED, 'start before load_song')
       if (s.state === 'playing') return true
+      reviewHalt()
       s.state = 'playing'
       s.startAt = env.performance.now() + START_DELAY_MS
       s.lastT = -START_DELAY_MS / 1000
@@ -124,6 +135,7 @@ export function createMockVoice(mode, cfg = {}, env = globalThis) {
         env.setTimeout(async () => {
           const r = await firstJson([`${base}mock/result.${m}.json`, `${base}mock/result.perfect.json`])
           if (!r) return resolve(fail(ERR.NET, 'mock result not found'))
+          if (s.review) s.review.takeId = r.take_id ?? null
           bus.emit('on_result', { ...r, song_id: s.ref?.id ?? r.song_id, client_id: clientId(env), player: playerName(player), difficulty: s.difficulty, challenge: challengeId ? mockChallenge(challengeId, r) : null })
           resolve(true)
         }, SUBMIT_DELAY_MS)
@@ -131,6 +143,40 @@ export function createMockVoice(mode, cfg = {}, env = globalThis) {
     },
     client_id() {
       return clientId(env)
+    },
+    review_play(from) {
+      const r = s.review
+      if (!r || s.state === 'playing') return fail(ERR.LOCKED, 'no take to review')
+      const at = Number(from)
+      let pos = Math.min(r.dur, Math.max(0, Number.isFinite(at) && at >= 0 ? at : reviewPos(r)))
+      if (pos >= r.dur - 0.05) pos = 0
+      Object.assign(r, { pos, startPos: pos, startAt: env.performance.now(), playing: true })
+      return true
+    },
+    review_pause() {
+      reviewHalt()
+      return true
+    },
+    review_seek(t) {
+      const r = s.review
+      if (!r) return false
+      const pos = Math.min(r.dur, Math.max(0, Number(t) || 0))
+      if (r.playing) Object.assign(r, { startPos: pos, startAt: env.performance.now() })
+      r.pos = pos
+      return true
+    },
+    review_stop() {
+      reviewHalt()
+      if (s.review) s.review.pos = 0
+      return true
+    },
+    review_state() {
+      const r = s.review
+      if (!r) return JSON.stringify({ available: false, state: 'idle', t: 0, duration: 0, song_id: null, take_id: null })
+      if (r.playing && reviewPos(r) >= r.dur) reviewHalt()
+      const t = reviewPos(r)
+      const state = r.playing ? 'playing' : t >= r.dur ? 'ended' : 'paused'
+      return JSON.stringify({ available: true, state, t: round(t, 3), duration: round(r.dur, 3), song_id: r.songId, take_id: r.takeId })
     },
     calibrate(mode) {
       const kind = mode === 'headphones' ? 'headphones' : 'speakers'
