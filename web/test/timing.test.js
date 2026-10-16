@@ -24,6 +24,12 @@ test('estimateLagMs sums latencies with a 20 ms default for the mic track', () =
   assert.equal(estimateLagMs({ outputLatency: Infinity, baseLatency: 0.005, trackLatency: 0.01 }), 0)
 })
 
+test('estimateLagMs adds 200 ms instead of the mic track for Bluetooth output', () => {
+  assert.equal(estimateLagMs({ outputLatency: 0.15, baseLatency: 0.01, trackLatency: 0.01, bt: true }), 360)
+  assert.equal(estimateLagMs({ outputLatency: 0.15, baseLatency: 0.01, trackLatency: undefined, bt: true }), 360)
+  assert.equal(estimateLagMs({ outputLatency: 0.15, baseLatency: 0.01, trackLatency: 0.01, bt: false }), 170)
+})
+
 test('isBtSuspect triggers above 100 ms output latency', () => {
   assert.equal(isBtSuspect(0.15), true)
   assert.equal(isBtSuspect(0.1), false)
