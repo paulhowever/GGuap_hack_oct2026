@@ -5,7 +5,7 @@ import numpy as np
 import soundfile as sf
 
 from refpipe import audio, paths, usdx
-from refpipe.compile import PITCHED, compile_reference, read_reference, write_reference
+from refpipe.compile import PITCHED, compile_reference, mark_check_stale, read_reference, write_json
 from refpipe.meta import load_meta
 
 SR = 44100
@@ -56,7 +56,8 @@ def apply_gap_shift(song_dir: Path, shift_ms: float) -> dict:
     song.gap_ms = round(song.gap_ms + shift_ms, 3)
     ref = compile_reference(song, load_meta(song_dir / "meta.yaml"), song_dir.resolve().name, duration)
     usdx.write(song, song_dir / "song.txt")
-    write_reference(ref, song_dir / "reference.json")
+    write_json(ref, song_dir / "reference.json")
+    mark_check_stale(song_dir)
     return ref
 
 

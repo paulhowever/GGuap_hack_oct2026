@@ -1,3 +1,4 @@
+import json
 import shutil
 import subprocess
 
@@ -5,7 +6,7 @@ import numpy as np
 import pytest
 
 from refpipe import audio, usdx
-from refpipe.cli import main
+from refpipe.cli import build_parser, main
 from refpipe.cut import cut_song, fragment_warnings
 from refpipe.errors import CutError
 from refpipe.meta import load_meta
@@ -238,3 +239,99 @@ def test_cli_cut_bad_meta_writes_nothing(tmp_path, monkeypatch, demo_txt):
     assert main(argv) == 2
     assert calls == []
     assert not (out / "song.txt").exists()
+
+
+def run_cli_cut(tmp_path, monkeypatch, demo_txt, demo_meta_text, *flags):
+    calls = []
+    monkeypatch.setattr(audio, "run_tool", lambda argv: calls.append(argv))
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "nv.wav").write_bytes(b"")
+    (tmp_path / "v.wav").write_bytes(b"")
+    src = tmp_path / "full.txt"
+    src.write_text(demo_txt, encoding="utf-8")
+    out = tmp_path / "songs" / "demo"
+    out.mkdir(parents=True, exist_ok=True)
+    if not (out / "meta.yaml").exists():
+        (out / "meta.yaml").write_text(demo_meta_text, encoding="utf-8")
+    argv = ["cut", str(src), "--out", str(out), "--minus", "nv.wav", "--guide", "v.wav", *flags]
+    return main(argv), calls, out
+
+
+def seek(call: list[str]) -> tuple[float, float]:
+    return float(call[call.index("-ss") + 1]), float(call[call.index("-t") + 1])
+
+
+def test_cli_cut_guide_offset(tmp_path, monkeypatch, demo_txt, demo_meta_text):
+    flags = ("--t0", "3", "--t1", "10.4", "--guide-offset-ms", "1200")
+    code, calls, out = run_cli_cut(tmp_path, monkeypatch, demo_txt, demo_meta_text, *flags)
+    assert code == 0
+    minus, guide = calls
+    assert minus[-1] == str(out / "minus.mp3") and guide[-1] == str(out / "guide.mp3")
+    assert seek(minus) == pytest.approx((3.0, 7.4))
+    assert seek(guide) == pytest.approx((4.2, 7.4))
+    assert usdx.read(out / "song.txt").gap_ms == 3000.0
+    assert load_meta(out / "meta.yaml").source.t0_ms == 3000
+
+
+def test_cli_cut_negative_guide_start_is_rejected(tmp_path, monkeypatch, capsys, demo_txt, demo_meta_text):
+    calls = []
+    monkeypatch.setattr(audio, "run_tool", lambda argv: calls.append(argv))
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "nv.wav").write_bytes(b"")
+    (tmp_path / "v.wav").write_bytes(b"")
+    src = tmp_path / "full.txt"
+    src.write_text(demo_txt, encoding="utf-8")
+    out = tmp_path / "out"
+    argv = ["cut", str(src), "--t0", "0.5", "--t1", "10.4", "--out", str(out), "--guide", "v.wav"]
+    args = build_parser().parse_args([*argv, "--guide-offset-ms", "-1000"])
+    with pytest.raises(CutError, match="guide"):
+        args.func(args)
+    assert main([*argv, "--guide-offset-ms", "-1000"]) == 2
+    assert "guide-offset-ms" in capsys.readouterr().err
+    assert calls == []
+    assert not out.exists()
+
+
+def test_negative_t0_is_rejected():
+    with pytest.raises(CutError, match="t0 must be >= 0"):
+        cut_song(phrase_song(), -1, 33)
+
+
+def test_dropped_opening_phrase_is_reported():
+    rows = ["#TITLE:T", "#ARTIST:A", "#MP3:full.wav", "#BPM:300", "#GAP:2000"]
+    for k in range(4):
+        if k:
+            rows.append(f"- {50 * k - 10}")
+        rows += [f": {50 * k + 10 * j} 8 {j} la " for j in range(4)]
+    rows.append("E")
+    result = cut_song(usdx.parse("\n".join(rows)), 0, 11)
+    assert [len(line.notes) for line in result.song.lines] == [4, 4]
+    dropped = [w for w in result.warnings if w.startswith("phrase ")]
+    assert dropped[0] == "phrase 1 (2.0–3.9 s) dropped: needs 2.5 s lead-in and 1.5 s tail inside [0, 11]"
+    assert [w.split(" (")[0] for w in dropped] == ["phrase 1", "phrase 4"]
+
+
+def test_only_phrases_overlapping_window_are_reported():
+    result = cut_song(phrase_song(), 2.0, 11.0)
+    assert [w.split(" (")[0] for w in result.warnings if w.startswith("phrase ")] == ["phrase 3"]
+
+
+def test_cli_cut_marks_existing_check_stale(tmp_path, monkeypatch, demo_txt, demo_meta_text):
+    out = tmp_path / "songs" / "demo"
+    out.mkdir(parents=True)
+    (out / "reference.json").write_text("{}\n", encoding="utf-8")
+    (out / "check.json").write_text('{"pass": true}\n', encoding="utf-8")
+    code, _, out = run_cli_cut(tmp_path, monkeypatch, demo_txt, demo_meta_text, "--t0", "3", "--t1", "10.4")
+    assert code == 0
+    assert json.loads((out / "check.json").read_text(encoding="utf-8")) == {
+        "schema": 1,
+        "song_id": "demo",
+        "pass": False,
+        "stale": "rerun refpipe compile and check",
+    }
+
+
+def test_cli_cut_without_reference_writes_no_check(tmp_path, monkeypatch, demo_txt, demo_meta_text):
+    code, _, out = run_cli_cut(tmp_path, monkeypatch, demo_txt, demo_meta_text, "--t0", "3", "--t1", "10.4")
+    assert code == 0
+    assert not (out / "check.json").exists()

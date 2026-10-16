@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 
 from app.api import challenges
 from app.main import create_app
-from app.store.db import add_row, save_take
+from app.store.db import add_row
 from app.store.models import Challenge, Take
 
 
@@ -26,6 +26,13 @@ def test_create_challenge_is_idempotent(client, submit):
     assert client.post("/api/v1/challenges", json={"take_id": owner["take_id"]}).json() == body
 
 
+def test_challenge_url_uses_public_url(client, submit):
+    client.app.state.settings.public_url = "https://abc.lhr.life/"
+    _, r = make_challenge(client, submit)
+    body = r.json()
+    assert body["url"] == f"https://abc.lhr.life/c/{body['id']}"
+
+
 def test_concurrent_create_returns_same_challenge(settings):
     async def go():
         app = create_app(settings)
@@ -39,7 +46,7 @@ def test_concurrent_create_returns_same_challenge(settings):
                 grade="A",
                 result_json="{}",
             )
-            await save_take(app.state.sessions, take)
+            await add_row(app.state.sessions, take)
             async with httpx2.AsyncClient(
                 transport=httpx2.ASGITransport(app=app), base_url="http://testserver"
             ) as ac:

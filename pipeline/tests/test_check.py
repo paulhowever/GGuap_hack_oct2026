@@ -7,14 +7,27 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+import soundfile as sf
 
 from refpipe import audio, usdx
-from refpipe.check import run_cases, run_check, self_score_checks, structural_checks, variants
+from refpipe.check import (
+    build_report,
+    check_dir,
+    run_cases,
+    run_check,
+    self_score_checks,
+    structural_checks,
+    variants,
+)
 from refpipe.cli import main
 from refpipe.compile import compile_reference
 from refpipe.meta import load_meta
 
 REPO = Path(__file__).resolve().parents[2]
+needs_ffmpeg = pytest.mark.skipif(
+    shutil.which("ffmpeg") is None or shutil.which("ffprobe") is None,
+    reason="ffmpeg and ffprobe are required",
+)
 GOOD = {"guide": 9600, "octave_up": 9590, "octave_down": 9580, "plus2": 300, "silence": 0, "delay150": 9300}
 
 
@@ -304,3 +317,173 @@ def test_detuned_guide_fails_self_score(tmp_path, demo_meta_text):
     assert not checks["score_guide"]["ok"]
     assert not checks["guide_pitch_class"]["ok"]
     assert report["pass"] is False
+
+
+def song_rows(title: str = "T", artist: str = "A", gap: int = 3000, syl: str = "la ") -> list[str]:
+    rows = [f"#TITLE:{title}", f"#ARTIST:{artist}", "#MP3:minus.mp3", "#BPM:300", f"#GAP:{gap}"]
+    for k in range(20):
+        if k and k % 5 == 0:
+            rows.append(f"- {k * 10}")
+        kind = "*" if k in (4, 14) else ":"
+        rows.append(f"{kind} {k * 10} 8 {k % 5} {syl}")
+    rows.append("E")
+    return rows
+
+
+def make_song_dir(tmp_path: Path, meta_text: str, rows: list[str], name: str = "synth") -> Path:
+    song_dir = tmp_path / name
+    song_dir.mkdir()
+    (song_dir / "song.txt").write_text("\n".join(rows) + "\n", encoding="utf-8")
+    (song_dir / "meta.yaml").write_text(meta_text, encoding="utf-8")
+    assert main(["compile", str(song_dir), "--duration", "16"]) == 0
+    return song_dir
+
+
+@pytest.fixture
+def fake_backend(monkeypatch):
+    import app.f0
+    import app.scoring.core
+
+    monkeypatch.setattr(audio, "load_audio", lambda path, sr: np.zeros(sr, dtype=np.float32))
+    monkeypatch.setattr(app.f0, "get_engine", lambda name: FakeEngine())
+    monkeypatch.setattr(app.scoring.core, "score_take", fake_score)
+
+
+def test_missing_minus_fails(tmp_path, demo_meta_text, fake_backend):
+    song_dir = make_song_dir(tmp_path, demo_meta_text, song_rows("Демо-гамма", "команда"))
+    (song_dir / "guide.mp3").write_bytes(b"\0" * 2048)
+    report = check_dir(song_dir)
+    checks = {c["code"]: c for c in report["checks"]}
+    assert checks["minus_present"]["ok"] is False and checks["minus_present"]["level"] == "error"
+    assert report["pass"] is False
+    (song_dir / "minus.mp3").write_bytes(b"\0" * 2048)
+    report = check_dir(song_dir)
+    checks = {c["code"]: c for c in report["checks"]}
+    assert checks["minus_present"]["ok"] and checks["media_size"]["ok"] and checks["media_size"]["value"] == 2
+    assert checks["reference_fresh"]["ok"] and checks["meta_matches_txt"]["ok"]
+    assert report["pass"], report["checks"]
+
+
+def test_large_media_warns(tmp_path, demo_meta_text, fake_backend):
+    song_dir = make_song_dir(tmp_path, demo_meta_text, song_rows("Демо-гамма", "команда"))
+    (song_dir / "guide.mp3").write_bytes(b"\0" * 2048)
+    (song_dir / "minus.mp3").write_bytes(b"\0" * (1536 * 1024))
+    report = check_dir(song_dir)
+    size = {c["code"]: c for c in report["checks"]}["media_size"]
+    assert (size["ok"], size["value"], size["level"]) == (False, 1536, "warn")
+    assert report["pass"]
+
+
+def test_stale_reference_warns(tmp_path, demo_meta_text, fake_backend):
+    song_dir = make_song_dir(tmp_path, demo_meta_text, song_rows("Демо-гамма", "команда"))
+    (song_dir / "guide.mp3").write_bytes(b"\0" * 2048)
+    (song_dir / "minus.mp3").write_bytes(b"\0" * 2048)
+    assert {c["code"]: c for c in check_dir(song_dir)["checks"]}["reference_fresh"]["ok"]
+    txt = song_dir / "song.txt"
+    txt.write_text(txt.read_text(encoding="utf-8").replace("#GAP:3000", "#GAP:3100"), encoding="utf-8")
+    report = check_dir(song_dir)
+    fresh = {c["code"]: c for c in report["checks"]}["reference_fresh"]
+    assert (fresh["ok"], fresh["level"]) == (False, "warn")
+    assert report["pass"]
+
+
+def test_unreadable_sources_mark_reference_stale(tmp_path, demo_meta_text, fake_backend):
+    song_dir = make_song_dir(tmp_path, demo_meta_text, song_rows("Демо-гамма", "команда"))
+    (song_dir / "meta.yaml").unlink()
+    checks = {c["code"]: c for c in check_dir(song_dir)["checks"]}
+    assert checks["reference_fresh"]["ok"] is False
+    assert checks["meta_matches_txt"]["ok"]
+
+
+def test_meta_title_mismatch_warns(tmp_path, fake_backend):
+    meta = (REPO / "pipeline" / "examples" / "meta.example.yaml").read_text(encoding="utf-8")
+    song_dir = make_song_dir(tmp_path, meta, song_rows("Коробейники", "нар."), name="korobeiniki")
+    (song_dir / "guide.mp3").write_bytes(b"\0" * 2048)
+    (song_dir / "minus.mp3").write_bytes(b"\0" * 2048)
+    report = check_dir(song_dir)
+    match = {c["code"]: c for c in report["checks"]}["meta_matches_txt"]
+    assert (match["ok"], match["level"]) == (False, "warn")
+    assert report["pass"], report["checks"]
+
+
+def test_word_breaks_warns(tmp_path, demo_meta_text):
+    rows = ["#TITLE:T", "#ARTIST:A", "#MP3:minus.mp3", "#BPM:300", "#GAP:3000"]
+    rows += [f": {k * 10} 8 {k % 5} la" for k in range(6)]
+    rows += ["- 60", *[f": {60 + k * 10} 8 0 la " for k in range(6)], "E"]
+    (tmp_path / "meta.yaml").write_text(demo_meta_text, encoding="utf-8")
+    ref = compile_reference(usdx.parse("\n".join(rows)), load_meta(tmp_path / "meta.yaml"), "x", 12.0)
+    breaks = by_code(structural_checks(ref))["word_breaks"]
+    assert (breaks.ok, breaks.value, breaks.level) == (False, 1, "warn")
+
+
+def test_word_breaks_ok_on_spaced_lines(tmp_path, demo_meta_text):
+    assert by_code(structural_checks(make_ref(tmp_path, demo_meta_text)))["word_breaks"].ok
+
+
+def test_guide_lag_warns(demo_fixture):
+    results = results_from(GOOD, guide_notes())
+    base = self_score_checks(demo_fixture, results)
+    assert "guide_lag" not in by_code(base)
+    results["guide"]["latency"] = {"estimated_ms": 300.0}
+    checks = self_score_checks(demo_fixture, results)
+    lag = by_code(checks)["guide_lag"]
+    assert (lag.ok, lag.value, lag.level) == (False, 300, "warn")
+    assert build_report(demo_fixture, checks)["pass"] == build_report(demo_fixture, base)["pass"]
+    results["guide"]["latency"] = {"estimated_ms": -40.0}
+    assert by_code(self_score_checks(demo_fixture, results))["guide_lag"].ok
+
+
+def test_guide_onset_found_warns(demo_fixture):
+    notes = [{"i": i, "cents": 10, "onset_ms": 20 if i == 0 else None} for i in range(6)]
+    checks = self_score_checks(demo_fixture, results_from(GOOD, notes))
+    found = by_code(checks)["guide_onset_found"]
+    assert (found.ok, found.value, found.level) == (False, 0.167, "warn")
+    assert by_code(checks)["guide_onset"].ok
+    base = self_score_checks(demo_fixture, results_from(GOOD, guide_notes()))
+    assert by_code(base)["guide_onset_found"].ok
+    assert build_report(demo_fixture, checks)["pass"] == build_report(demo_fixture, base)["pass"]
+
+
+def write_e2e_source(tmp_path: Path, meta_text: str, delay_s: float) -> Path:
+    synth = pytest.importorskip("app.scoring.synth")
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "song.txt").write_text("\n".join(song_rows("Демо-гамма", "команда", gap=6000)) + "\n", "utf-8")
+    (src / "meta.yaml").write_text(meta_text, encoding="utf-8")
+    uncut = compile_reference(usdx.read(src / "song.txt"), load_meta(src / "meta.yaml"), "src", 20.0)
+    sf.write(src / "guide.wav", synth.synth_take(uncut, sr=16000, delay_s=delay_s), 16000, subtype="PCM_16")
+    t = np.arange(20 * 44100) / 44100
+    sf.write(src / "minus.wav", (0.05 * np.sin(2 * np.pi * 110 * t)).astype(np.float32), 44100)
+    return src
+
+
+def run_e2e(tmp_path: Path, meta_text: str, delay_s: float) -> tuple[int, dict]:
+    src = write_e2e_source(tmp_path, meta_text, delay_s)
+    out = tmp_path / "songs" / "e2e"
+    out.mkdir(parents=True)
+    (out / "meta.yaml").write_text(meta_text, encoding="utf-8")
+    cut = ["cut", str(src / "song.txt"), "--t0", "3.4", "--t1", "18", "--out", str(out)]
+    assert main([*cut, "--minus", str(src / "minus.wav"), "--guide", str(src / "guide.wav")]) == 0
+    assert main(["compile", str(out)]) == 0
+    code = main(["check", str(out)])
+    return code, json.loads((out / "check.json").read_text(encoding="utf-8"))
+
+
+@pytest.mark.integration
+@needs_ffmpeg
+def test_e2e_cut_compile_check(tmp_path, demo_meta_text):
+    code, report = run_e2e(tmp_path, demo_meta_text, 0.0)
+    checks = {c["code"]: c for c in report["checks"]}
+    assert code == 0 and report["pass"], report["checks"]
+    assert checks["guide_lag"]["ok"], checks["guide_lag"]
+    assert checks["minus_present"]["ok"] and checks["reference_fresh"]["ok"]
+    assert checks["meta_matches_txt"]["ok"]
+
+
+@pytest.mark.integration
+@needs_ffmpeg
+def test_e2e_late_guide_passes_with_lag_warning(tmp_path, demo_meta_text):
+    code, report = run_e2e(tmp_path, demo_meta_text, 0.3)
+    checks = {c["code"]: c for c in report["checks"]}
+    assert code == 0 and report["pass"], report["checks"]
+    assert not checks["guide_lag"]["ok"] and checks["guide_lag"]["level"] == "warn"

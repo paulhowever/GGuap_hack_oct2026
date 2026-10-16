@@ -52,6 +52,19 @@ def test_golden_miss():
     assert "golden_miss" in codes(tips)
 
 
+def test_golden_miss_skips_continuation_syllable():
+    tips, per_line = build_tips([note(0, 0, type="golden", syl="~", hit=0.2)], [line(0, 60)], LAT, 0, 120)
+    assert codes(tips)[0] == "golden_miss"
+    assert "«~»" not in per_line[0]
+    assert "~" not in tips[0]["text"]
+    assert per_line[0].startswith("золотая нота в «")
+
+
+def test_golden_miss_quotes_syllable():
+    _, per_line = build_tips([note(0, 0, type="golden", syl=" ми~ ", hit=0.2)], [line(0, 60)], LAT, 0, 120)
+    assert per_line[0].startswith("золотая нота «ми» в «")
+
+
 def test_late_and_early_by_line():
     tips, per_line = build_tips([note(0, 0, onset_ms=180.0)], [line(0, 70)], LAT, 0, 120)
     assert "late" in codes(tips)

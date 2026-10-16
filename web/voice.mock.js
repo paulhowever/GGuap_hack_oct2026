@@ -7,11 +7,31 @@ import { round } from './lib/num.js'
 import { toMs } from './lib/timing.js'
 import { createJudge } from './lib/judge.js'
 import { clientId } from './lib/profile.js'
+import { getJson } from './lib/http.js'
+import { playerName } from './lib/meta.js'
+import { DEFAULT_TOL } from './lib/scoring.js'
+import { CLICKS } from './lib/calibration.js'
 
 const BASE = new URL('./', import.meta.url).href
 const START_DELAY_MS = 150
 const SUBMIT_DELAY_MS = 500
 const CALIBRATE_DELAY_MS = 1000
+const OPPONENT = 'Соперник'
+const OPPONENT_TOTAL = 7320
+const OPPONENT_LINE = 75
+
+function mockChallenge(id, r) {
+  const delta = r.score.total - OPPONENT_TOTAL
+  return {
+    id: String(id),
+    opponent: OPPONENT,
+    opponent_total: OPPONENT_TOTAL,
+    delta,
+    verdict: delta > 0 ? 'win' : delta < 0 ? 'lose' : 'draw',
+    lines_won: r.lines.filter(l => l.score > OPPONENT_LINE).length,
+    lines_lost: r.lines.filter(l => l.score < OPPONENT_LINE).length
+  }
+}
 
 export function createMockVoice(mode, cfg = {}, env = globalThis) {
   const m = MODES.includes(mode) ? mode : 'perfect'
@@ -20,10 +40,11 @@ export function createMockVoice(mode, cfg = {}, env = globalThis) {
   const rand = rng(7)
   const api = cfg.api || ''
   const base = cfg.mock_base || BASE
-  const s = { ref: null, state: 'idle', startAt: 0, lastT: 0, timer: null, level: 0, difficulty: cfg.difficulty || 'normal', lag: toMs(cfg.lag_ms) ?? 40, player: null }
+  const s = { ref: null, state: 'idle', startAt: 0, lastT: 0, timer: null, level: 0, difficulty: cfg.difficulty || 'normal', lag: toMs(cfg.lag_ms) ?? 40, player: null, loadSeq: 0 }
 
   const tNow = () => (s.state === 'idle' ? 0 : (env.performance.now() - s.startAt) / 1000)
-  const tol = () => (cfg.tol_cents || {})[s.difficulty] ?? 120
+  const tolTable = cfg.tol_cents || DEFAULT_TOL
+  const tol = () => tolTable[s.difficulty] ?? 120
   const fail = (code, err) => {
     bus.emit('on_error', errorPayload(code, err))
     return false
@@ -31,10 +52,8 @@ export function createMockVoice(mode, cfg = {}, env = globalThis) {
 
   async function firstJson(urls) {
     for (const u of urls) {
-      try {
-        const r = await env.fetch(u)
-        if (r.ok) return await r.json()
-      } catch {}
+      const j = await getJson(env, u)
+      if (j !== null) return j
     }
     return null
   }
@@ -57,12 +76,14 @@ export function createMockVoice(mode, cfg = {}, env = globalThis) {
     },
     configure(json) {
       const o = parseOptions(json)
-      if (typeof o.difficulty === 'string') s.difficulty = o.difficulty
+      if (typeof o.difficulty === 'string' && Object.hasOwn(tolTable, o.difficulty)) s.difficulty = o.difficulty
       const lag = toMs(o.lag_ms)
       if (lag !== null) s.lag = lag
     },
     async load_song(id) {
+      const seq = ++s.loadSeq
       const ref = await firstJson([`${api}/api/v1/songs/${encodeURIComponent(id)}`, `${base}mock/${id}.reference.json`])
+      if (seq !== s.loadSeq) return false
       if (!ref) return fail(ERR.NET, `song ${id} not found`)
       env.clearTimeout(s.timer)
       s.ref = ref
@@ -99,24 +120,33 @@ export function createMockVoice(mode, cfg = {}, env = globalThis) {
     },
     submit(player, challengeId) {
       s.player = player || null
-      env.setTimeout(async () => {
-        const r = await firstJson([`${base}mock/result.${m}.json`, `${base}mock/result.perfect.json`])
-        if (!r) return fail(ERR.NET, 'mock result not found')
-        bus.emit('on_result', { ...r, player: player || r.player, challenge: challengeId ? r.challenge : null, client_id: clientId(env) })
-      }, SUBMIT_DELAY_MS)
+      return new Promise(resolve => {
+        env.setTimeout(async () => {
+          const r = await firstJson([`${base}mock/result.${m}.json`, `${base}mock/result.perfect.json`])
+          if (!r) return resolve(fail(ERR.NET, 'mock result not found'))
+          bus.emit('on_result', { ...r, song_id: s.ref?.id ?? r.song_id, client_id: clientId(env), player: playerName(player), difficulty: s.difficulty, challenge: challengeId ? mockChallenge(challengeId, r) : null })
+          resolve(true)
+        }, SUBMIT_DELAY_MS)
+      })
     },
     client_id() {
       return clientId(env)
     },
     calibrate(mode) {
       const kind = mode === 'headphones' ? 'headphones' : 'speakers'
-      env.setTimeout(() => bus.emit('on_calibrated', { lag_ms: s.lag, hits: 8, mode: kind }), CALIBRATE_DELAY_MS)
+      return new Promise(resolve => {
+        env.setTimeout(() => {
+          bus.emit('on_calibrated', { lag_ms: s.lag, hits: CLICKS, mode: kind })
+          resolve(true)
+        }, CALIBRATE_DELAY_MS)
+      })
     },
     async _planB() {
       const wav = await env.fetch(`${base}mock/take.wav`).then(r => (r.ok ? r.arrayBuffer() : null)).catch(() => null)
       const meta = await firstJson([`${base}mock/take.meta.json`])
       if (!wav || !meta) return fail(ERR.UPLOAD, 'mock/take.wav or mock/take.meta.json missing')
-      if (s.player) meta.player = s.player
+      meta.player = playerName(s.player ?? meta.player)
+      meta.client_id = clientId(env)
       meta.session_token = null
       try {
         bus.emit('on_result', await postTake({ env, url: `${api}/api/v1/takes`, wav, meta }))

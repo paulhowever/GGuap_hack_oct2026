@@ -1,13 +1,16 @@
+import io
 import json
 import sqlite3
 import uuid
 
 import numpy as np
 import pytest
+import soundfile as sf
 from fastapi.testclient import TestClient
 
 from app.anticheat.session import make_token
 from app.main import create_app
+from app.scoring.synth import synth_take
 
 
 def issue(client, **kw):
@@ -182,6 +185,48 @@ def test_secret_generated_when_missing(settings, caplog):
     with TestClient(create_app(settings)) as c:
         assert len(c.app.state.secret) == 64
     assert any(r.getMessage() == "secret_generated" for r in caplog.records)
+
+
+def test_generated_secret_survives_restart(settings, demo_ref, clock, caplog):
+    body = {"song_id": "demo", "client_id": None, "difficulty": "normal"}
+    with TestClient(create_app(settings)) as first:
+        secret = first.app.state.secret
+        token = first.post("/api/v1/sessions", json=body).json()["token"]
+    path = settings.data_dir / "secret.key"
+    assert path.read_text().strip() == secret
+    assert path.stat().st_mode & 0o777 == 0o600
+    clock.advance(demo_ref["audio"]["duration"])
+    meta = {**body, "player": "Паша", "wav_t0": 0.0, "wav_sr": 16000, "session_token": token}
+    buf = io.BytesIO()
+    sf.write(buf, synth_take(demo_ref, jitter_cents=20.0), 16000, format="WAV", subtype="PCM_16")
+    audio = buf.getvalue()
+    with TestClient(create_app(settings)) as second:
+        assert second.app.state.secret == secret
+        r = second.post(
+            "/api/v1/takes",
+            files={"audio": ("take.wav", audio, "audio/wav")},
+            data={"meta": json.dumps(meta, ensure_ascii=False)},
+        )
+    assert r.status_code == 200
+    assert r.json()["integrity"] == {"status": "ok", "flags": []}
+    assert [r.getMessage() for r in caplog.records].count("secret_generated") == 1
+    assert any(r.getMessage() == "secret_loaded" for r in caplog.records)
+
+
+def test_explicit_secret_wins_over_file(settings):
+    settings.data_dir.mkdir(parents=True)
+    (settings.data_dir / "secret.key").write_text("from-file")
+    settings.secret = "s3cret"
+    with TestClient(create_app(settings)) as c:
+        assert c.app.state.secret == "s3cret"
+
+
+def test_empty_secret_file_is_regenerated(settings):
+    settings.data_dir.mkdir(parents=True)
+    (settings.data_dir / "secret.key").write_text("\n")
+    with TestClient(create_app(settings)) as c:
+        assert len(c.app.state.secret) == 64
+    assert (settings.data_dir / "secret.key").read_text() == c.app.state.secret
 
 
 def test_malformed_token_is_bad_session(submit):

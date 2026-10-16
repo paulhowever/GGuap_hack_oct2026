@@ -50,13 +50,16 @@ def estimate_latency(
     corr = np.array([float(np.dot(shifted(v, steps_for(lag), 0.0), r)) for lag in lags])
     coarse = float(lags[int(np.argmax(corr))])
     rho = float(corr.max() / denom) if denom > 0 else 0.0
-    fine = np.arange(max(lo, coarse - 50), min(hi, coarse + 50) + 1, 10.0)
-    hits = np.array([pitch_hit_rate(grid, ref_midi, lag, tol) for lag in fine])
-    if hits.size and hits.max() > 0:
-        best = fine[hits == hits.max()]
-        estimated = float(best[int(np.argmin(np.abs(best - coarse)))])
+    if denom == 0:
+        estimated = float(hint_ms) if hint_ms is not None else 0.0
     else:
-        estimated = coarse
+        fine = np.arange(max(lo, coarse - 50), min(hi, coarse + 50) + 1, 10.0)
+        hits = np.array([pitch_hit_rate(grid, ref_midi, lag, tol) for lag in fine])
+        if hits.size and hits.max() > 0:
+            best = fine[hits == hits.max()]
+            estimated = float(best[int(np.argmin(np.abs(best - coarse)))])
+        else:
+            estimated = coarse
     if rho < cfg.rho_min:
         applied = hint_ms if hint_ms is not None else 0.0
     elif hint_ms is None or lag_source != "calibrated":

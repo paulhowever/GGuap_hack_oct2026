@@ -4,12 +4,12 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from refpipe import audio, usdx
+from refpipe.compile import mark_check_stale
 from refpipe.errors import CutError
+from refpipe.limits import FRAGMENT_S, LEAD_S, NOTE_COUNT, TAIL_S
 from refpipe.meta import load_meta, set_t0_ms
 from refpipe.usdx import Line, Note, UsdxSong
 
-LEAD_S = 2.5
-TAIL_S = 1.5
 EPS = 1e-6
 KEEP_HEADERS = ("VERSION", "LANGUAGE", "GENRE", "YEAR", "CREATOR", "COMMENT")
 
@@ -28,22 +28,35 @@ def line_span(song: UsdxSong, line: Line) -> tuple[float, float]:
 
 def fragment_warnings(duration: float, notes: int) -> tuple[str, ...]:
     out = []
-    if not 20 <= duration <= 40:
-        out.append(f"fragment is {duration:.1f} s, expected 20-40 s")
-    if not 40 <= notes <= 120:
-        out.append(f"fragment has {notes} notes, expected 40-120")
+    lo_s, hi_s = FRAGMENT_S
+    lo_n, hi_n = NOTE_COUNT
+    if not lo_s <= duration <= hi_s:
+        out.append(f"fragment is {duration:.1f} s, expected {lo_s}-{hi_s} s")
+    if not lo_n <= notes <= hi_n:
+        out.append(f"fragment has {notes} notes, expected {lo_n}-{hi_n}")
     return tuple(out)
 
 
 def cut_song(song: UsdxSong, t0: float, t1: float, lead_s: float = LEAD_S, tail_s: float = TAIL_S) -> Cut:
+    if t0 < 0:
+        raise CutError(
+            f"t0 must be >= 0; to keep a phrase that starts in the first {lead_s:g} s, add an intro "
+            "(e.g. 2 empty bars) in MuseScore and re-export melody.mid and minus.wav"
+        )
     if t1 <= t0:
         raise CutError("t1 must be greater than t0")
     lo, hi = t0 + lead_s, t1 - tail_s
-    keep = [
-        line
-        for line in song.lines
-        if line_span(song, line)[0] >= lo - EPS and line_span(song, line)[1] <= hi + EPS
-    ]
+    keep = []
+    dropped = []
+    for number, line in enumerate(song.lines, 1):
+        a, b = line_span(song, line)
+        if a >= lo - EPS and b <= hi + EPS:
+            keep.append(line)
+        elif a < t1 and b > t0:
+            dropped.append(
+                f"phrase {number} ({a:.1f}–{b:.1f} s) dropped: needs {lead_s:g} s lead-in "
+                f"and {tail_s:g} s tail inside [{t0:g}, {t1:g}]"
+            )
     if not keep:
         raise CutError(f"no whole phrase fits into [{lo:.3f}, {hi:.3f}] s")
     b0 = keep[0].notes[0].beat
@@ -63,26 +76,35 @@ def cut_song(song: UsdxSong, t0: float, t1: float, lead_s: float = LEAD_S, tail_
         lines=lines,
         extra=extra,
     )
-    return Cut(t0, t1, cut, fragment_warnings(t1 - t0, len(cut.notes)))
+    return Cut(t0, t1, cut, (*dropped, *fragment_warnings(t1 - t0, len(cut.notes))))
 
 
 def cmd(args: argparse.Namespace) -> int:
     result = cut_song(usdx.read(args.txt), args.t0, args.t1)
+    off = args.guide_offset_ms / 1000
+    if result.t0 + off < 0:
+        raise CutError(
+            f"guide cut would start at {result.t0 + off:g} s: t0 + guide offset must be >= 0, "
+            "trim the guide head or lower --guide-offset-ms"
+        )
     jobs = [
-        (src, name) for src, name in ((args.minus, "minus.mp3"), (args.guide, "guide.mp3")) if src is not None
+        (src, name, shift)
+        for src, name, shift in ((args.minus, "minus.mp3", 0.0), (args.guide, "guide.mp3", off))
+        if src is not None
     ]
-    for src, _ in jobs:
+    for src, _, _ in jobs:
         if not src.is_file():
             raise CutError(f"source not found: {src}")
     meta = args.out / "meta.yaml"
     if meta.exists():
         load_meta(meta)
     args.out.mkdir(parents=True, exist_ok=True)
-    for src, name in jobs:
-        audio.run_tool(audio.ffmpeg_cut_argv(src, args.out / name, args.t0, args.t1))
+    for src, name, shift in jobs:
+        audio.run_tool(audio.ffmpeg_cut_argv(src, args.out / name, result.t0 + shift, result.t1 + shift))
     usdx.write(result.song, args.out / "song.txt")
     if meta.exists():
-        set_t0_ms(meta, round(args.t0 * 1000))
+        set_t0_ms(meta, round(result.t0 * 1000))
+    mark_check_stale(args.out)
     for warning in result.warnings:
         print(f"warning: {warning}", file=sys.stderr)
     print(
@@ -100,4 +122,5 @@ def add_parser(sub) -> None:
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--minus", type=Path, default=None)
     p.add_argument("--guide", type=Path, default=None)
+    p.add_argument("--guide-offset-ms", type=float, default=0.0)
     p.set_defaults(func=cmd)

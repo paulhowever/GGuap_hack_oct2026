@@ -1,4 +1,5 @@
 import { hzToMidi } from './pitch.js'
+import { getJson } from './http.js'
 
 export const DEBUG_PERIOD_MS = 250
 const DASH = '—'
@@ -51,7 +52,7 @@ export function debugText({ mode, api = null, web = null, state = {}, frame = nu
     apiLine(api),
     webLine(web),
     `mode ${mode === 'real' ? 'real' : `mock:${mode}`} · sr ${state.sr || DASH} · ctx ${state.ctx_state ?? DASH}`,
-    `lag ${ms(state.lag_ms)} · est ${ms(state.est_lag_ms)} · out ${secondsAsMs(state.output_latency)}`,
+    `lag ${ms(state.lag_ms)} ${state.lag_source ?? DASH} · est ${ms(state.est_lag_ms)} · out ${secondsAsMs(state.output_latency)}`,
     pitchLine(frame),
     `fps ${Math.round(fps)}`,
     `client ${clientId || DASH}`,
@@ -109,15 +110,6 @@ export function createDebugTracker(now, windowMs = 1000) {
   }
 }
 
-async function fetchJson(win, url) {
-  try {
-    const r = await win.fetch(url, { cache: 'no-store' })
-    return r.ok ? await r.json() : null
-  } catch {
-    return null
-  }
-}
-
 const STYLE = {
   position: 'fixed',
   right: '8px',
@@ -141,43 +133,28 @@ export function attachDebug(win, voice, { apiUrl, versionUrl, periodMs = DEBUG_P
   el.id = 'voice-debug'
   Object.assign(el.style, STYLE)
   const tracker = createDebugTracker(() => win.performance.now())
-  let live = true
   const poll = voice.poll
-  const wrapped = (...args) => {
+  voice.poll = (...args) => {
     const out = poll.apply(voice, args)
-    if (live) tracker.onPoll(out)
+    tracker.onPoll(out)
     return out
   }
-  voice.poll = wrapped
-  const unsubscribe = voice.subscribe((name, json) => {
-    if (live) tracker.onEvent(name, json)
-  })
+  voice.subscribe((name, json) => tracker.onEvent(name, json))
   const clientId = voice.client_id?.() ?? null
   const info = { api: null, web: null }
   const render = () => {
     el.textContent = debugText({ mode: voice._mode, api: info.api, web: info.web, state: voice._state?.() ?? {}, clientId, ...tracker.snapshot() })
     return el.textContent
   }
-  fetchJson(win, apiUrl).then(v => (info.api = v))
-  fetchJson(win, versionUrl).then(v => (info.web = v))
+  getJson(win, apiUrl, { cache: 'no-store' }).then(v => (info.api = v))
+  getJson(win, versionUrl, { cache: 'no-store' }).then(v => (info.web = v))
   const mount = () => doc.body.appendChild(el)
   if (doc.body) mount()
   else doc.addEventListener('DOMContentLoaded', mount)
   render()
-  const timer = win.setInterval(render, periodMs)
-  const onKey = e => {
+  win.setInterval(render, periodMs)
+  win.addEventListener?.('keydown', e => {
     if (e.code === 'KeyD' && e.altKey && e.shiftKey && !e.repeat) win.navigator?.clipboard?.writeText(render()).catch(() => {})
-  }
-  win.addEventListener?.('keydown', onKey, true)
-  const stop = () => {
-    if (!live) return
-    live = false
-    win.clearInterval(timer)
-    win.removeEventListener?.('keydown', onKey, true)
-    doc.removeEventListener('DOMContentLoaded', mount)
-    el.remove()
-    if (voice.poll === wrapped) voice.poll = poll
-    if (typeof unsubscribe === 'function') unsubscribe()
-  }
-  return { el, render, stop }
+  }, true)
+  return { el, render }
 }

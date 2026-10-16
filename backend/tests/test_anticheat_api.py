@@ -5,8 +5,10 @@ import pytest
 import soundfile as sf
 from scipy.signal import resample_poly
 
+from app.anticheat.signal import METRIC_KEYS
 from app.core.config import ROOT
 from app.demo import build_demo
+from app.scoring.synth import synth_take
 
 
 def test_flat_synth_keeps_score_but_is_suspect(submit):
@@ -39,6 +41,15 @@ def test_jittered_take_with_media_is_ok(submit, settings):
     assert submit().json()["integrity"] == {"status": "ok", "flags": []}
 
 
+def test_jittered_take_with_web_timing_is_ok(submit, settings, demo_ref):
+    build_demo(settings.songs_dir / "demo", ROOT / "contracts" / "fixtures" / "demo.reference.json")
+    lead = np.zeros(round(0.15 * 16000), dtype=np.float32)
+    x = np.concatenate([lead, synth_take(demo_ref, delay_s=0.25, jitter_cents=20.0)])
+    body = submit(audio=x, wav_t0=-0.15, lag_ms=250, lag_source="calibrated").json()
+    assert body["score"]["total"] >= 9000
+    assert not {"replay", "not_voice"} & set(body["integrity"]["flags"])
+
+
 def logged(caplog, msg):
     return [r.fields for r in caplog.records if r.getMessage() == msg]
 
@@ -67,6 +78,4 @@ def test_signal_check_failure_fails_open(submit, monkeypatch, caplog):
     assert failed.levelname == "WARNING"
     assert failed.exc_info[0] is ValueError
     scored = logged(caplog, "take_scored")[0]
-    assert all(
-        scored[k] is None for k in ("replay_guide_c", "replay_minus_c", "jitter_c", "harm", "long_notes")
-    )
+    assert all(scored[k] is None for k in METRIC_KEYS)

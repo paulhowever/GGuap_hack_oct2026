@@ -128,6 +128,8 @@ def test_web_missing_file_is_404(web_client):
     assert web_client.get("/missing.js").status_code == 404
 
 
-def test_api_and_media_are_not_forced_to_no_cache(web_client):
+def test_media_is_no_cache_and_api_is_not(web_client):
     assert "cache-control" not in web_client.get("/api/v1/version").headers
-    assert "cache-control" not in web_client.get("/media/demo/reference.json").headers
+    media = web_client.get("/media/demo/reference.json")
+    assert media.status_code == 200
+    assert media.headers["cache-control"] == "no-cache"

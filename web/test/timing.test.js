@@ -45,14 +45,29 @@ test('toMs parses stored strings and rejects junk', () => {
 })
 
 test('resolveLagMs priority is session, pinned, stored, estimated', () => {
-  assert.equal(resolveLagMs({ session: 10, pinned: 20, stored: 30, estimated: 40 }), 10)
-  assert.equal(resolveLagMs({ session: null, pinned: 20, stored: 30, estimated: 40 }), 20)
-  assert.equal(resolveLagMs({ session: null, pinned: null, stored: 30, estimated: 40 }), 30)
-  assert.equal(resolveLagMs({ session: null, pinned: null, stored: null, estimated: 40 }), 40)
-  assert.equal(resolveLagMs({ session: 0, pinned: 20, stored: 30, estimated: 40 }), 0)
-  assert.equal(resolveLagMs({ session: NaN, pinned: Infinity, stored: undefined, estimated: 40 }), 40)
-  assert.equal(resolveLagMs({ session: NaN, pinned: null, stored: null, estimated: NaN }), 0)
-  assert.equal(resolveLagMs({ session: null, pinned: null, stored: null, estimated: undefined }), 0)
+  const ms = o => resolveLagMs(o).ms
+  assert.equal(ms({ session: 10, pinned: 20, stored: 30, estimated: 40 }), 10)
+  assert.equal(ms({ session: null, pinned: 20, stored: 30, estimated: 40 }), 20)
+  assert.equal(ms({ session: null, pinned: null, stored: 30, estimated: 40 }), 30)
+  assert.equal(ms({ session: null, pinned: null, stored: null, estimated: 40 }), 40)
+  assert.equal(ms({ session: 0, pinned: 20, stored: 30, estimated: 40 }), 0)
+  assert.equal(ms({ session: NaN, pinned: Infinity, stored: undefined, estimated: 40 }), 40)
+  assert.equal(ms({ session: NaN, pinned: null, stored: null, estimated: NaN }), 0)
+  assert.equal(ms({ session: null, pinned: null, stored: null, estimated: undefined }), 0)
+})
+
+test('resolveLagMs reports where the lag came from', () => {
+  const all = { session: 10, sessionSource: 'calibrated', pinned: 20, stored: 30, storedSource: 'auto', estimated: 40 }
+  assert.deepEqual(resolveLagMs(all), { ms: 10, source: 'calibrated' })
+  assert.deepEqual(resolveLagMs({ ...all, sessionSource: 'config' }), { ms: 10, source: 'config' })
+  assert.deepEqual(resolveLagMs({ ...all, session: null }), { ms: 20, source: 'config' })
+  assert.deepEqual(resolveLagMs({ ...all, session: null, pinned: null }), { ms: 30, source: 'auto' })
+  assert.deepEqual(resolveLagMs({ ...all, session: null, pinned: null, storedSource: 'config' }), { ms: 30, source: 'config' })
+  assert.deepEqual(resolveLagMs({ ...all, session: null, pinned: null, storedSource: 'calibrated' }), { ms: 30, source: 'calibrated' })
+  assert.deepEqual(resolveLagMs({ ...all, session: null, pinned: null, storedSource: null }), { ms: 30, source: 'calibrated' })
+  assert.deepEqual(resolveLagMs({ ...all, session: null, pinned: null, storedSource: 'junk' }), { ms: 30, source: 'calibrated' })
+  assert.deepEqual(resolveLagMs({ ...all, session: null, pinned: null, stored: null }), { ms: 40, source: 'estimated' })
+  assert.deepEqual(resolveLagMs({ session: null, pinned: null, stored: null, storedSource: 'auto', estimated: NaN }), { ms: 0, source: 'estimated' })
 })
 
 test('noise floor, gate and dB', () => {

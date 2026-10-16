@@ -7,7 +7,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.board import display_names
-from app.duel import CHALLENGE_ID, new_challenge_id, verdict
+from app.duel import new_challenge_id, verdict
+from app.ids import CHALLENGE_ID
 from app.store.db import add_row, challenge_for_take, get_challenge, get_take, rival_takes
 from app.store.models import Challenge, Take
 
@@ -57,7 +58,9 @@ async def post_challenge(body: ChallengeIn, request: Request) -> dict:
         if take.integrity_status != "ok":
             raise HTTPException(status_code=422, detail="challenge_take_not_ok")
         challenge = await create_challenge(sessions, take)
-    return {"id": challenge.id, "url": f"{request.base_url}c/{challenge.id}"}
+    s = request.app.state.settings
+    base = s.public_url.rstrip("/") + "/" if s.public_url else str(request.base_url)
+    return {"id": challenge.id, "url": f"{base}c/{challenge.id}"}
 
 
 @router.get("/challenges/{challenge_id}")

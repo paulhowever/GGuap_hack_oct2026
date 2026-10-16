@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.main import create_app
-from app.store.db import init_db, make_engine, ping, save_take
+from app.store.db import add_row, init_db, make_engine, ping
 from app.store.models import Take
 
 
@@ -16,7 +16,7 @@ def test_roundtrip(tmp_path):
         await init_db(engine)
         assert (await ping(engine)).count(".") == 2
         sessions = async_sessionmaker(engine, expire_on_commit=False)
-        await save_take(
+        await add_row(
             sessions,
             Take(
                 id="tk_1",

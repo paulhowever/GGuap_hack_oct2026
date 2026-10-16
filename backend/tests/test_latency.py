@@ -78,9 +78,19 @@ def test_silence_falls_back_to_hint(demo_ref, cfg):
     mask, midi = ref_arrays(demo_ref, g.t, cfg)
     lat = estimate_latency(g, mask, midi, cfg, cfg.tol("normal"), 48.0)
     assert lat.confidence == 0.0
+    assert lat.estimated_ms == 48.0
     assert lat.applied_ms == 48.0
     assert lat.residual_ms == 0.0
     assert not g.voiced.any()
+
+
+def test_silence_without_hint_estimates_zero(demo_ref, cfg):
+    g = grid_for(demo_ref, cfg, np.zeros(16000 * 12, dtype=np.float32))
+    mask, midi = ref_arrays(demo_ref, g.t, cfg)
+    lat = estimate_latency(g, mask, midi, cfg, cfg.tol("normal"), None)
+    assert lat.estimated_ms == 0.0
+    assert lat.applied_ms == 0.0
+    assert lat.confidence == 0.0
 
 
 def test_to_grid_handles_empty_track(cfg):
