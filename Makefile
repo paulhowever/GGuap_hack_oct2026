@@ -4,6 +4,7 @@ GODOT ?= /Applications/Godot.app/Contents/MacOS/Godot
 
 setup:
 	cd backend && uv sync
+	cd pipeline && uv sync
 	cd web && npm install
 	$(MAKE) vendor
 
@@ -26,6 +27,7 @@ dev: export-web assemble backend
 
 test:
 	cd backend && uv run pytest
+	cd pipeline && uv run pytest
 
 test-web:
 	cd web && npm test
