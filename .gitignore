@@ -5,7 +5,10 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 node_modules/
-dist/
+dist/*
+!dist/web/
+dist/web/mock/take.wav
+dist/web/mock/take.meta.json
 data/
 *.log
 .env

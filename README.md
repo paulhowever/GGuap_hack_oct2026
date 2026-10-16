@@ -16,6 +16,22 @@ Godot рисует, JS слушает, бэкенд судит.
 | `songs/` | эталоны, минусы, лицензии — [как сделать песню](songs/README.md) | Сеня |
 | `docs/` | Obsidian-волт: архитектура, контракты, решения, план | все |
 
+## Запустить игру (без Godot)
+
+Собранная игра лежит в репозитории, в `dist/web`. Нужны только [uv](https://docs.astral.sh/uv/) и Chrome или Edge.
+
+```bash
+git clone <url>
+cd GGuap_hack_oct2026/backend
+uv sync                                   # только в первый раз
+uv run uvicorn app.main:app --port 8000   # окно не закрывать
+```
+
+Открыть http://localhost:8000/ (микрофон, лучше в наушниках) или http://localhost:8000/?mock=perfect (без микрофона).
+Открывать `dist/web/index.html` двойным щелчком нельзя: игре нужен бэкенд, а микрофону — `localhost`.
+
+Обновить сборку (нужен Godot 4.8-dev7 с шаблонами Web): `powershell -ExecutionPolicy Bypass -File scripts\build-web.ps1`, затем закоммитить `dist/web`.
+
 ## Быстрый старт
 
 Движок без Godot:
