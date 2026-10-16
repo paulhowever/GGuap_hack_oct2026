@@ -13,6 +13,7 @@ import { requestSession } from './lib/session.js'
 import { attachDebug, isDebug } from './lib/debug.js'
 import { CLICK_LEAD, CLICK_LEN, CLICKS, HEADPHONES, LEAD_IN, SPEAKERS, clickTimes, detectOnsets, estimateLag, onsetThreshold } from './lib/calibration.js'
 import { clamp, round } from './lib/num.js'
+import { DEFAULT_TOL, RHO_MIN } from './lib/scoring.js'
 import { createMockVoice, attachPlanB } from './voice.mock.js'
 
 const LAG_KEY = 'voice.lag_ms'
@@ -26,7 +27,6 @@ const UPLOAD_TIMEOUT_MS = 10000
 const REC_FLUSH_TIMEOUT_MS = 500
 const RESUME_TIMEOUT_MS = 1000
 const SESSION_TIMEOUT_MS = 2000
-const AUTO_MIN_CONFIDENCE = 0.2
 const AUTO_OUTLIER_MS = 150
 const ESTIMATED_SLACK_S = 0.15
 
@@ -34,14 +34,14 @@ export function createVoice(cfg = {}, env = globalThis) {
   const bus = createBus({ sticky: ['on_unlocked'] })
   const queue = new FrameQueue(2000)
   const api = cfg.api || ''
-  const tolTable = cfg.tol_cents || { easy: 200, normal: 120, hard: 60 }
+  const tolTable = cfg.tol_cents || DEFAULT_TOL
   const s = {
     ctx: null, stream: null, mic: null, tap: null, music: null, src: null, unlocking: null, calibrating: false,
     sr: 0, floor: 0, gate: 0.01, level: 0,
     difficulty: cfg.difficulty || 'normal', aec: !!cfg.aec, volume: cfg.music_volume ?? 1,
     sessionLag: null, sessionSource: null, estLag: 20, lag: 20, lagSource: 'estimated', saved: null, outlier: null,
-    ref: null, buffer: null, state: 'idle', t0: 0,
-    rec: null, takeFrames: [], take: null, takeJob: null, recDone: null,
+    ref: null, buffer: null, state: 'idle', t0: 0, loadSeq: 0, judge: null,
+    rec: null, flushRec: null, takeFrames: [], take: null, takeJob: null, recDone: null,
     tokenJob: null, identity: null, tokenState: 'none',
     listeners: new Set()
   }
@@ -73,17 +73,12 @@ export function createVoice(cfg = {}, env = globalThis) {
     s.sessionLag = v
     s.sessionSource = source
     writeStored(v, source)
-    refreshLag()
+    if (s.state !== 'playing') refreshLag()
   }
 
   function resolveLag() {
-    const pinned = toMs(cfg.lag_ms)
-    const { ms: stored, src } = s.saved
-    const lag = resolveLagMs({ session: s.sessionLag, pinned, stored, estimated: s.estLag })
-    if (Number.isFinite(s.sessionLag)) return { lag, lagSource: s.sessionSource }
-    if (Number.isFinite(pinned)) return { lag, lagSource: 'config' }
-    if (Number.isFinite(stored)) return { lag, lagSource: src === 'config' || src === 'auto' ? src : 'calibrated' }
-    return { lag, lagSource: 'estimated' }
+    const r = resolveLagMs({ session: s.sessionLag, sessionSource: s.sessionSource, pinned: toMs(cfg.lag_ms), stored: s.saved.ms, storedSource: s.saved.src, estimated: s.estLag })
+    return { lag: r.ms, lagSource: r.source }
   }
 
   function refreshLag() {
@@ -92,7 +87,7 @@ export function createVoice(cfg = {}, env = globalThis) {
 
   function autoLag(latency) {
     const est = toMs(latency?.estimated_ms)
-    if (est === null || !(latency.confidence >= AUTO_MIN_CONFIDENCE)) return
+    if (est === null || !(latency.confidence >= RHO_MIN)) return
     const { lag: prev, lagSource } = resolveLag()
     if (lagSource !== 'estimated' && lagSource !== 'auto') return
     let next = est
@@ -152,7 +147,7 @@ export function createVoice(cfg = {}, env = globalThis) {
 
   function onTap(d) {
     if (d.frames) for (const f of d.frames) onFrame(f)
-    else if (d.pcm) s.rec?.push(d.pcm, d.F)
+    else if (d.pcm) (s.flushRec ?? s.rec)?.push(d.pcm, d.F)
     else if (d.recDone && s.recDone) {
       s.recDone()
       s.recDone = null
@@ -263,23 +258,33 @@ export function createVoice(cfg = {}, env = globalThis) {
   async function load_song(id) {
     if (!s.ctx || s.ctx.state !== 'running') return fail(ERR.LOCKED, 'load_song before unlock')
     if (s.state === 'playing') stop()
+    const seq = ++s.loadSeq
+    const stale = () => seq !== s.loadSeq
     let ref
     let data
     try {
       const r = await env.fetch(url(`/api/v1/songs/${encodeURIComponent(id)}`))
+      if (stale()) return false
       if (!r.ok) throw new Error(`songs/${id}: HTTP ${r.status}`)
       ref = await r.json()
+      if (stale()) return false
       const a = await env.fetch(url(ref.audio.minus))
+      if (stale()) return false
       if (!a.ok) throw new Error(`${ref.audio.minus}: HTTP ${a.status}`)
       data = await a.arrayBuffer()
+      if (stale()) return false
     } catch (e) {
+      if (stale()) return false
       return fail(ERR.NET, e)
     }
+    let buffer
     try {
-      s.buffer = await s.ctx.decodeAudioData(data)
+      buffer = await s.ctx.decodeAudioData(data)
     } catch (e) {
-      return fail(ERR.DECODE, e)
+      return stale() ? false : fail(ERR.DECODE, e)
     }
+    if (stale()) return false
+    s.buffer = buffer
     s.ref = ref
     s.state = 'idle'
     s.take = null
@@ -369,24 +374,34 @@ export function createVoice(cfg = {}, env = globalThis) {
     try {
       src.stop()
     } catch {}
+    const rec = s.rec
+    s.flushRec = rec
     const flushed = new Promise(resolve => {
-      s.recDone = resolve
-      env.setTimeout(resolve, REC_FLUSH_TIMEOUT_MS)
+      const done = () => {
+        if (s.flushRec === rec) s.flushRec = null
+        resolve()
+      }
+      s.recDone = done
+      env.setTimeout(done, REC_FLUSH_TIMEOUT_MS)
     })
     s.tap.port.postMessage({ rec: false })
-    const rec = s.rec
     const tokenJob = s.tokenJob
     const { songId, clientId: takeClientId, difficulty } = s.identity
     const info = { t0: s.t0, frames: s.takeFrames, lag_ms: s.lag, lag_source: s.lagSource, difficulty, song_id: songId, client_id: takeClientId }
     refreshLag()
-    s.takeJob = flushed
+    const job = flushed
       .then(() => buildTake(rec, info))
-      .then(async take => (s.take = { ...take, session_token: await tokenJob }))
+      .then(async take => {
+        const t = { ...take, session_token: await tokenJob }
+        if (s.takeJob === job) s.take = t
+        return t
+      })
       .catch(e => {
         fail(ERR.UPLOAD, e)
         return null
       })
-    return s.takeJob
+    s.takeJob = job
+    return job
   }
 
   function metaFor(take, player, challengeId) {

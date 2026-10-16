@@ -33,9 +33,11 @@ export function toMs(v) {
   return Number.isFinite(n) ? Math.round(n) : null
 }
 
-export function resolveLagMs({ session, pinned, stored, estimated }) {
-  for (const v of [session, pinned, stored]) if (Number.isFinite(v)) return v
-  return Number.isFinite(estimated) ? estimated : 0
+export function resolveLagMs({ session, sessionSource, pinned, stored, storedSource, estimated }) {
+  if (Number.isFinite(session)) return { ms: session, source: sessionSource }
+  if (Number.isFinite(pinned)) return { ms: pinned, source: 'config' }
+  if (Number.isFinite(stored)) return { ms: stored, source: storedSource === 'config' || storedSource === 'auto' ? storedSource : 'calibrated' }
+  return { ms: Number.isFinite(estimated) ? estimated : 0, source: 'estimated' }
 }
 
 export function noiseFloor(rmsList) {

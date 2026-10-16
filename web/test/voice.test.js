@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { createVoice, installVoice } from '../voice.js'
 import { createMockVoice } from '../voice.mock.js'
 import { parseWavHeader } from '../lib/wav.js'
+import { frameTime } from '../lib/timing.js'
 
 const BRIDGE = ['subscribe', 'unlock', 'configure', 'load_song', 'start', 'stop', 'poll', 'submit', 'calibrate', 'client_id']
 
@@ -146,14 +147,19 @@ test('installVoice picks the mock by ?mock= and the real engine otherwise', () =
   assert.equal(installVoice(win(''))._mode, 'real')
 })
 
-function recordingEnv({ sampleRate = 16000, takes, offline = false } = {}) {
+function recordingEnv({ sampleRate = 16000, takes, offline = false, decodeFails = false } = {}) {
   const taps = []
+  const sources = []
+  const gains = []
   class Node {
     constructor() {
       this.gain = { value: 1 }
       this.buffer = null
+      this.onended = null
     }
-    connect() {}
+    connect(to) {
+      this.out = to
+    }
     disconnect() {}
     start() {}
     stop() {}
@@ -175,13 +181,18 @@ function recordingEnv({ sampleRate = 16000, takes, offline = false } = {}) {
       return new Node()
     }
     createGain() {
-      return new Node()
+      const n = new Node()
+      gains.push(n)
+      return n
     }
     createBufferSource() {
-      return new Node()
+      const n = new Node()
+      sources.push(n)
+      return n
     }
-    decodeAudioData() {
-      return Promise.resolve({})
+    decodeAudioData(data) {
+      if (decodeFails) return Promise.reject(Object.assign(new Error('EncodingError'), { name: 'EncodingError' }))
+      return Promise.resolve({ tag: data?.tag })
     }
   }
   class Tap {
@@ -196,6 +207,8 @@ function recordingEnv({ sampleRate = 16000, takes, offline = false } = {}) {
   const env = {
     ...instant,
     taps,
+    sources,
+    gains,
     isSecureContext: true,
     performance: { now: () => 0 },
     AudioContext: Ctx,
@@ -594,4 +607,232 @@ test('the live judge gives an estimated lag 150 ms of slack and a tuned lag none
     const [strict] = await lateNoteHit({ 'voice.lag_ms': '200', 'voice.lag_src': src })
     assert.ok(strict < 0.8, `${src} ${strict}`)
   }
+})
+
+function gate() {
+  let open
+  const p = new Promise(r => (open = r))
+  return { p, open }
+}
+
+const song = id => ({ id, audio: { minus: `/media/${id}/minus.mp3`, duration: 10 }, lines: [{ i: 0, t0: 1, t1: 2, notes: [{ i: 0, t: 1, d: 0.5, midi: 69, type: 'normal' }] }] })
+
+function songsEnv(songs, opts) {
+  const env = recordingEnv(opts)
+  env.posted = []
+  env.fetch = async (u, o) => {
+    if (o?.method === 'POST' && u.endsWith('/api/v1/sessions')) return { ok: true, status: 200, json: async () => ({ token: 'tok' }) }
+    if (o?.method === 'POST') {
+      env.posted.push(JSON.parse(o.body.get('meta')))
+      return { ok: true, status: 200, json: async () => ({ take_id: 'tk' }) }
+    }
+    for (const [id, sg] of Object.entries(songs)) {
+      if (u.endsWith(`/api/v1/songs/${id}`)) {
+        if (sg.wait) await sg.wait
+        if (sg.status) return { ok: false, status: sg.status }
+        return { ok: true, status: 200, json: async () => sg.ref }
+      }
+      if (u.endsWith(sg.ref.audio.minus)) return { ok: true, status: 200, arrayBuffer: async () => Object.assign(new ArrayBuffer(8), { tag: id }) }
+    }
+    return { ok: false, status: 404 }
+  }
+  return env
+}
+
+async function unlockedVoice(env, cfg = {}) {
+  const v = createVoice(cfg, env)
+  const events = listen(v)
+  assert.equal(await v.unlock(), true)
+  return { v, events }
+}
+
+const readyIds = events => events.filter(e => e[0] === 'on_ready').map(e => e[1].id)
+const pushPcm = (env, n, F, value = 0.1) => env.taps[0].port.onmessage({ data: { pcm: new Float32Array(n).fill(value), F } })
+
+test('a slower, older load_song never replaces the newer song', async () => {
+  const g = gate()
+  const env = songsEnv({ a: { ref: song('a'), wait: g.p }, b: { ref: song('b') } })
+  const { v, events } = await unlockedVoice(env)
+  const pa = v.load_song('a')
+  assert.equal(await v.load_song('b'), true)
+  g.open()
+  assert.equal(await pa, false)
+  assert.deepEqual(readyIds(events), ['b'])
+  assert.equal(v.start(), true)
+  assert.equal(env.sources.at(-1).buffer.tag, 'b')
+  pushPcm(env, 1600, 4800)
+  await v.stop()
+  assert.equal(await v.submit('P', null), true)
+  assert.equal(env.posted.at(-1).song_id, 'b')
+  assert.deepEqual(errorCodes(events), [])
+})
+
+test('a stale load_song that fails after the newer one succeeded reports nothing', async () => {
+  const g = gate()
+  const env = songsEnv({ a: { ref: song('a'), wait: g.p, status: 500 }, b: { ref: song('b') } })
+  const { v, events } = await unlockedVoice(env)
+  const pa = v.load_song('a')
+  assert.equal(await v.load_song('b'), true)
+  g.open()
+  assert.equal(await pa, false)
+  assert.deepEqual(errorCodes(events), [])
+  assert.deepEqual(readyIds(events), ['b'])
+})
+
+test('a stale load_song landing mid-song leaves the playing take alone', async () => {
+  const g = gate()
+  const env = songsEnv({ a: { ref: song('a'), wait: g.p }, b: { ref: song('b') } })
+  const { v, events } = await unlockedVoice(env)
+  const pa = v.load_song('a')
+  await v.load_song('b')
+  v.start()
+  g.open()
+  assert.equal(await pa, false)
+  assert.equal(JSON.parse(v.poll()).state, 'playing')
+  pushPcm(env, 1600, 4800)
+  env.sources.at(-1).onended()
+  assert.equal(events.filter(e => e[0] === 'on_song_end').length, 1)
+  assert.equal(await v.submit('P', null), true)
+  assert.equal(env.posted.at(-1).song_id, 'b')
+  assert.deepEqual(errorCodes(events), [])
+})
+
+test('a double load_song of the same song with start on on_ready keeps the take', async () => {
+  const env = songsEnv({ a: { ref: song('a') } })
+  const { v, events } = await unlockedVoice(env)
+  let started = 0
+  v.subscribe(name => {
+    if (name === 'on_ready' && !started++) v.start()
+  })
+  await Promise.all([v.load_song('a'), v.load_song('a')])
+  assert.equal(JSON.parse(v.poll()).state, 'playing')
+  pushPcm(env, 1600, 4800)
+  env.sources.at(-1).onended()
+  assert.deepEqual(events.filter(e => e[0] === 'on_note_judged').map(e => e[1].i), [0])
+  assert.equal(await v.submit('P', null), true)
+  assert.equal(env.posted.at(-1).song_id, 'a')
+  assert.deepEqual(errorCodes(events), [])
+})
+
+test('a natural song end flushes the judge, emits on_song_end and submits the take', async () => {
+  const env = songsEnv({ a: { ref: song('a') } })
+  const { v, events } = await unlockedVoice(env)
+  assert.equal(await v.load_song('a'), true)
+  assert.equal(v.start(), true)
+  pushPcm(env, 8000, 0)
+  env.sources.at(-1).onended()
+  const tail = events.slice(-2)
+  assert.deepEqual(tail.map(e => e[0]), ['on_note_judged', 'on_song_end'])
+  assert.deepEqual(Object.keys(tail[1][1]), ['t'])
+  assert.equal(JSON.parse(v.poll()).state, 'ended')
+  assert.equal(await v.submit('P', null), true)
+  assert.deepEqual(events.at(-1), ['on_result', { take_id: 'tk' }])
+  assert.equal(env.posted.at(-1).song_id, 'a')
+})
+
+test('a manual stop emits no on_song_end even if onended fires later', async () => {
+  const env = songsEnv({ a: { ref: song('a') } })
+  const { v, events } = await unlockedVoice(env)
+  await v.load_song('a')
+  v.start()
+  const src = env.sources.at(-1)
+  await v.stop()
+  src.onended()
+  assert.equal(events.filter(e => e[0] === 'on_song_end').length, 0)
+  assert.equal(events.filter(e => e[0] === 'on_note_judged').length, 0)
+})
+
+test('load_song reports net for a 404 and decode_failed for a bad minus', async () => {
+  const gone = await unlockedVoice(songsEnv({ a: { ref: song('a') }, gone: { ref: song('gone'), status: 404 } }))
+  assert.equal(await gone.v.load_song('gone'), false)
+  assert.deepEqual(errorCodes(gone.events), ['net'])
+  const bad = await unlockedVoice(songsEnv({ a: { ref: song('a') } }, { decodeFails: true }))
+  assert.equal(await bad.v.load_song('a'), false)
+  assert.deepEqual(errorCodes(bad.events), ['decode_failed'])
+  assert.deepEqual(readyIds([...gone.events, ...bad.events]), [])
+})
+
+test('the real on_unlocked and on_ready payloads carry the bridge keys', async () => {
+  const env = songsEnv({ a: { ref: song('a') } })
+  const { v, events } = await unlockedVoice(env)
+  assert.deepEqual(Object.keys(events.find(e => e[0] === 'on_unlocked')[1]), ['sr', 'noise_db', 'lag_ms', 'bt_suspect'])
+  await v.load_song('a')
+  const ready = events.find(e => e[0] === 'on_ready')[1]
+  assert.deepEqual(ready.scoring, { tol_cents: 120 })
+  assert.equal(typeof ready.lag_ms, 'number')
+  assert.equal(ready.id, 'a')
+})
+
+test('music_volume is clamped into the music gain and an aec toggle reopens the mic', async () => {
+  const env = songsEnv({ a: { ref: song('a') } })
+  const opens = []
+  const gum = env.navigator.mediaDevices.getUserMedia
+  env.navigator.mediaDevices.getUserMedia = c => {
+    opens.push(c.audio.echoCancellation)
+    return gum(c)
+  }
+  const { v } = await unlockedVoice(env)
+  await v.load_song('a')
+  v.start()
+  const music = env.sources.at(-1).out
+  assert.ok(env.gains.includes(music))
+  v.configure({ music_volume: 3 })
+  assert.equal(music.gain.value, 1)
+  v.configure({ music_volume: 0.4 })
+  assert.equal(music.gain.value, 0.4)
+  v.configure({ music_volume: -1 })
+  assert.equal(music.gain.value, 0)
+  v.configure({ aec: true })
+  await new Promise(r => setImmediate(r))
+  assert.deepEqual(opens, [false, true])
+  assert.equal(JSON.parse(v.poll()).state, 'playing')
+})
+
+test('a restart right after stop keeps the old tail in the old take', async () => {
+  const env = songsEnv({ a: { ref: song('a') } })
+  const { v } = await unlockedVoice(env)
+  await v.load_song('a')
+  env.setTimeout = () => 0
+  const port = env.taps[0].port
+  v.start()
+  pushPcm(env, 1600, 4800, 0.1)
+  const first = v.stop()
+  v.start()
+  pushPcm(env, 400, 6400, 0.9)
+  port.onmessage({ data: { recDone: true } })
+  pushPcm(env, 1600, 8000, 0.2)
+  const old = await first
+  assert.equal(old.samples, 2000)
+  assert.equal(v._take(), null)
+  const second = v.stop()
+  port.onmessage({ data: { recDone: true } })
+  const take = await second
+  assert.equal(take.samples, 1600)
+  assert.ok(Math.abs(new DataView(take.wav).getInt16(44, true) / 32767 - 0.2) < 1e-3)
+  assert.equal(v._take().meta.wav_t0, take.wav_t0)
+})
+
+test('a lag configured mid-song applies from the next take only', async () => {
+  const env = songsEnv({ a: { ref: song('a') } })
+  const { v } = await unlockedVoice(env)
+  await v.load_song('a')
+  const frame = E => env.taps[0].port.onmessage({ data: { frames: [{ E, hz: 440, clarity: 0.99, rms: 0.1 }] } })
+  v.start()
+  const A = v._state().lag_ms
+  frame(16000 + 1024)
+  v.configure({ lag_ms: A + 100 })
+  assert.deepEqual([v._state().lag_ms, v._state().lag_source], [A, 'estimated'])
+  frame(32000 + 1024)
+  await v.stop()
+  const meta = v._take().meta
+  assert.equal(meta.lag_ms, A)
+  assert.equal(meta.lag_source, 'estimated')
+  assert.deepEqual(meta.frames.map(f => f.t), [16000 + 1024, 32000 + 1024].map(E => Math.round(frameTime(E, 16000, 0.15, A / 1000) * 1000) / 1000))
+  assert.deepEqual([v._state().lag_ms, v._state().lag_source], [A + 100, 'config'])
+  v.start()
+  frame(16000 + 1024)
+  await v.stop()
+  const next = v._take().meta
+  assert.deepEqual([next.lag_ms, next.lag_source], [A + 100, 'config'])
+  assert.equal(next.frames[0].t, Math.round(frameTime(16000 + 1024, 16000, 0.15, (A + 100) / 1000) * 1000) / 1000)
 })
