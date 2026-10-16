@@ -186,7 +186,8 @@ def logged_scored(caplog):
 
 
 @pytest.mark.parametrize(
-    ("source", "applied"), [("estimated", 300), ("config", 300), (None, 300), ("calibrated", 160)]
+    ("source", "applied"),
+    [("estimated", 300), ("config", 300), ("auto", 300), (None, 300), ("calibrated", 160)],
 )
 def test_lag_source_decides_the_clip(submit, caplog, source, applied):
     extra = {} if source is None else {"lag_source": source}

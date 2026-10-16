@@ -50,7 +50,7 @@ class TakeMeta(BaseModel):
     wav_t0: float
     wav_sr: int
     lag_ms: float | None = None
-    lag_source: Literal["calibrated", "config", "estimated"] | None = None
+    lag_source: Literal["calibrated", "config", "estimated", "auto"] | None = None
     frames: list[Frame] = Field(default_factory=list)
     client: dict[str, Any] = Field(default_factory=dict)
 

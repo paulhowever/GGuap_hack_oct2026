@@ -10,17 +10,18 @@ export function judgeNotes(ref) {
     .sort((a, b) => a.t - b.t)
 }
 
-export function createJudge(ref, { tolCents = 120, onsetPre = 0.15 } = {}) {
+export function createJudge(ref, { tolCents = 120, onsetPre = 0.15, slack = 0 } = {}) {
   const notes = judgeNotes(ref)
-  const acc = notes.map(() => ({ frames: 0, voiced: 0, good: 0, cents: [], run: null, onset: null }))
-  const starts = notes.map((n, k) => (k > 0 ? Math.max(n.t - onsetPre, notes[k - 1].end) : n.t - onsetPre))
+  const acc = notes.map(() => ({ frames: 0, good: 0, cents: [], run: null, onset: null }))
+  const starts = notes.map((n, k) => (k > 0 ? Math.max(n.t - onsetPre, Math.min(notes[k - 1].end, n.t)) : n.t - onsetPre))
+  const reach = Math.max(onsetPre, slack)
   let next = 0
 
   function verdict(k) {
     const n = notes[k]
     const a = acc[k]
     const pitched = PITCHED.has(n.type)
-    const hit = a.frames ? (pitched ? a.good : a.voiced) / a.frames : 0
+    const hit = a.frames ? Math.min(1, a.good / a.frames) : 0
     return {
       i: n.i,
       line: n.line,
@@ -33,7 +34,7 @@ export function createJudge(ref, { tolCents = 120, onsetPre = 0.15 } = {}) {
 
   function closeUntil(t) {
     const out = []
-    while (next < notes.length && t >= notes[next].end) out.push(verdict(next++))
+    while (next < notes.length && t >= notes[next].end + slack) out.push(verdict(next++))
     return out
   }
 
@@ -41,19 +42,18 @@ export function createJudge(ref, { tolCents = 120, onsetPre = 0.15 } = {}) {
     push(frame) {
       const out = closeUntil(frame.t)
       const voiced = frame.conf > 0 && frame.hz > 0
-      for (let k = next; k < notes.length && notes[k].t - onsetPre <= frame.t; k++) {
+      for (let k = next; k < notes.length && notes[k].t - reach <= frame.t; k++) {
         const n = notes[k]
         const a = acc[k]
-        if (frame.t < starts[k]) continue
         const pitched = PITCHED.has(n.type)
         const dc = voiced && pitched ? foldCents(100 * (hzToMidi(frame.hz) - n.midi)) : null
         const good = voiced && (!pitched || Math.abs(dc) <= tolCents)
+        if (good && frame.t >= n.t - slack && frame.t < n.end + slack) a.good++
+        if (frame.t < starts[k] || frame.t >= n.end) continue
         a.run = good ? (a.run ?? frame.t) : null
         if (frame.t < n.t) continue
         if (good && a.onset === null) a.onset = Math.max(a.run - n.t, starts[k] - n.t)
         a.frames++
-        if (voiced) a.voiced++
-        if (good) a.good++
         if (dc !== null) a.cents.push(dc)
       }
       return out

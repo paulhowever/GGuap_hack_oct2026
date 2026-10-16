@@ -16,6 +16,8 @@
   main { padding: 12px; display: grid; gap: 10px; max-width: 980px }
   .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center }
   #bt { display: none; background: #a30; padding: 8px }
+  #fine summary { cursor: pointer; color: #999 }
+  #fine .row, #fine #calibHint { margin-top: 8px }
   #calibHint { padding: 8px; background: #135 }
   #calibHint:empty { display: none }
   #calibHint.fail { background: #a30 }
@@ -38,12 +40,18 @@
     <button id="load">Загрузить</button>
     <button id="start">Старт</button>
     <button id="stop">Стоп</button>
-    <button id="calibSpeakers" title="8 щелчков через динамики, микрофон слушает их сам">Калибровка: динамики</button>
-    <button id="calibHeadphones" title="10 щелчков в наушниках, хлопай в такт">Калибровка: наушники (хлопай)</button>
-    <button id="lagMinus">lag −10</button>
-    <button id="lagPlus">lag +10</button>
   </div>
-  <div id="calibHint"></div>
+  <details id="fine">
+    <summary>Точная подстройка (необязательно)</summary>
+    <div class="row">
+      <button id="calibSpeakers" title="8 щелчков через динамики, микрофон слушает их сам">Калибровка: динамики</button>
+      <button id="calibHeadphones" title="10 щелчков в наушниках, хлопай в такт">Калибровка: наушники (хлопай)</button>
+      <button id="lagMinus">lag −10</button>
+      <button id="lagPlus">lag +10</button>
+      <button id="lagReset" title="Забыть сохранённую задержку и перезагрузить страницу">Сбросить задержку</button>
+    </div>
+    <div id="calibHint"></div>
+  </details>
   <div class="row">
     <input id="player" value="Паша" maxlength="32">
     <button id="submit">Отправить</button>
@@ -87,7 +95,7 @@ const UNLOCK_REASONS = {
   audio_locked: 'Браузер не дал включить звук. Нажми ещё раз.',
   worklet_failed: 'Не загрузился модуль звука. Обнови страницу.'
 }
-const st = { ref: null, tol: 120, frames: [], tNow: 0, state: 'idle', level: 0, unlocked: null, lastFrames: 0, count: 0, fps: 0, wav: null, submitting: false, calibrating: false, unlocking: false, starting: false }
+const st = { ref: null, tol: 120, frames: [], tNow: 0, state: 'idle', level: 0, unlocked: null, lastFrames: 0, count: 0, fps: 0, wav: null, submitting: false, calibrating: false, unlocking: false, starting: false, lagBefore: null }
 
 function log(name, data) {
   const line = `${new Date().toISOString().slice(11, 23)} ${name} ${JSON.stringify(data)}`
@@ -113,7 +121,7 @@ function calibrate(mode) {
 
 function showBt(data) {
   const out = voice._state().output_latency
-  $('bt').textContent = `Похоже на Bluetooth-наушники: задержка вывода ~${Math.round((out || 0) * 1000)} мс. Откалибруй в режиме «наушники» и лучше используй микрофон ноутбука, а не наушников.`
+  $('bt').textContent = `Похоже на Bluetooth-наушники: задержка вывода ~${Math.round((out || 0) * 1000)} мс. В первой песне точки могут чуть смещаться, дальше задержка подстроится сама. Лучше пой в микрофон ноутбука, а не наушников.`
   $('bt').style.display = data.bt_suspect ? 'block' : 'none'
 }
 
@@ -126,9 +134,19 @@ function integrityLabel(data) {
   return status || '—'
 }
 
+function lagKey() {
+  const vs = voice._state()
+  return `${vs.lag_source}:${vs.lag_ms}`
+}
+
+function lagLabel() {
+  const vs = voice._state()
+  return vs.lag_source === 'auto' && lagKey() !== st.lagBefore ? ` · задержка подстроена: ${vs.lag_ms} мс` : ''
+}
+
 function showResult(data) {
   $('result').textContent = JSON.stringify(data, null, 2)
-  $('submitStatus').textContent = `${data.score?.total ?? '—'} · ${data.score?.grade ?? '—'} · ${integrityLabel(data)}`
+  $('submitStatus').textContent = `${data.score?.total ?? '—'} · ${data.score?.grade ?? '—'} · ${integrityLabel(data)}${lagLabel()}`
   $('result').scrollIntoView({ behavior: 'smooth', block: 'nearest' })
 }
 
@@ -225,6 +243,14 @@ function nudge(d) {
   voice.configure(JSON.stringify({ lag_ms: voice._state().lag_ms + d }))
 }
 
+function resetLag() {
+  try {
+    localStorage.removeItem('voice.lag_ms')
+    localStorage.removeItem('voice.lag_src')
+  } catch {}
+  location.reload()
+}
+
 $('load').onclick = () => {
   voice.configure(JSON.stringify({ difficulty: $('difficulty').value }))
   voice.load_song($('song').value)
@@ -242,10 +268,12 @@ $('calibSpeakers').onclick = () => calibrate('speakers')
 $('calibHeadphones').onclick = () => calibrate('headphones')
 $('lagMinus').onclick = () => nudge(-10)
 $('lagPlus').onclick = () => nudge(10)
+$('lagReset').onclick = resetLag
 $('submit').onclick = () => {
   $('result').textContent = 'Судья слушает…'
   $('submitStatus').textContent = 'Судья слушает…'
   st.submitting = true
+  st.lagBefore = lagKey()
   voice.submit($('player').value, new URLSearchParams(location.search).get('challenge') || '')
 }
 $('download').onclick = downloadTake

@@ -26,6 +26,9 @@ const UPLOAD_TIMEOUT_MS = 10000
 const REC_FLUSH_TIMEOUT_MS = 500
 const RESUME_TIMEOUT_MS = 1000
 const SESSION_TIMEOUT_MS = 2000
+const AUTO_MIN_CONFIDENCE = 0.2
+const AUTO_OUTLIER_MS = 150
+const ESTIMATED_SLACK_S = 0.15
 
 export function createVoice(cfg = {}, env = globalThis) {
   const bus = createBus({ sticky: ['on_unlocked'] })
@@ -36,7 +39,7 @@ export function createVoice(cfg = {}, env = globalThis) {
     ctx: null, stream: null, mic: null, tap: null, music: null, src: null, unlocking: null, calibrating: false,
     sr: 0, floor: 0, gate: 0.01, level: 0,
     difficulty: cfg.difficulty || 'normal', aec: !!cfg.aec, volume: cfg.music_volume ?? 1,
-    sessionLag: null, sessionSource: null, estLag: 20, lag: 20, lagSource: 'estimated',
+    sessionLag: null, sessionSource: null, estLag: 20, lag: 20, lagSource: 'estimated', saved: null, outlier: null,
     ref: null, buffer: null, state: 'idle', t0: 0,
     rec: null, takeFrames: [], take: null, takeJob: null, recDone: null,
     tokenJob: null, identity: null, tokenState: 'none',
@@ -59,6 +62,7 @@ export function createVoice(cfg = {}, env = globalThis) {
   }
 
   function writeStored(v, source) {
+    s.saved = { ms: v, src: source }
     try {
       env.localStorage?.setItem(LAG_KEY, String(v))
       env.localStorage?.setItem(LAG_SRC_KEY, source)
@@ -72,16 +76,42 @@ export function createVoice(cfg = {}, env = globalThis) {
     refreshLag()
   }
 
-  function refreshLag() {
+  function resolveLag() {
     const pinned = toMs(cfg.lag_ms)
-    const stored = toMs(readKey(LAG_KEY))
-    s.lag = resolveLagMs({ session: s.sessionLag, pinned, stored, estimated: s.estLag })
-    if (Number.isFinite(s.sessionLag)) s.lagSource = s.sessionSource
-    else if (Number.isFinite(pinned)) s.lagSource = 'config'
-    else if (Number.isFinite(stored)) s.lagSource = readKey(LAG_SRC_KEY) === 'config' ? 'config' : 'calibrated'
-    else s.lagSource = 'estimated'
+    const { ms: stored, src } = s.saved
+    const lag = resolveLagMs({ session: s.sessionLag, pinned, stored, estimated: s.estLag })
+    if (Number.isFinite(s.sessionLag)) return { lag, lagSource: s.sessionSource }
+    if (Number.isFinite(pinned)) return { lag, lagSource: 'config' }
+    if (Number.isFinite(stored)) return { lag, lagSource: src === 'config' || src === 'auto' ? src : 'calibrated' }
+    return { lag, lagSource: 'estimated' }
   }
 
+  function refreshLag() {
+    Object.assign(s, resolveLag())
+  }
+
+  function autoLag(latency) {
+    const est = toMs(latency?.estimated_ms)
+    if (est === null || !(latency.confidence >= AUTO_MIN_CONFIDENCE)) return
+    const { lag: prev, lagSource } = resolveLag()
+    if (lagSource !== 'estimated' && lagSource !== 'auto') return
+    let next = est
+    if (lagSource === 'auto') {
+      if (Math.abs(est - prev) > AUTO_OUTLIER_MS) {
+        const first = s.outlier
+        s.outlier = est
+        if (first === null || Math.abs(est - first) > AUTO_OUTLIER_MS) return
+        next = Math.round((first + est) / 2)
+      } else {
+        next = Math.round((prev + est) / 2)
+      }
+    }
+    s.outlier = null
+    writeStored(next, 'auto')
+    if (s.state !== 'playing') refreshLag()
+  }
+
+  s.saved = { ms: toMs(readKey(LAG_KEY)), src: readKey(LAG_SRC_KEY) }
   refreshLag()
 
   function songNow() {
@@ -174,9 +204,10 @@ export function createVoice(cfg = {}, env = globalThis) {
     s.floor = noiseFloor(frames.map(f => f.rms))
     s.gate = gateFrom(s.floor)
     const track = s.stream.getAudioTracks()[0]
-    s.estLag = estimateLagMs({ outputLatency: ctx.outputLatency, baseLatency: ctx.baseLatency, trackLatency: track?.getSettings?.().latency })
+    const bt = isBtSuspect(ctx.outputLatency)
+    s.estLag = estimateLagMs({ outputLatency: ctx.outputLatency, baseLatency: ctx.baseLatency, trackLatency: track?.getSettings?.().latency, bt })
     refreshLag()
-    bus.emit('on_unlocked', { sr: s.sr, noise_db: toDb(s.floor), lag_ms: s.lag, bt_suspect: isBtSuspect(ctx.outputLatency) })
+    bus.emit('on_unlocked', { sr: s.sr, noise_db: toDb(s.floor), lag_ms: s.lag, bt_suspect: bt })
     return true
   }
 
@@ -275,7 +306,7 @@ export function createVoice(cfg = {}, env = globalThis) {
     s.t0 = ctx.currentTime + START_DELAY
     s.rec = new PcmRecorder(s.sr, MAX_TAKE_SECONDS)
     s.takeFrames = []
-    s.judge = createJudge(s.ref, { tolCents: tol() })
+    s.judge = createJudge(s.ref, { tolCents: tol(), slack: s.lagSource === 'estimated' ? ESTIMATED_SLACK_S : 0 })
     s.take = null
     s.takeJob = null
     queue.drain()
@@ -347,6 +378,7 @@ export function createVoice(cfg = {}, env = globalThis) {
     const tokenJob = s.tokenJob
     const { songId, clientId: takeClientId, difficulty } = s.identity
     const info = { t0: s.t0, frames: s.takeFrames, lag_ms: s.lag, lag_source: s.lagSource, difficulty, song_id: songId, client_id: takeClientId }
+    refreshLag()
     s.takeJob = flushed
       .then(() => buildTake(rec, info))
       .then(async take => (s.take = { ...take, session_token: await tokenJob }))
@@ -382,6 +414,7 @@ export function createVoice(cfg = {}, env = globalThis) {
       const meta = metaFor(take, player, challengeId)
       take.token_spent = true
       const result = await postTake({ env, url: url('/api/v1/takes'), wav: take.wav, meta, timeoutMs: UPLOAD_TIMEOUT_MS })
+      autoLag(result?.latency)
       bus.emit('on_result', result)
       return true
     } catch (e) {
