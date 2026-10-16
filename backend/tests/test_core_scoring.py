@@ -99,3 +99,49 @@ def test_contiguous_notes_keep_their_own_onset(demo_ref, cfg, difficulty):
         assert res["notes"][k]["onset_ms"] is not None
         assert abs(res["notes"][k]["onset_ms"]) <= cfg.onset_ok_ms
         assert res["notes"][k]["perfect"] is True
+
+
+@pytest.mark.parametrize("lead_s", [0.15, 0.4])
+def test_negative_wav_t0_is_song_time_of_first_sample(demo_ref, cfg, lead_s):
+    x = np.concatenate([np.zeros(int(lead_s * 16000), dtype=np.float32), synth_take(demo_ref, delay_s=0.1)])
+    tr = get_engine("swiftf0").track(x, 16000)
+    res = score_take(demo_ref, tr, -lead_s, cfg, "normal", None)
+    assert res["latency"]["estimated_ms"] == pytest.approx(100, abs=20)
+    assert res["score"]["total"] >= 9300
+
+
+def test_two_octaves_down_reports_one(demo_ref, cfg):
+    assert run(demo_ref, cfg, synth_take(demo_ref, octave=-2))["octave_shift"] == -1
+
+
+def test_fifth_sharp_is_not_an_octave(demo_ref, cfg):
+    res = run(demo_ref, cfg, synth_take(demo_ref, cents=700))
+    assert res["octave_shift"] == 0
+    assert all(t["code"] != "octave_info" for t in res["tips"])
+
+
+def test_rap_and_free_notes(demo_ref, cfg):
+    ref = copy.deepcopy(demo_ref)
+    for n in ref["lines"][0]["notes"]:
+        n["type"] = "rap"
+    ref["lines"][1]["notes"][1]["type"] = "free"
+    res = run(ref, cfg, synth_take(ref, jitter_cents=20.0))
+    assert res["notes"][4]["pts"] == 0
+    assert all(n["cents"] is None for n in res["notes"] if n["line"] == 0)
+    assert res["lines"][0]["pitch_pct"] == res["lines"][0]["rhythm_pct"]
+
+
+def test_chart_folds_octave_to_target(demo_ref, cfg):
+    res = run(demo_ref, cfg, synth_take(demo_ref, octave=-1))
+    ch = res["chart"]
+    notes = [n for line in demo_ref["lines"] for n in line["notes"]]
+    checked = 0
+    for k, v in enumerate(ch["sung"]):
+        if v is None:
+            continue
+        t = ch["t0"] + k * ch["hop_ms"] / 1000.0
+        for n in notes:
+            if n["t"] <= t < n["t"] + n["d"]:
+                assert abs(v - n["midi"]) <= 0.5
+                checked += 1
+    assert checked > 100
