@@ -29,8 +29,9 @@ const RESUME_TIMEOUT_MS = 1000
 const SESSION_TIMEOUT_MS = 2000
 const AUTO_OUTLIER_MS = 150
 const ESTIMATED_SLACK_S = 0.15
-const REVIEW_LEAD = 0.05
-const VOICE_GAIN = 1.4
+const PUBLISH_TIMEOUT_MS = 5000
+const LISTEN_LEAD = 0.1
+const WAV_T0_MAX = 5
 
 export function createVoice(cfg = {}, env = globalThis) {
   const bus = createBus({ sticky: ['on_unlocked'] })
@@ -45,9 +46,18 @@ export function createVoice(cfg = {}, env = globalThis) {
     ref: null, buffer: null, state: 'idle', t0: 0, loadSeq: 0, judge: null,
     rec: null, flushRec: null, takeFrames: [], take: null, takeJob: null, recDone: null,
     tokenJob: null, identity: null, tokenState: 'none',
-    review: null, reviewNodes: [],
+    listenSeq: 0, listening: null, lastPub: null,
     listeners: new Set()
   }
+
+  bus.subscribe((name, json) => {
+    if (name !== 'on_result') return
+    try {
+      const r = JSON.parse(json)
+      const w = s.take?.wav_t0
+      s.lastPub = { take_id: r?.take_id ?? null, wav_t0: Number.isFinite(w) && Math.abs(w) <= WAV_T0_MAX ? round(w, 3) : null }
+    } catch {}
+  })
 
   const fail = (code, err) => {
     bus.emit('on_error', errorPayload(code, err))
@@ -259,6 +269,7 @@ export function createVoice(cfg = {}, env = globalThis) {
   }
 
   async function load_song(id) {
+    stopListen('stopped')
     if (!s.ctx || s.ctx.state !== 'running') return fail(ERR.LOCKED, 'load_song before unlock')
     if (s.state === 'playing') stop()
     const seq = ++s.loadSeq
@@ -297,9 +308,9 @@ export function createVoice(cfg = {}, env = globalThis) {
   }
 
   function start() {
+    stopListen('stopped')
     if (!s.buffer || !s.tap) return fail(ERR.LOCKED, 'start before load_song')
     if (s.state === 'playing') return true
-    reviewHalt()
     const ctx = s.ctx
     if (ctx.state !== 'running') ctx.resume().catch(() => {})
     const src = ctx.createBufferSource()
@@ -362,8 +373,6 @@ export function createVoice(cfg = {}, env = globalThis) {
     const { data, rate, resampler } = await resample16k(pcm, rec.sr)
     return {
       ...info,
-      pcm,
-      pcm_sr: rec.sr,
       wav: encodeWav(data, rate),
       wav_sr: rate,
       wav_t0: rec.firstFrame === null ? 0 : rec.firstFrame / rec.sr - info.t0,
@@ -394,16 +403,12 @@ export function createVoice(cfg = {}, env = globalThis) {
     const tokenJob = s.tokenJob
     const { songId, clientId: takeClientId, difficulty } = s.identity
     const info = { t0: s.t0, frames: s.takeFrames, lag_ms: s.lag, lag_source: s.lagSource, difficulty, song_id: songId, client_id: takeClientId }
-    const minus = s.buffer
     refreshLag()
     const job = flushed
       .then(() => buildTake(rec, info))
       .then(async take => {
         const t = { ...take, session_token: await tokenJob }
-        if (s.takeJob === job) {
-          s.take = t
-          setReview(t, minus)
-        }
+        if (s.takeJob === job) s.take = t
         return t
       })
       .catch(e => {
@@ -439,7 +444,6 @@ export function createVoice(cfg = {}, env = globalThis) {
       const meta = metaFor(take, player, challengeId)
       take.token_spent = true
       const result = await postTake({ env, url: url('/api/v1/takes'), wav: take.wav, meta, timeoutMs: UPLOAD_TIMEOUT_MS })
-      if (s.review && s.review.pcm === take.pcm) s.review.takeId = result?.take_id ?? null
       autoLag(result?.latency)
       bus.emit('on_result', result)
       return true
@@ -449,6 +453,7 @@ export function createVoice(cfg = {}, env = globalThis) {
   }
 
   async function calibrate(mode) {
+    stopListen('stopped')
     if (s.calibrating) return false
     if (!s.tap || s.state === 'playing') return fail(ERR.LOCKED, 'calibrate needs unlock and no song playing')
     s.calibrating = true
@@ -476,123 +481,158 @@ export function createVoice(cfg = {}, env = globalThis) {
     return r.lag_ms !== null
   }
 
-  // --- Прослушивание последнего дубля: голос + минус, пауза и перемотка ---
-  // Голос записан с задержкой lag относительно минуса, поэтому сдвигаем его на lag раньше.
+  const takeIdOf = id => (typeof id === 'string' ? id : String(id ?? ''))
 
-  function setReview(take, minus) {
-    reviewHalt()
-    if (!take?.pcm?.length) return
-    s.review = {
-      pcm: take.pcm, sr: take.pcm_sr, t0: take.wav_t0 - take.lag_ms / 1000, buffer: minus,
-      songId: take.song_id, takeId: null, voice: null, pos: 0, playing: false, startCtx: 0, startPos: 0
+  async function requestJson(path, body) {
+    const ac = new env.AbortController()
+    const timer = env.setTimeout(() => ac.abort(), PUBLISH_TIMEOUT_MS)
+    try {
+      const r = await env.fetch(url(path), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: ac.signal })
+      if (r.ok) return null
+      const detail = await r.json().then(b => b?.detail, () => null)
+      return typeof detail === 'string' && detail ? detail : `http_${r.status}`
+    } catch {
+      return ERR.NET
+    } finally {
+      env.clearTimeout?.(timer)
     }
   }
 
-  function reviewDuration(r) {
-    return Math.max(r.buffer?.duration ?? 0, r.t0 + r.pcm.length / r.sr)
+  async function setPublished(id, published) {
+    const take_id = takeIdOf(id)
+    let code = 'take_not_found'
+    if (take_id) {
+      const cid = clientId(env)
+      code = published
+        ? await requestJson('/api/v1/published', { take_id, client_id: cid, wav_t0: s.lastPub?.take_id === take_id ? s.lastPub.wav_t0 : null })
+        : await requestJson(`/api/v1/published/${encodeURIComponent(take_id)}/remove`, { client_id: cid })
+    }
+    bus.emit('on_published', { take_id, published, ok: code === null, code })
+    return code === null
   }
 
-  function reviewStopNodes() {
-    for (const n of s.reviewNodes) {
+  function endListen(p, reason, code = null) {
+    if (!p || s.listening !== p) return false
+    s.listening = null
+    s.listenSeq++
+    for (const n of p.nodes) {
+      n.onended = null
       try {
-        n.stop?.()
+        n.stop()
       } catch {}
       try {
-        n.disconnect?.()
+        n.disconnect()
       } catch {}
     }
-    s.reviewNodes = []
+    bus.emit('on_listen_end', { take_id: p.take_id, reason, code })
+    return false
   }
 
-  function reviewPos(r) {
-    if (!r.playing) return r.pos
-    return clamp(r.startPos + Math.max(0, s.ctx.currentTime - r.startCtx), 0, reviewDuration(r))
-  }
-
-  function reviewHalt() {
-    const r = s.review
-    if (r?.playing) {
-      r.pos = reviewPos(r)
-      r.playing = false
+  function stopListen(reason) {
+    if (!s.listening) {
+      s.listenSeq++
+      return false
     }
-    reviewStopNodes()
+    endListen(s.listening, reason)
+    return true
   }
 
-  function review_play(from) {
-    const r = s.review
-    if (!r) return fail(ERR.LOCKED, 'no take to review')
-    if (!s.ctx || s.state === 'playing') return fail(ERR.LOCKED, 'review needs unlock and no song playing')
+  function listenError(code, message) {
+    const e = new Error(message)
+    e.code = code
+    return e
+  }
+
+  async function fetchBuffer(path) {
+    let data
+    try {
+      const r = await env.fetch(url(path))
+      if (!r.ok) throw listenError(ERR.NET, `${path}: HTTP ${r.status}`)
+      data = await r.arrayBuffer()
+    } catch (e) {
+      throw e?.code ? e : listenError(ERR.NET, e?.message)
+    }
+    try {
+      return await s.ctx.decodeAudioData(data)
+    } catch (e) {
+      throw listenError(ERR.DECODE, e?.message)
+    }
+  }
+
+  async function fetchItem(take_id) {
+    let r
+    try {
+      r = await env.fetch(url(`/api/v1/published/${encodeURIComponent(take_id)}`))
+    } catch (e) {
+      throw listenError(ERR.NET, e?.message)
+    }
+    const body = await r.json().catch(() => null)
+    if (!r.ok) throw listenError(typeof body?.detail === 'string' && body.detail ? body.detail : `http_${r.status}`, `published/${take_id}`)
+    if (!body || typeof body.audio !== 'string') throw listenError(ERR.NET, `published/${take_id}: no audio`)
+    return body
+  }
+
+  function minusFor(item) {
+    if (s.buffer && s.ref?.id === item.song_id) return Promise.resolve(s.buffer)
+    if (typeof item.minus !== 'string' || !item.minus) return Promise.resolve(null)
+    return fetchBuffer(item.minus).catch(() => null)
+  }
+
+  const audioReady = () => !!s.ctx && s.ctx.state === 'running' && s.state !== 'playing' && !s.calibrating
+
+  async function listen(id) {
+    const take_id = takeIdOf(id)
+    stopListen('stopped')
+    const refused = !audioReady() ? ERR.LOCKED : take_id ? null : 'not_published'
+    if (refused) {
+      bus.emit('on_listen_end', { take_id, reason: 'error', code: refused })
+      return false
+    }
+    const p = { take_id, seq: ++s.listenSeq, nodes: [] }
+    s.listening = p
+    const live = () => s.listening === p && p.seq === s.listenSeq && audioReady()
+    const bail = () => (s.ctx.state === 'running' ? endListen(p, 'stopped') : endListen(p, 'error', ERR.LOCKED))
+    let item
+    let vocal
+    let minus
+    try {
+      item = await fetchItem(take_id)
+      if (!live()) return bail()
+      ;[vocal, minus] = await Promise.all([fetchBuffer(item.audio), minusFor(item)])
+      if (!live()) return bail()
+    } catch (e) {
+      return live() ? endListen(p, 'error', e?.code || ERR.NET) : bail()
+    }
     const ctx = s.ctx
-    if (ctx.state !== 'running') ctx.resume().catch(() => {})
-    const dur = reviewDuration(r)
-    const at = Number(from)
-    let pos = clamp(Number.isFinite(at) && at >= 0 ? at : reviewPos(r), 0, dur)
-    if (pos >= dur - 0.05) pos = 0
-    reviewStopNodes()
-    if (!r.voice) {
-      r.voice = ctx.createBuffer(1, r.pcm.length, r.sr)
-      r.voice.copyToChannel(r.pcm, 0)
+    const at = ctx.currentTime + LISTEN_LEAD
+    const offset = Number.isFinite(item.offset_s) ? item.offset_s : 0
+    const duration = Math.max(0, offset + vocal.duration)
+    const voiceSrc = ctx.createBufferSource()
+    voiceSrc.buffer = vocal
+    voiceSrc.connect(ctx.destination)
+    p.nodes.push(voiceSrc)
+    voiceSrc.onended = () => {
+      if (s.listening === p && p.seq === s.listenSeq) endListen(p, 'ended')
     }
-    const when = ctx.currentTime + REVIEW_LEAD
-    const nodes = []
-    if (r.buffer && pos < r.buffer.duration) {
-      const m = ctx.createBufferSource()
-      m.buffer = r.buffer
-      m.connect(s.music)
-      m.start(when, pos)
-      nodes.push(m)
+    if (minus) {
+      let out = s.music
+      if (!out) {
+        out = ctx.createGain()
+        out.gain.value = s.volume
+        out.connect(ctx.destination)
+        p.nodes.push(out)
+      }
+      const minusSrc = ctx.createBufferSource()
+      minusSrc.buffer = minus
+      minusSrc.connect(out)
+      p.nodes.push(minusSrc)
+      minusSrc.start(at)
+      minusSrc.stop(at + duration)
     }
-    const vOff = pos - r.t0
-    if (vOff < r.pcm.length / r.sr) {
-      const v = ctx.createBufferSource()
-      v.buffer = r.voice
-      const g = ctx.createGain()
-      g.gain.value = VOICE_GAIN
-      v.connect(g)
-      g.connect(ctx.destination)
-      if (vOff >= 0) v.start(when, vOff)
-      else v.start(when - vOff, 0)
-      nodes.push(v, g)
-    }
-    s.reviewNodes = nodes
-    r.startCtx = when
-    r.startPos = pos
-    r.pos = pos
-    r.playing = true
+    if (offset >= 0) voiceSrc.start(at + offset)
+    else voiceSrc.start(at, -offset)
+    bus.emit('on_listen', { take_id, duration: round(duration, 3) })
     return true
-  }
-
-  function review_pause() {
-    reviewHalt()
-    return true
-  }
-
-  function review_seek(t) {
-    const r = s.review
-    if (!r) return false
-    const pos = clamp(Number(t) || 0, 0, reviewDuration(r))
-    if (r.playing) return review_play(pos)
-    r.pos = pos
-    return true
-  }
-
-  function review_stop() {
-    reviewHalt()
-    if (s.review) s.review.pos = 0
-    return true
-  }
-
-  function review_state() {
-    const r = s.review
-    if (!r) return JSON.stringify({ available: false, state: 'idle', t: 0, duration: 0, song_id: null, take_id: null })
-    const dur = reviewDuration(r)
-    if (r.playing && reviewPos(r) >= dur) {
-      reviewHalt()
-      r.pos = dur
-    }
-    const t = reviewPos(r)
-    const state = r.playing ? 'playing' : t >= dur ? 'ended' : 'paused'
-    return JSON.stringify({ available: true, state, t: round(t, 3), duration: round(dur, 3), song_id: r.songId, take_id: r.takeId })
   }
 
   function poll() {
@@ -610,14 +650,13 @@ export function createVoice(cfg = {}, env = globalThis) {
     poll,
     submit,
     calibrate,
-    review_play,
-    review_pause,
-    review_seek,
-    review_stop,
-    review_state,
     client_id() {
       return clientId(env)
     },
+    publish: id => setPublished(id, true),
+    unpublish: id => setPublished(id, false),
+    listen,
+    listen_stop: () => stopListen('stopped'),
     _take() {
       const take = s.take
       return take ? { wav: take.wav, meta: metaFor(take, 'dev', null), resampler: take.resampler } : null

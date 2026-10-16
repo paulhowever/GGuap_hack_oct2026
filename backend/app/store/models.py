@@ -65,3 +65,11 @@ class GameSession(Base):
     difficulty: Mapped[str] = mapped_column(String(8))
     issued_at: Mapped[float] = mapped_column(Float)
     used_at: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+
+class PublishedTake(Base):
+    __tablename__ = "published_takes"
+
+    take_id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    wav_t0: Mapped[float | None] = mapped_column(Float, nullable=True)
+    published_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
