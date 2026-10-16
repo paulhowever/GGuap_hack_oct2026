@@ -49,4 +49,4 @@
 
 ## План Б
 
-«Скачать дубль» в dev.html сохраняет `take.wav` и `take.meta.json`. Положить их в `web/mock/`, открыть игру с `?mock=perfect` и нажать Alt+Shift+R: дубль уйдёт в настоящий `POST /api/v1/takes`.
+Кнопки «Скачать WAV» и «Скачать meta» в dev.html сохраняют `take.wav` и `take.meta.json`, по файлу на клик: Safari теряет одно из двух скачиваний с одного клика. Положить их в `web/mock/`, открыть игру с `?mock=perfect` и нажать Alt+Shift+R: дубль уйдёт в настоящий `POST /api/v1/takes`.

@@ -55,7 +55,8 @@
   <div class="row">
     <input id="player" value="Паша" maxlength="32">
     <button id="submit">Отправить</button>
-    <button id="download">Скачать дубль</button>
+    <button id="downloadWav">Скачать WAV</button>
+    <button id="downloadMeta">Скачать meta</button>
     <span id="submitStatus"></span>
     <span id="meter"><div></div></span>
     <span id="db"></span>
@@ -229,14 +230,13 @@ function save(name, blob) {
   setTimeout(() => URL.revokeObjectURL(a.href), 1000)
 }
 
-function downloadTake() {
+function downloadTake(name, type, body) {
   const take = voice._take()
   if (!take) {
     $('submitStatus').textContent = 'Дубля нет — сначала спой песню до конца или нажми Стоп'
     return log('dev', 'нет дубля')
   }
-  save('take.wav', new Blob([take.wav], { type: 'audio/wav' }))
-  save('take.meta.json', new Blob([JSON.stringify(take.meta)], { type: 'application/json' }))
+  save(name, new Blob([body(take)], { type }))
 }
 
 function nudge(d) {
@@ -276,7 +276,8 @@ $('submit').onclick = () => {
   st.lagBefore = lagKey()
   voice.submit($('player').value, new URLSearchParams(location.search).get('challenge') || '')
 }
-$('download').onclick = downloadTake
+$('downloadWav').onclick = () => downloadTake('take.wav', 'audio/wav', take => take.wav)
+$('downloadMeta').onclick = () => downloadTake('take.meta.json', 'application/json', take => JSON.stringify(take.meta))
 
 const lane = $('lane')
 const g = lane.getContext('2d')
