@@ -1,10 +1,16 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://c1gqt70a17cb7"]
 
-[ext_resource type="Script" path="res://scenes/result/result.gd" id="1_res"]
+[ext_resource type="Script" uid="uid://xmr1csx0ifog" path="res://scenes/result/result.gd" id="1_res"]
 [ext_resource type="PackedScene" uid="uid://kvfxehvfomao" path="res://ui/components/studio_background.tscn" id="2_bg"]
 [ext_resource type="Theme" uid="uid://jo2ye60ryjcu" path="res://ui/theme/main_theme.tres" id="3_theme"]
+[ext_resource type="Script" uid="uid://cf3r34gml1i8d" path="res://ui/components/score_ring.gd" id="4_ring"]
+[ext_resource type="Script" uid="uid://2c2dvcjeytwd" path="res://ui/behaviours/beat_reactor.gd" id="5_beat"]
 
-[node name="Result" type="Control"]
+[sub_resource type="Gradient" id="Gradient_efjyw"]
+offsets = PackedFloat32Array(0, 0.4, 0.65, 0.73888886, 0.95555556)
+colors = PackedColorArray(1, 0.365, 0.365, 1, 1, 0.549, 0.102, 1, 1, 0.8, 0.25, 1, 1, 0.82, 0.35, 1, 0.373, 0.827, 0.737, 1)
+
+[node name="Result" type="Control" unique_id=1678873868]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -14,10 +20,10 @@ grow_vertical = 2
 theme = ExtResource("3_theme")
 script = ExtResource("1_res")
 
-[node name="StudioBackground" parent="." instance=ExtResource("2_bg")]
+[node name="StudioBackground" parent="." unique_id=1477056971 instance=ExtResource("2_bg")]
 layout_mode = 1
 
-[node name="Center" type="CenterContainer" parent="."]
+[node name="Center" type="CenterContainer" parent="." unique_id=1640208620]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -25,89 +31,133 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 
-[node name="Card" type="PanelContainer" parent="Center"]
+[node name="Card" type="PanelContainer" parent="Center" unique_id=1740954882]
 custom_minimum_size = Vector2(860, 0)
 layout_mode = 2
 theme_type_variation = &"CardPanel"
 
-[node name="VBox" type="VBoxContainer" parent="Center/Card"]
+[node name="VBox" type="VBoxContainer" parent="Center/Card" unique_id=93623568]
 layout_mode = 2
 theme_override_constants/separation = 18
 
-[node name="Title" type="Label" parent="Center/Card/VBox"]
+[node name="Title" type="Label" parent="Center/Card/VBox" unique_id=1631434778]
 layout_mode = 2
 theme_type_variation = &"HeadingLabel"
 text = "Результат"
 horizontal_alignment = 1
 
-[node name="ScoreRow" type="HBoxContainer" parent="Center/Card/VBox"]
+[node name="ScoreRow" type="HBoxContainer" parent="Center/Card/VBox" unique_id=1063919586]
 layout_mode = 2
-theme_override_constants/separation = 32
+theme_override_constants/separation = 48
 alignment = 1
 
-[node name="TotalLabel" type="Label" parent="Center/Card/VBox/ScoreRow"]
+[node name="ScoreRing" type="Control" parent="Center/Card/VBox/ScoreRow" unique_id=957340466]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(260, 0)
+custom_minimum_size = Vector2(300, 300)
 layout_mode = 2
-theme_type_variation = &"BigNumberLabel"
-text = "0"
-horizontal_alignment = 2
+mouse_filter = 2
+script = ExtResource("4_ring")
+gradient = SubResource("Gradient_efjyw")
 
-[node name="GradeLabel" type="Label" parent="Center/Card/VBox/ScoreRow"]
+[node name="Inner" type="VBoxContainer" parent="Center/Card/VBox/ScoreRow/ScoreRing" unique_id=1768498007]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -110.0
+offset_top = -50.0
+offset_right = 110.0
+offset_bottom = 50.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_constants/separation = 0
+alignment = 1
+
+[node name="PercentLabel" type="Label" parent="Center/Card/VBox/ScoreRow/ScoreRing/Inner" unique_id=674514051]
 unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"BigNumberLabel"
+theme_override_colors/font_color = Color(0.953, 0.902, 0.827, 1)
+theme_override_font_sizes/font_size = 60
+text = "0.0%"
+horizontal_alignment = 1
+
+[node name="TotalLabel" type="Label" parent="Center/Card/VBox/ScoreRow/ScoreRing/Inner" unique_id=1977660145]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"HintLabel"
+text = "0 очков"
+horizontal_alignment = 1
+
+[node name="GradeLabel" type="Label" parent="Center/Card/VBox/ScoreRow" unique_id=992938]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(200, 0)
+layout_mode = 2
+theme_type_variation = &"BigNumberLabel"
+theme_override_font_sizes/font_size = 200
 text = "—"
+horizontal_alignment = 1
 
-[node name="DetailsLabel" type="Label" parent="Center/Card/VBox"]
+[node name="GradeBeat" type="Node" parent="Center/Card/VBox/ScoreRow/GradeLabel" unique_id=1406117351]
+unique_name_in_owner = true
+script = ExtResource("5_beat")
+strength = 0.12
+decay = 8.0
+enabled = false
+
+[node name="DetailsLabel" type="Label" parent="Center/Card/VBox" unique_id=912238737]
 unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"HintLabel"
 horizontal_alignment = 1
 
-[node name="BoardLabel" type="Label" parent="Center/Card/VBox"]
+[node name="BoardLabel" type="Label" parent="Center/Card/VBox" unique_id=1665810128]
 unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"AccentLabel"
 horizontal_alignment = 1
 
-[node name="WarnLabel" type="Label" parent="Center/Card/VBox"]
+[node name="WarnLabel" type="Label" parent="Center/Card/VBox" unique_id=836486725]
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
 horizontal_alignment = 1
 autowrap_mode = 3
 
-[node name="Scroll" type="ScrollContainer" parent="Center/Card/VBox"]
+[node name="Scroll" type="ScrollContainer" parent="Center/Card/VBox" unique_id=550773529]
 custom_minimum_size = Vector2(0, 220)
 layout_mode = 2
 horizontal_scroll_mode = 0
 
-[node name="LinesList" type="VBoxContainer" parent="Center/Card/VBox/Scroll"]
+[node name="LinesList" type="VBoxContainer" parent="Center/Card/VBox/Scroll" unique_id=1266692040]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 10
 
-[node name="Buttons" type="HBoxContainer" parent="Center/Card/VBox"]
+[node name="Buttons" type="HBoxContainer" parent="Center/Card/VBox" unique_id=485807034]
 layout_mode = 2
 theme_override_constants/separation = 24
 alignment = 1
 
-[node name="AgainButton" type="Button" parent="Center/Card/VBox/Buttons"]
+[node name="AgainButton" type="Button" parent="Center/Card/VBox/Buttons" unique_id=585276630]
 unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"PrimaryButton"
 text = "Ещё раз"
 
-[node name="SelectButton" type="Button" parent="Center/Card/VBox/Buttons"]
+[node name="SelectButton" type="Button" parent="Center/Card/VBox/Buttons" unique_id=191693329]
 unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"GhostButton"
 text = "К выбору песни"
 
-[node name="Fade" type="ColorRect" parent="."]
+[node name="Fade" type="ColorRect" parent="." unique_id=132212098]
 unique_name_in_owner = true
+visible = false
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0

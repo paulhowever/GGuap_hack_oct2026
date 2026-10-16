@@ -26,7 +26,7 @@ grow_horizontal = 2
 grow_vertical = 2
 
 [node name="Card" type="PanelContainer" parent="Center" unique_id=1473557801]
-custom_minimum_size = Vector2(760, 0)
+custom_minimum_size = Vector2(960, 0)
 layout_mode = 2
 theme_type_variation = &"CardPanel"
 
@@ -50,7 +50,7 @@ horizontal_alignment = 1
 autowrap_mode = 3
 
 [node name="Scroll" type="ScrollContainer" parent="Center/Card/VBox" unique_id=1610000001]
-custom_minimum_size = Vector2(0, 320)
+custom_minimum_size = Vector2(0, 380)
 layout_mode = 2
 horizontal_scroll_mode = 0
 
@@ -73,21 +73,21 @@ text = "Сложность"
 [node name="EasyButton" type="Button" parent="Center/Card/VBox/DiffRow" unique_id=1610000005]
 unique_name_in_owner = true
 layout_mode = 2
-theme_type_variation = &"GhostButton"
+theme_type_variation = &"DiffButton"
 toggle_mode = true
 text = "Легко"
 
 [node name="NormalButton" type="Button" parent="Center/Card/VBox/DiffRow" unique_id=1610000006]
 unique_name_in_owner = true
 layout_mode = 2
-theme_type_variation = &"GhostButton"
+theme_type_variation = &"DiffButton"
 toggle_mode = true
 text = "Нормально"
 
 [node name="HardButton" type="Button" parent="Center/Card/VBox/DiffRow" unique_id=1610000007]
 unique_name_in_owner = true
 layout_mode = 2
-theme_type_variation = &"GhostButton"
+theme_type_variation = &"DiffButton"
 toggle_mode = true
 text = "Сложно"
 

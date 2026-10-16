@@ -1,20 +1,23 @@
 extends Control
 ## Игровой экран: load_song → on_ready → start; дорожка нот, след голоса, текст,
-## оценки нот (on_note_judged) и примерный живой счёт. Конец песни → submit →
-## on_result → экран результата. Esc — остановить и выйти к выбору песни.
+## оценки нот (on_note_judged). Счёт и ранг во время пения НЕ показываем:
+## живая оценка (pitchy) не совпадает с финальной (SwiftF0 + автоподстройка
+## задержки, ADR-004/ADR-021), итог — только на экране результата.
+## Конец песни → submit → on_result → экран результата.
+## Esc — остановить и выйти к выбору песни.
 ## Единственные часы — VoiceBridge.t_now (часы минуса в JS).
 
 const SELECT_SCENE := "res://scenes/select/select.tscn"
 const RESULT_SCENE := "res://scenes/result/result.tscn"
-const MAX_SCORE := 10000.0
-const WEIGHTS := {"normal": 1.0, "golden": 2.0, "rap": 1.0, "rap_golden": 2.0, "free": 0.0}
 const C_SUNG := Color(1.0, 0.478, 0.239)
+## Шаги ожидания оценки (сменяются по кругу, последний остаётся).
+const SUBMIT_STEPS := ["Отправляем запись…", "Нейросеть слушает…", "Считаем очки…"]
+const SUBMIT_STEP_SEC := 1.2
 
 enum Phase { LOADING, PLAYING, SUBMITTING, ERROR, LEAVING }
 
 @onready var _lane: NoteLane = %NoteLane
 @onready var _title: Label = %SongTitle
-@onready var _score: Label = %ScoreLabel
 @onready var _lyrics: RichTextLabel = %Lyrics
 @onready var _next_lyrics: Label = %NextLyrics
 @onready var _status: Label = %StatusLabel
@@ -28,11 +31,9 @@ enum Phase { LOADING, PLAYING, SUBMITTING, ERROR, LEAVING }
 var _phase: Phase = Phase.LOADING
 var _lines: Array = []
 var _duration: float = 0.0
-var _point_per_weight: float = 0.0
-var _note_weight: Dictionary = {}
-var _live_score: float = 0.0
-var _shown_score: float = 0.0
 var _line_idx: int = -2
+var _submit_step: int = 0
+var _submit_elapsed: float = 0.0
 var _can_resubmit: bool = false
 var _judge_tween: Tween
 
@@ -42,7 +43,6 @@ func _ready() -> void:
 	_error_box.visible = false
 	_judge.modulate.a = 0.0
 	_title.text = str(Session.song_info.get("title", Session.song_id))
-	_score.text = "0"
 	_lyrics.text = ""
 	_next_lyrics.text = ""
 	_retry.pressed.connect(_on_retry)
@@ -75,13 +75,6 @@ func _on_song_ready(ref: Dictionary) -> void:
 	_duration = float(ref.get("audio", {}).get("duration", 0.0))
 	_title.text = "%s — %s" % [ref.get("title", "?"), ref.get("artist", "")]
 	_lane.set_reference(ref)
-	var total := 0.0
-	for line in _lines:
-		for n in line.get("notes", []):
-			var w: float = WEIGHTS.get(str(n.get("type", "normal")), 1.0)
-			_note_weight[int(n.i)] = w
-			total += w
-	_point_per_weight = MAX_SCORE / total if total > 0.0 else 0.0
 	_set_status("")
 	_phase = Phase.PLAYING
 	VoiceBridge.start()
@@ -103,7 +96,6 @@ func _on_note_judged(v: Dictionary) -> void:
 	var i := int(v.get("i", -1))
 	var hit := clampf(float(v.get("hit", 0.0)), 0.0, 1.0)
 	_lane.judge(i, hit)
-	_live_score += _point_per_weight * float(_note_weight.get(i, 1.0)) * hit
 	_show_judgement(hit, int(v.get("onset_ms", 0)))
 
 
@@ -142,7 +134,9 @@ func _on_bridge_error(code: String, msg: String) -> void:
 func _submit() -> void:
 	_phase = Phase.SUBMITTING
 	_error_box.visible = false
-	_set_status("Подсчитываем результат…")
+	_submit_step = 0
+	_submit_elapsed = 0.0
+	_set_status(SUBMIT_STEPS[0])
 	VoiceBridge.submit(Session.nickname, Session.challenge_id)
 
 
@@ -226,9 +220,14 @@ func _show_judgement(hit: float, onset_ms: int) -> void:
 
 
 func _process(delta: float) -> void:
-	if absf(_shown_score - _live_score) > 0.5:
-		_shown_score = lerpf(_shown_score, _live_score, minf(1.0, delta * 8.0))
-		_score.text = str(roundi(_shown_score))
+	# шаги ожидания оценки нейросетью; последний шаг держится до on_result
+	if _phase != Phase.SUBMITTING or _submit_step >= SUBMIT_STEPS.size() - 1:
+		return
+	_submit_elapsed += delta
+	if _submit_elapsed >= SUBMIT_STEP_SEC:
+		_submit_elapsed = 0.0
+		_submit_step += 1
+		_set_status(SUBMIT_STEPS[_submit_step])
 
 
 func _leave(scene: String) -> void:

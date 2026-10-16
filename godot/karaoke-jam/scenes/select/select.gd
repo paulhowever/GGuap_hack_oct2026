@@ -58,14 +58,47 @@ func _load_songs() -> void:
 	(_list.get_child(0) as Button).grab_focus.call_deferred()
 
 
+## Карточка песни: SongButton (без свечения — его обрезал бы ScrollContainer),
+## две строки: название крупно и «Артист · 3:25 · ★★★» мельче.
 func _make_song_button(song: Dictionary) -> Button:
 	var b := Button.new()
-	b.theme_type_variation = &"PrimaryButton"
-	b.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	b.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	b.theme_type_variation = &"SongButton"
+	b.custom_minimum_size = Vector2(0, 104)
+	b.tooltip_text = str(song.get("title", ""))
 	var dur := int(float(song.get("duration", 0.0)))
 	var stars := "★".repeat(clampi(int(song.get("difficulty", 1)), 1, 5))
-	b.text = "%s — %s   %d:%02d  %s" % [song.get("title", "?"), song.get("artist", ""), dur / 60, dur % 60, stars]
+
+	var box := VBoxContainer.new()
+	box.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	box.offset_left = 32
+	box.offset_right = -32
+	box.alignment = BoxContainer.ALIGNMENT_CENTER
+	box.add_theme_constant_override(&"separation", 2)
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	var title := Label.new()
+	title.text = str(song.get("title", "?"))
+	title.add_theme_font_override(&"font", get_theme_font(&"font", &"Button"))
+	title.add_theme_font_size_override(&"font_size", 30)
+	title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	var sub := Label.new()
+	sub.theme_type_variation = &"HintLabel"
+	sub.add_theme_font_size_override(&"font_size", 20)
+	sub.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	sub.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var parts: PackedStringArray = []
+	if str(song.get("artist", "")) != "":
+		parts.append(str(song.artist))
+	@warning_ignore("integer_division")
+	parts.append("%d:%02d" % [dur / 60, dur % 60])
+	parts.append(stars)
+	sub.text = "  ·  ".join(parts)
+
+	box.add_child(title)
+	box.add_child(sub)
+	b.add_child(box)
 	b.pressed.connect(_play.bind(song))
 	return b
 
